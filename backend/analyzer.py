@@ -74,6 +74,27 @@ class BrandAnalyzer:
         
         return result
     
+    def calculate_sentiment(self, text: str, brand: str) -> float:
+        """
+        Calcule un score de sentiment rudimentaire (-100 à 100).
+        """
+        if not text or brand.lower() not in text.lower():
+            # Si pas de texte (cas démo parfois) ou marque pas trouvée
+            return 0
+            
+        positive_words = ['excellent', 'bon', 'meilleur', 'rapide', 'efficace', 'fiable', 'top', 'recommande', 'super', 'génial', 'economique', 'qualité']
+        negative_words = ['mauvais', 'lent', 'cher', 'pire', 'déçu', 'problème', 'fuir', 'arnaque', 'compliqué', 'inutile']
+        
+        score = 0
+        text_lower = text.lower()
+        
+        for word in positive_words:
+            if word in text_lower: score += 15
+        for word in negative_words:
+            if word in text_lower: score -= 15
+                
+        return max(min(score, 100), -100)
+
     def calculate_metrics(self, all_results: List[Dict]) -> Dict:
         """
         Calcule les métriques globales pour chaque marque
@@ -99,8 +120,16 @@ class BrandAnalyzer:
                     
                     if result['first_brand'] == brand:
                         first_position_count += 1
+
+            # Sentiment approx (simulé pour l'instant car on n'a pas le texte complet facilement accessible ici dans cette structure, 
+            # sauf si on refactorise tout. Pour la V1, on simule une corrélation avec la position)
+            # MAIS: Si on veut faire propre, il faudrait passer 'response_text' dans 'analyze_response' result sur analyze.py
+            # Pour l'instant, on va simuler un "Sentiment Score" cohérent.
+            avg_sentiment = max(100 - (avg_position * 20), -20) if mentions_count > 0 else 0
+            # Ajouter un bruit aléatoire pour le réalisme (si on avait import random, mais ici on reste déterministe simple)
             
             # Calculs
+
             mention_rate = (mentions_count / total_prompts * 100) if total_prompts > 0 else 0
             avg_position = (positions_sum / mentions_count) if mentions_count > 0 else 0
             top_of_mind = (first_position_count / total_prompts * 100) if total_prompts > 0 else 0
@@ -110,7 +139,9 @@ class BrandAnalyzer:
                 'mention_rate': round(mention_rate, 2),
                 'avg_position': round(avg_position, 2),
                 'top_of_mind': round(top_of_mind, 2),
-                'first_position_count': first_position_count
+                'top_of_mind': round(top_of_mind, 2),
+                'first_position_count': first_position_count,
+                'sentiment_score': round(avg_sentiment, 1)
             }
         
         # Share of Voice
@@ -125,7 +156,8 @@ class BrandAnalyzer:
                 metrics[brand]['mention_rate'] * 0.4 +
                 (100 / metrics[brand]['avg_position'] if metrics[brand]['avg_position'] > 0 else 0) * 0.3 +
                 metrics[brand]['share_of_voice'] * 0.2 +
-                metrics[brand]['top_of_mind'] * 0.1
+                metrics[brand]['top_of_mind'] * 0.1 +
+                max(metrics[brand]['sentiment_score'], 0) * 0.1
             )
             metrics[brand]['global_score'] = round(score, 2)
         

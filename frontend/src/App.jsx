@@ -4,12 +4,14 @@ import Header from './components/Header';
 import KpiCards from './components/KpiCards';
 import RankingTable from './components/RankingTable';
 import { MentionChart, SovChart, RadarCompare, CategoryHeatmap } from './components/Charts';
+import TrendChart from './components/TrendChart';
 import InsightsPanel from './components/InsightsPanel';
-import { fetchMetrics, fetchExport, checkStatus } from './services/api';
+import { fetchMetrics, fetchExport, checkStatus, fetchHistory } from './services/api';
 import './App.css';
 
 export default function App() {
   const [data, setData] = useState(null);
+  const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isBackendOnline, setIsBackendOnline] = useState(false);
   const [error, setError] = useState(null);
@@ -18,8 +20,12 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchMetrics();
+      const [result, historyData] = await Promise.all([
+        fetchMetrics(),
+        fetchHistory()
+      ]);
       setData(result);
+      setHistory(historyData);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -77,6 +83,7 @@ export default function App() {
           {data && (
             <>
               <KpiCards data={data} />
+              <TrendChart data={history} />
               <RankingTable ranking={data.ranking} />
 
               <div className="charts-row">

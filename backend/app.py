@@ -13,6 +13,10 @@ from prompts import ALL_PROMPTS, PROMPTS, BRANDS
 app = Flask(__name__)
 CORS(app)
 
+# Initialize DB
+from database import init_db, save_analysis, get_history, generate_demo_history
+init_db()
+
 # Initialisation
 analyzer = BrandAnalyzer()
 
@@ -214,11 +218,30 @@ def run_analysis():
     # Sauvegarder
     save_results(results)
     
+    # Save to SQLite History
+    if not use_demo:
+        save_analysis(results)
+    
     return jsonify({
         'status': 'success',
         'message': f'Analysis completed for {limit} prompts',
         'timestamp': results['timestamp']
     })
+
+
+@app.route('/api/history', methods=['GET'])
+def get_history_data():
+    """Récupère l'historique pour le graphique d'évolution"""
+    use_demo = request.args.get('demo', 'false').lower() == 'true'
+    
+    if use_demo:
+        return jsonify(generate_demo_history())
+        
+    history = get_history()
+    if not history:
+        return jsonify(generate_demo_history())
+        
+    return jsonify(history)
 
 
 @app.route('/api/metrics', methods=['GET'])

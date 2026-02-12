@@ -120,6 +120,18 @@ export async function fetchExport() {
   }
 }
 
+export async function fetchHistory() {
+  try {
+    const response = await fetch(`${API_URL}/history`);
+    if (!response.ok) throw new Error('History not available');
+    return await response.json();
+  } catch (error) {
+    // Return empty array or throw, handled by caller
+    console.warn('History API fetch failed:', error);
+    return [];
+  }
+}
+
 export async function checkStatus() {
   try {
     const response = await fetch(`${API_URL}/status`);

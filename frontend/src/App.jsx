@@ -6,6 +6,7 @@ import RankingTable from './components/RankingTable';
 import { MentionChart, SovChart, RadarCompare, CategoryHeatmap } from './components/Charts';
 import TrendChart from './components/TrendChart';
 import SentimentChart from './components/SentimentChart';
+import DuelCard from './components/DuelCard';
 import InsightsPanel from './components/InsightsPanel';
 import { fetchMetrics, fetchExport, checkStatus, fetchHistory } from './services/api';
 import './App.css';
@@ -85,6 +86,7 @@ export default function App() {
             <>
               <KpiCards data={data} />
               <TrendChart data={history} />
+              <DuelCard ranking={data.ranking} />
               <RankingTable ranking={data.ranking} />
 
               <div className="charts-row">

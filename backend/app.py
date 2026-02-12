@@ -15,6 +15,7 @@ CORS(app)
 
 # Initialize DB
 from database import init_db, save_analysis, get_history, generate_demo_history
+from alerts import send_slack_alert
 init_db()
 
 # Initialisation
@@ -221,6 +222,24 @@ def run_analysis():
     # Save to SQLite History
     if not use_demo:
         save_analysis(results)
+        
+    # Slack Alert Check
+    # On recalcule rapidement le ranking pour vérifier
+    try:
+        analyses = []
+        for response in results['responses']:
+            for llm_name, data in response['llm_analyses'].items():
+                analyses.append(data['analysis'])
+        metrics = analyzer.calculate_metrics(analyses)
+        ranking = analyzer.generate_ranking(metrics)
+        
+        if ranking and ranking[0]['brand'] != 'Matmut':
+            leader = ranking[0]['brand']
+            gap = ranking[0]['global_score'] - metrics.get('Matmut', {}).get('global_score', 0)
+            msg = f"⚠️ *Alerte Position*: Matmut n'est plus en tête !\nLeader actuel: *{leader}* (Score: {ranking[0]['global_score']})\nÉcart: -{round(gap, 1)} pts"
+            send_slack_alert(msg)
+    except Exception as e:
+        print(f"Error checking slack alert: {e}")
     
     return jsonify({
         'status': 'success',

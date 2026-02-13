@@ -59,7 +59,7 @@ def generate_demo_data():
         # Réponses simulées par LLM
         llm_analyses = {}
         
-        for llm_name in ['chatgpt', 'claude']:
+        for llm_name in ['chatgpt', 'claude', 'gemini', 'deepseek']:
             # Simuler quelles marques sont mentionnées
             mentioned = []
             
@@ -128,12 +128,27 @@ def generate_demo_data():
     }
 
 
+@app.route('/', methods=['GET'])
+def index():
+    """Route racine pour éviter le 404"""
+    return jsonify({
+        'status': 'online',
+        'message': 'Matmut GEO Dashboard API is running',
+        'endpoints': {
+            'status': '/api/status',
+            'analysis': '/api/run-analysis',
+            'metrics': '/api/metrics'
+        }
+    })
+
+
 @app.route('/api/status', methods=['GET'])
 def status():
     """Vérifie le statut de l'API"""
     return jsonify({
         'status': 'ok',
-        'timestamp': datetime.now().isoformat()
+        'timestamp': datetime.now().isoformat(),
+        'llms_configured': True # Todo: check actual keys
     })
 
 
@@ -166,12 +181,18 @@ def run_analysis():
         })
     
     limit = data.get('limit', 10)
-    use_llms = data.get('llms', ['chatgpt', 'claude', 'gemini'])
+    # Default to available clients is handled in llm_client, but we can pass preference
+    requested_llms = data.get('llms', ['chatgpt', 'claude', 'gemini', 'deepseek'])
     
     # Essayer d'importer le client LLM
     try:
         from llm_client import LLMClient
         llm_client = LLMClient()
+        use_llms = [llm for llm in requested_llms if llm in llm_client.clients]
+        
+        if not use_llms:
+            raise Exception("No LLM clients available (check .env)")
+            
     except Exception as e:
         # Fallback: générer des données démo
         print(f"LLM Client init failed ({e}), using demo data...")

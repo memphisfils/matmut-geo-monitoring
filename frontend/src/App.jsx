@@ -84,10 +84,15 @@ export default function App() {
 
           {data && (
             <>
-              <KpiCards data={data} />
-              <TrendChart data={history} />
-              <DuelCard ranking={data.ranking} />
-              <RankingTable ranking={data.ranking} />
+              <div id="dashboard">
+                <KpiCards data={data} />
+                <TrendChart data={history} />
+                <DuelCard ranking={data.ranking} />
+              </div>
+
+              <div id="ranking">
+                <RankingTable ranking={data.ranking} />
+              </div>
 
               <div className="charts-row">
                 <SentimentChart ranking={data.ranking} />
@@ -95,9 +100,11 @@ export default function App() {
                 <SovChart ranking={data.ranking} />
               </div>
 
-              <RadarCompare ranking={data.ranking} />
-              <CategoryHeatmap categoryData={data.category_data} />
-              <InsightsPanel insights={data.insights} />
+              <div id="insights">
+                <RadarCompare ranking={data.ranking} />
+                <CategoryHeatmap categoryData={data.category_data} />
+                <InsightsPanel insights={data.insights} />
+              </div>
             </>
           )}
         </div>

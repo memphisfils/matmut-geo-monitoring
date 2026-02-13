@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { RefreshCw, Download, Clock, FileText } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import SystemStatus from './SystemStatus';
 import './Header.css';
 
 export default function Header({ onRefresh, onExport, isLoading, metadata }) {
@@ -18,8 +19,6 @@ export default function Header({ onRefresh, onExport, isLoading, metadata }) {
 
     const handlePdfExport = async () => {
         setIsExporting(true);
-        const element = document.querySelector('.page-content');
-        if (!element) return;
         const dashboard = document.querySelector('.page-content');
         if (!dashboard) return;
 

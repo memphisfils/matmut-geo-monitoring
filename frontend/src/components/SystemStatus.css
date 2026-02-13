@@ -1,0 +1,140 @@
+.system-status-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: default;
+}
+
+.status-badge-main {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+
+.status-badge-main.ready {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+.status-badge-main.not-ready {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.demo-data-badge {
+    padding: 0.35rem 0.75rem;
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+/* Dropdown */
+.status-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.75rem;
+    width: 260px;
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    padding: 1rem;
+    z-index: 50;
+    animation: fadeIn 0.15s ease-out;
+}
+
+.dropdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.dropdown-header h3 {
+    font-size: 0.9rem;
+    color: #e2e8f0;
+    margin: 0;
+}
+
+.status-timestamp {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+}
+
+.status-item .label {
+    color: #94a3b8;
+}
+
+.status-item .label.capitalize {
+    text-transform: capitalize;
+}
+
+.status-item .value {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 500;
+}
+
+.value.success {
+    color: #34d399;
+}
+
+.value.error {
+    color: #ef4444;
+}
+
+.divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.05);
+    margin: 0.25rem 0;
+}
+
+.section-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #64748b;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

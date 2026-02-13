@@ -20,71 +20,55 @@ export default function Header({ onRefresh, onExport, isLoading, metadata }) {
         setIsExporting(true);
         const element = document.querySelector('.page-content');
         if (!element) return;
+        const dashboard = document.querySelector('.page-content');
+        if (!dashboard) return;
+
+        // Temporarily hide buttons for clean capture
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(b => b.style.opacity = '0');
 
         try {
-            const canvas = await html2canvas(element, {
+            const canvas = await html2canvas(dashboard, {
                 scale: 2,
-                useCORS: true,
-                logging: false,
-                backgroundColor: '#0f172a' // Dark background
+                backgroundColor: '#0f172a',
+                useCORS: true
             });
 
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const imgWidth = canvas.width;
-            const imgHeight = canvas.height;
-            const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-            const imgX = (pdfWidth - imgWidth * ratio) / 2;
-            const imgY = 30;
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
-            pdf.setFillColor(15, 23, 42);
-            pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
-
-            pdf.setTextColor(255, 255, 255);
-            pdf.setFontSize(20);
-            pdf.text('Matmut GEO Dashboard - Rapport Executif', 10, 20);
-
-            pdf.addImage(imgData, 'PNG', 0, imgY, imgWidth * ratio, imgHeight * ratio);
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
             pdf.save(`matmut-report-${new Date().toISOString().split('T')[0]}.pdf`);
         } catch (err) {
-            console.error('PDF Export failed', err);
+            console.error("PDF Export failed", err);
         } finally {
-            setIsExporting(false);
+            buttons.forEach(b => b.style.opacity = '1');
         }
     };
 
     return (
-        <header className="app-header glass">
+        <header className="header">
             <div className="header-left">
-                <h1 className="header-title">
-                    <span className="title-accent">📊</span> Dashboard GEO Monitoring
-                </h1>
+                <h1>Vue d'ensemble</h1>
                 <div className="header-meta">
-                    <Clock size={12} />
-                    <span>Dernière MAJ: {formatDate(metadata?.timestamp)}</span>
-                    {metadata?.is_demo && (
-                        <span className="demo-badge">DÉMO</span>
-                    )}
+                    <Calendar size={14} />
+                    <span>Dernière mise à jour: {metadata?.timestamp ? new Date(metadata.timestamp).toLocaleString() : 'Jamais'}</span>
                 </div>
             </div>
+
             <div className="header-actions">
-                <button
-                    className="btn btn-secondary"
-                    onClick={onRefresh}
-                    disabled={isLoading}
-                >
-                    <RefreshCw size={16} className={isLoading ? 'spin' : ''} />
-                    <span>Rafraîchir</span>
+                <SystemStatus status={backendStatus} isDemoData={isDemo} />
+
+                <button className="btn-secondary" onClick={handlePdfExport}>
+                    <Download size={18} />
+                    <span>PDF</span>
                 </button>
-                <button className="btn btn-outline" onClick={handlePdfExport} disabled={isExporting}>
-                    <FileText size={16} />
-                    <span>{isExporting ? 'Génération...' : 'PDF'}</span>
-                </button>
-                <button className="btn btn-primary" onClick={onExport}>
-                    <Download size={16} />
-                    <span>JSON</span>
+
+                <button className="btn-primary" onClick={onRefresh} disabled={isLoading}>
+                    <RefreshCw size={18} className={isLoading ? 'spin' : ''} />
+                    <span>{isLoading ? 'Analyse...' : 'Actualiser'}</span>
                 </button>
             </div>
         </header>

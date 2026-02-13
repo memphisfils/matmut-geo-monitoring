@@ -15,7 +15,7 @@ export default function App() {
   const [data, setData] = useState(null);
   const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isBackendOnline, setIsBackendOnline] = useState(false);
+  const [backendStatus, setBackendStatus] = useState(null); // Full status object
   const [error, setError] = useState(null);
 
   const loadData = useCallback(async () => {
@@ -53,8 +53,10 @@ export default function App() {
   useEffect(() => {
     loadData();
     // Check backend status
-    checkStatus().then(res => setIsBackendOnline(res.status === 'ok'));
+    checkStatus().then(res => setBackendStatus(res || { status: 'offline' }));
   }, [loadData]);
+
+  const isBackendOnline = backendStatus?.status === 'ok';
 
   return (
     <div className="app-layout">
@@ -66,6 +68,7 @@ export default function App() {
           onExport={handleExport}
           isLoading={isLoading}
           metadata={data?.metadata}
+          backendStatus={backendStatus}
         />
 
         <div className="page-content">

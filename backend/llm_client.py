@@ -131,3 +131,7 @@ class LLMClient:
             results['gemini'] = self.query_gemini(prompt)
         
         return results
+
+    def get_active_models(self) -> Dict[str, bool]:
+        """Retourne la liste des modèles actifs"""
+        return self.clients

@@ -144,11 +144,21 @@ def index():
 
 @app.route('/api/status', methods=['GET'])
 def status():
-    """Vérifie le statut de l'API"""
+    """Vérifie le statut de l'API et des LLMs"""
+    llm_status = {}
+    try:
+        from llm_client import LLMClient
+        client = LLMClient()
+        llm_status = client.get_active_models()
+    except Exception as e:
+        print(f"Status check error: {e}")
+        llm_status = {'error': str(e)}
+
     return jsonify({
         'status': 'ok',
         'timestamp': datetime.now().isoformat(),
-        'llms_configured': True # Todo: check actual keys
+        'llm_status': llm_status,
+        'system_ready': len(llm_status) > 0 and 'error' not in llm_status
     })
 
 

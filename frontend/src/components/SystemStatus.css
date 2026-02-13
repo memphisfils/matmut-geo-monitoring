@@ -4,6 +4,7 @@
     align-items: center;
     gap: 0.75rem;
     cursor: default;
+    z-index: 100;
 }
 
 .status-badge-main {
@@ -16,18 +17,32 @@
     font-weight: 600;
     transition: all 0.2s;
     border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+/* Default / Blue (Undefined state fallback) */
+.status-badge-main {
+    background: rgba(30, 41, 59, 0.8);
+    color: #94a3b8;
+    border-color: rgba(148, 163, 184, 0.2);
+}
+
+.status-badge-main.loading {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.2);
 }
 
 .status-badge-main.ready {
-    background: rgba(16, 185, 129, 0.15);
-    color: #34d399;
-    border-color: rgba(16, 185, 129, 0.2);
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: #34d399 !important;
+    border-color: rgba(16, 185, 129, 0.2) !important;
 }
 
 .status-badge-main.not-ready {
-    background: rgba(239, 68, 68, 0.15);
-    color: #ef4444;
-    border-color: rgba(239, 68, 68, 0.2);
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #ef4444 !important;
+    border-color: rgba(239, 68, 68, 0.2) !important;
 }
 
 .demo-data-badge {
@@ -39,6 +54,7 @@
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.05em;
+    white-space: nowrap;
 }
 
 /* Dropdown */
@@ -53,7 +69,8 @@
     border-radius: 12px;
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
     padding: 1rem;
-    z-index: 50;
+    z-index: 1500;
+    /* High Z-index to ensure visibility */
     animation: fadeIn 0.15s ease-out;
 }
 
@@ -136,5 +153,19 @@
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
     }
 }

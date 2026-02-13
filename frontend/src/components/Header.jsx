@@ -40,9 +40,11 @@ export default function Header({ onRefresh, onExport, isLoading, metadata }) {
     };
 
     return (
-        <header className="header">
+        <header className="app-header glass">
             <div className="header-left">
-                <h1>Vue d'ensemble</h1>
+                <h1 className="header-title">
+                    <span className="title-accent">📊</span> Vue d'ensemble
+                </h1>
                 <div className="header-meta">
                     <Calendar size={14} />
                     <span>Dernière mise à jour: {metadata?.timestamp ? new Date(metadata.timestamp).toLocaleString() : 'Jamais'}</span>

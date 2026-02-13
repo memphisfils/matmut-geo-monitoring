@@ -125,20 +125,18 @@ class BrandAnalyzer:
             # sauf si on refactorise tout. Pour la V1, on simule une corrélation avec la position)
             # MAIS: Si on veut faire propre, il faudrait passer 'response_text' dans 'analyze_response' result sur analyze.py
             # Pour l'instant, on va simuler un "Sentiment Score" cohérent.
-            avg_sentiment = max(100 - (avg_position * 20), -20) if mentions_count > 0 else 0
-            # Ajouter un bruit aléatoire pour le réalisme (si on avait import random, mais ici on reste déterministe simple)
-            
             # Calculs
-
             mention_rate = (mentions_count / total_prompts * 100) if total_prompts > 0 else 0
             avg_position = (positions_sum / mentions_count) if mentions_count > 0 else 0
             top_of_mind = (first_position_count / total_prompts * 100) if total_prompts > 0 else 0
             
+            # Sentiment approx (simulé pour l'instant)
+            avg_sentiment = max(100 - (avg_position * 20), -20) if mentions_count > 0 else 0
+
             metrics[brand] = {
                 'mention_count': mentions_count,
                 'mention_rate': round(mention_rate, 2),
                 'avg_position': round(avg_position, 2),
-                'top_of_mind': round(top_of_mind, 2),
                 'top_of_mind': round(top_of_mind, 2),
                 'first_position_count': first_position_count,
                 'sentiment_score': round(avg_sentiment, 1)

@@ -1,21 +1,12 @@
 import React, { useState } from 'react';
-import { RefreshCw, Download, Clock, FileText } from 'lucide-react';
+import { RefreshCw, Download, Calendar } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import SystemStatus from './SystemStatus';
 import './Header.css';
 
 export default function Header({ onRefresh, onExport, isLoading, metadata }) {
     const [isExporting, setIsExporting] = useState(false);
-
-    const formatDate = (ts) => {
-        if (!ts) return '—';
-        const d = new Date(ts);
-        return d.toLocaleString('fr-FR', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-        });
-    };
+    const isDemo = metadata?.is_demo === true;
 
     const handlePdfExport = async () => {
         setIsExporting(true);
@@ -44,6 +35,7 @@ export default function Header({ onRefresh, onExport, isLoading, metadata }) {
             console.error("PDF Export failed", err);
         } finally {
             buttons.forEach(b => b.style.opacity = '1');
+            setIsExporting(false);
         }
     };
 
@@ -58,9 +50,13 @@ export default function Header({ onRefresh, onExport, isLoading, metadata }) {
             </div>
 
             <div className="header-actions">
-                <SystemStatus status={backendStatus} isDemoData={isDemo} />
+                {isDemo && (
+                    <div className="demo-badge">
+                        <span>MODE DÉMO</span>
+                    </div>
+                )}
 
-                <button className="btn-secondary" onClick={handlePdfExport}>
+                <button className="btn-secondary" onClick={handlePdfExport} disabled={isExporting}>
                     <Download size={18} />
                     <span>PDF</span>
                 </button>

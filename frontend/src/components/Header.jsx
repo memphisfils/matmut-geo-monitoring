@@ -54,7 +54,7 @@ export default function Header({ onRefresh, onExport, isLoading, metadata }) {
             <div className="header-actions">
                 {isDemo && (
                     <div className="demo-badge">
-                        <span>MODE DÉMO</span>
+                        <span>MODE</span>
                     </div>
                 )}
 

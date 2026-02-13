@@ -1,92 +1,88 @@
-# 🚀 Matmut GEO Dashboard
-> **Le premier outil de monitoring de réputation de marque sur les moteurs de recherche IA (ChatGPT, Claude, Gemini).**
+# 📊 Matmut GEO Dashboard
 
-![Dashboard Preview](https://via.placeholder.com/800x400.png?text=Matmut+GEO+Dashboard+Preview)
+> **Dashboard de Monitoring de Visibilité IA** pour Matmut.
+> Analysez comment ChatGPT, DeepSeek, Claude et Gemini perçoivent votre marque.
 
-## 🎯 Pourquoi ce dashboard ?
-Les moteurs de recherche changent. Aujourd'hui, vos clients demandent conseil à l'IA.
-**Matmut GEO Dashboard** vous permet de :
-*   👀 **Voir** ce que ChatGPT répond sur "Meilleure assurance auto".
-*   📊 **Mesurer** votre part de voix (Share of Voice) face à la MAIF, AXA, etc.
-*   📈 **Suivre** l'évolution de votre visibilité dans le temps.
-*   🧠 **Analyser** le sentiment (Positif/Négatif) des mentions.
+![Dashboard Preview](https://placehold.co/1200x600/0f172a/3b82f6?text=Matmut+GEO+Dashboard)
 
----
+## 🚀 Fonctionnalités Clés
 
-## ✨ Fonctionnalités Clés
+### 1. 🧠 Multi-LLM & Flexibilité
+- **Compatible :** OpenAI (ChatGPT), DeepSeek, Anthropic (Claude), Google (Gemini).
+- **Mode Flexible :** Fonctionne avec **une seule clé API**. Si vous n'avez que DeepSeek, le dashboard tourne sur DeepSeek.
+- **Mode Démo :** Pas de clé ? Le dashboard génère des données réalistes pour tester l'interface.
 
-### 1. 🏆 Classement Temps Réel
-Qui est le numéro 1 ? Visualisez instantanément votre position moyenne sur 50+ requêtes stratégiques.
+### 2. 📈 Analyse de Tendances
+- Suivez l'évolution de la visibilité sur 30 jours (via SQLite).
+- KPI : Part de Voix, Taux de Mention, Position Moyenne.
 
-### 2. 🧠 Analyse de Sentiment (IA) `[NOUVEAU]`
-L'IA ne fait pas que vous citer. Elle donne un avis.
-*   🟢 **Positif :** "Matmut offre un service client réactif."
-*   🔴 **Négatif :** "Les tarifs sont parfois élevés."
-*   *Le dashboard quantifie ces émotions.*
+### 3. ⚔️ Mode Duel
+- **Comparateur direct** : Matmut vs Concurrent (ex: MAIF).
+- Radar Chart pour visualiser les forces/faiblesses relatives.
 
-### 3. 📈 Historique & Tendances `[NOUVEAU]`
-Suivez votre progression sur 30 jours grâce à notre base de données locale. Prouvez le ROI de vos actions SEO/Contenu.
+### 4. 📄 Export & Reporting
+- **PDF PRO** : Générez un rapport A4 complet en un clic.
+- **Slack Alerts** : Recevez une notif si Matmut perd sa 1ère place.
 
-### 4. ⚡ Mode Démo "Zéro Config"
-Pas de clé API ? Pas de problème. Le dashboard génère une simulation réaliste pour vous permettre de tester l'interface immédiatement.
+### 5. 🎨 Design Premium
+- Interface sombre "SaaS", Glassmorphism, Animations fluides.
+- Graphiques interactifs (Recharts).
 
 ---
 
-## 🚀 Démarrage Rapide (2 minutes)
+## 🛠️ Installation
 
 ### Pré-requis
-*   Python 3.8+
-*   Node.js 16+
+- Node.js 18+
+- Python 3.10+
 
-### 1. Installation & Lancement
+### 1. Backend (Flask)
 ```bash
-# Clonez le projet
-git clone https://github.com/memphisfils/matmut-geo-monitoring.git
-cd matmut-geo-monitoring
-
-# Lancez le Backend (API)
 cd project/backend
 python -m venv venv
-venv\Scripts\activate  # Windows
-pip install -r requirements.txt
-python app.py
-# 🟢 API running on http://localhost:5000
+# Windows
+venv\Scripts\activate
+# Mac/Linux
+source venv/bin/activate
 
-# Lancez le Frontend (Dashboard) - Dans un nouveau terminal
+pip install -r requirements.txt
+
+# Copier l'exemple de config
+cp .env.example .env
+# --> Ajoutez vos clés API dans .env (DEEPSEEK_API_KEY, etc.)
+
+python app.py
+# Serveur tourne sur http://localhost:5000
+```
+
+### 2. Frontend (React + Vite)
+```bash
 cd project/frontend
 npm install
 npm run dev
-# 🟢 Dashboard running on http://localhost:5173
+# Dashboard accessible sur http://localhost:5173
 ```
 
-### 2. Configuration (Optionnel)
-Pour avoir des **vraies données**, ajoutez vos clés API dans `project/backend/.env` :
-```env
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-...
-GOOGLE_API_KEY=AI...
+---
+
+## 📂 Structure du Projet
+
 ```
-*Sans clés, le Mode Démo s'active automatiquement.*
+project/
+├── backend/            # API Flask
+│   ├── app.py          # Point d'entrée
+│   ├── analyzer.py     # Logique de calcul (NLP, Sentiment)
+│   ├── llm_client.py   # Connecteurs IA (Simulés ou Réels)
+│   ├── alerts.py       # Webhook Slack
+│   └── database.py     # Gestion SQLite
+│
+├── frontend/           # React App
+│   ├── src/
+│   │   ├── components/ # Widgets (Charts, Duel, Header...)
+│   │   ├── services/   # Appels API
+│   │   └── App.jsx     # Layout Principal
+```
 
----
-
-## 🛠️ Stack Technique
-
-![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
-![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
-![Flask](https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-07405E?style=for-the-badge&logo=sqlite&logoColor=white)
-![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
-
----
-
-## 🔮 Roadmap
-- [x] Analyse de Sentiment
-- [x] Historique 30 jours
-- [ ] Export PDF Exécutif
-- [ ] Comparateur "Head-to-Head" (Duel)
-- [ ] Alerte Slack en cas de chute
-
----
-
-**Développé pour Matmut par Memphis.**
+## 🤝 Contribution
+Projet interne Matmut.
+Dev: @memphisfils

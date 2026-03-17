@@ -140,15 +140,26 @@ def generate_config():
         brand: str — nom de la marque
         sector: str — secteur d'activité
     """
+    import json as json_module
+    import re
+    
     data = request.get_json() or {}
     brand = data.get('brand', 'Marque')
     sector = data.get('sector', 'Autre')
+    
+    print(f"[CONFIG] Generating config for {brand} ({sector})...")
     
     try:
         from llm_client import LLMClient
         llm_client = LLMClient()
         
+        # Vérifie si la clé API est configurée
+        if not llm_client.api_key:
+            print("[CONFIG] No API key - using fallback mode")
+            raise Exception("OLLAMA_API_KEY not configured")
+        
         if 'ollama' not in llm_client.clients:
+            print("[CONFIG] Ollama client not available - using fallback mode")
             raise Exception("Ollama client not available")
         
         prompt = f"""Tu es un expert en analyse de marché et GEO (Generative Engine Optimization).
@@ -171,25 +182,27 @@ Règles :
 
 JSON :"""
 
-        print(f"Generating config for {brand} ({sector})...")
+        print(f"[CONFIG] Calling Ollama API...")
         response_text = llm_client.query_ollama(prompt)
         
+        if not response_text:
+            print("[CONFIG] Empty response from Ollama - using fallback mode")
+            raise ValueError("Empty response from Ollama")
+        
         # Extraire le JSON de la réponse
-        import re
         json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
         if json_match:
-            config = json.loads(json_match.group())
-            print(f"Config generated successfully: {len(config.get('products', []))} products, {len(config.get('suggested_competitors', []))} competitors")
+            config = json_module.loads(json_match.group())
+            print(f"[CONFIG] Config generated successfully: {len(config.get('products', []))} products, {len(config.get('suggested_competitors', []))} competitors")
         else:
+            print(f"[CONFIG] No JSON found in response - using fallback mode")
             raise ValueError("No JSON found in response")
         
         return jsonify({'status': 'success', 'config': config})
         
     except Exception as e:
-        print(f"Error generating config: {e}")
+        print(f"[CONFIG] Error: {e}")
         # Fallback to demo data
-        from app import generate_demo_data
-        demo = generate_demo_data(brand)
         config = {
             'products': [
                 {'id': 'p1', 'name': f'{brand} Base', 'description': 'Offre Essentielle', 'prompts': [f'Meilleur {sector} pas cher', f'Comparatif {sector} basique']},

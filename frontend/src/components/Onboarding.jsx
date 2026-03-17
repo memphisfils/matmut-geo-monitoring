@@ -7,6 +7,9 @@ const SECTORS = [
   'Automobile', 'Distribution', 'Immobilier', 'Tech / SaaS', 'Autre'
 ];
 
+// URL API dynamique
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 export default function Onboarding({ onComplete }) {
   const [step, setStep] = useState(1);
   const [brand, setBrand] = useState('');
@@ -21,7 +24,7 @@ export default function Onboarding({ onComplete }) {
     setIsGenerating(true);
     try {
       // Appel à notre backend qui utilise Ollama Cloud
-      const response = await fetch('http://localhost:5000/api/generate-config', {
+      const response = await fetch(`${API_URL}/generate-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

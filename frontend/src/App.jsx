@@ -103,11 +103,11 @@ export default function App() {
 
   // Affiche l'onboarding si pas encore configuré
   if (!config) {
-    return <Onboarding onComplete={handleOnboardingComplete} />;
+    return <Onboarding key="onboarding" onComplete={handleOnboardingComplete} />;
   }
 
   return (
-    <div className="app-layout">
+    <div className="app-layout" key={`dashboard-${config.brand}`}>
       <TopNavbar
         brand={config.brand}
         onRefresh={loadData}
@@ -132,7 +132,7 @@ export default function App() {
             </div>
           )}
 
-          {data && data.ranking && (
+          {data && data.ranking && Array.isArray(data.ranking) && data.ranking.length > 0 && (
             <>
               {/* Section 1: KPI + Trend Chart + Duel */}
               <div className="dashboard-section">

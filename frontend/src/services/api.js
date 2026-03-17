@@ -3,8 +3,19 @@
  * Communication avec le backend Flask — compatible toute marque
  */
 
-// URL de l'API (dynamique selon l'environnement)
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// URL de l'API - Utilise le même domaine que le frontend (pour production)
+// En local : http://localhost:5000/api
+// Sur Render : https://geo-monitoring-backend.onrender.com/api
+const getAPIURL = () => {
+  // En production, on utilise le backend sur le même sous-domaine
+  if (window.location.hostname.includes('onrender.com')) {
+    return 'https://geo-monitoring-backend.onrender.com/api';
+  }
+  // En local
+  return 'http://localhost:5000/api';
+};
+
+const API_URL = getAPIURL();
 
 // ========== DEMO DATA FACTORY — génère du démo pour n'importe quelle marque ==========
 export function DEMO_DATA_FACTORY(brand = 'Marque', competitors = []) {

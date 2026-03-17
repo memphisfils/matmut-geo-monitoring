@@ -7,8 +7,15 @@ const SECTORS = [
   'Automobile', 'Distribution', 'Immobilier', 'Tech / SaaS', 'Autre'
 ];
 
-// URL API dynamique
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// URL API dynamique - détecte automatiquement l'environnement
+const getAPIURL = () => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
+    return 'https://geo-monitoring-backend.onrender.com/api';
+  }
+  return 'http://localhost:5000/api';
+};
+
+const API_URL = getAPIURL();
 
 export default function Onboarding({ onComplete }) {
   const [step, setStep] = useState(1);

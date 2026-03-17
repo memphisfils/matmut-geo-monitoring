@@ -1,18 +1,175 @@
-.chart-card {
-    margin-bottom: 0;
+.chart-container {
+    border: var(--border-thick) solid var(--border-color);
+    background: var(--bg-secondary);
+    margin-bottom: 20px;
+}
+
+/* Sentiment Specific */
+.sentiment-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    min-height: 100px;
+}
+
+.sentiment-score {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.score-value {
+    font-family: var(--font-display);
+    font-size: 32px;
+    color: var(--text-primary);
+}
+
+.score-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.score-label.positive { color: var(--accent-green); }
+.score-label.negative { color: var(--accent-red); }
+
+.sentiment-bar {
+    width: 80%;
+    height: 8px;
+    background: var(--border-color);
+    position: relative;
+}
+
+.sentiment-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+/* Duel Card Specific */
+.duel-select {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 2px solid var(--border-color);
+    padding: 4px 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.duel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 13px;
+}
+
+.duel-table th {
+    padding: 10px;
+    border-bottom: 2px solid var(--border-color);
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+}
+
+.duel-table td {
+    padding: 12px 10px;
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.duel-table td:first-child {
+    text-align: left;
+    font-weight: 600;
+    color: var(--accent-yellow);
+}
+
+.duel-table td:last-child {
+    text-align: right;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.duel-table .winner {
+    color: var(--text-primary) !important;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+.text-muted { color: var(--text-muted); font-weight: normal !important; }
+
+/* Insights Panel Specific */
+.insights-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+}
+
+.insight-col h4 {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    letter-spacing: 1px;
+    font-family: var(--font-mono);
+}
+
+.insight-col ul {
+    list-style: none;
+}
+
+.insight-col li {
+    font-size: 12px;
+    margin-bottom: 8px;
+    font-family: var(--font-mono);
+    line-height: 1.4;
+}
+
+.text-green { color: var(--accent-green); }
+.text-red { color: var(--accent-red); }
+.text-yellow { color: var(--accent-yellow); }
+
+@media (max-width: 1024px) {
+    .insights-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: var(--border-thick) solid var(--border-color);
+    background: var(--bg-tertiary);
+}
+
+.chart-header h3 {
+    font-size: 12px;
+    margin: 0;
+}
+
+.chart-badge {
+    font-size: 10px;
+    background: var(--text-primary);
+    color: var(--bg-primary);
+    padding: 2px 6px;
+    font-family: var(--font-mono);
 }
 
 .chart-body {
-    padding: 16px 20px 20px;
+    padding: 20px;
 }
 
 /* Recharts tooltip */
 .chart-tooltip {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    padding: 10px 14px;
-    box-shadow: var(--shadow-lg);
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    padding: 10px;
+    font-family: var(--font-mono);
 }
 
 .tooltip-label {
@@ -25,18 +182,7 @@
 .tooltip-value {
     font-size: 11px;
     margin: 2px 0;
-}
-
-/* Charts grid */
-.charts-row {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
-}
-
-.chart-card-full {
-    margin-bottom: 24px;
+    color: var(--text-secondary);
 }
 
 /* Heatmap */
@@ -47,48 +193,44 @@
 .heatmap-table {
     width: 100%;
     border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 11px;
 }
 
 .heatmap-table th {
-    padding: 8px 12px;
-    font-size: 10px;
-    font-weight: 700;
+    padding: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
     color: var(--text-muted);
+    border-bottom: 1px solid var(--border-color);
     text-align: center;
 }
 
 .heatmap-table td {
-    padding: 6px 8px;
+    padding: 8px;
     text-align: center;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .heatmap-brand {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-secondary);
     text-align: left !important;
-    padding-left: 16px !important;
+    font-weight: 600;
+    color: var(--text-primary);
     min-width: 100px;
 }
 
 .heatmap-cell {
     display: inline-block;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 11px;
+    padding: 6px 10px;
+    min-width: 40px;
     font-weight: 600;
-    color: var(--text-primary);
-    min-width: 48px;
 }
 
-.heatmap-table .row-matmut .heatmap-brand {
-    color: var(--accent-blue);
+.row-target .heatmap-brand {
+    color: var(--accent-yellow);
 }
 
 @media (max-width: 1024px) {
-    .charts-row {
-        grid-template-columns: 1fr;
+    .chart-container {
+        margin-bottom: 20px;
     }
 }

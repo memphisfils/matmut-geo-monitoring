@@ -1,137 +1,154 @@
 """
-Client pour interroger multiple LLMs
+Client pour interroger Ollama Cloud API
+Format natif Ollama (pas OpenAI-compatible)
 """
 import os
-from typing import Dict, List
-import openai
-from anthropic import Anthropic
-import google.generativeai as genai
+import requests
+from typing import Dict
 from dotenv import load_dotenv
-import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 load_dotenv()
 
 class LLMClient:
-    """Client unifié pour ChatGPT, Claude, Gemini et DeepSeek"""
-    
+    """Client pour Ollama Cloud API - Format natif"""
+
     def __init__(self):
         self.clients = {}
+        self.base_url = os.getenv('OLLAMA_BASE_URL', 'https://ollama.com/api')
+        self.api_key = os.getenv('OLLAMA_API_KEY')
+        self.model = os.getenv('OLLAMA_MODEL', 'llama3.2:8b')
+        self.cache = {}  # Cache mémoire simple
         
-        # OpenAI
-        openai_key = os.getenv('OPENAI_API_KEY')
-        if openai_key:
-            self.openai_client = openai.OpenAI(api_key=openai_key)
-            self.clients['chatgpt'] = True
-        
-        # DeepSeek (OpenAI-compatible)
-        deepseek_key = os.getenv('DEEPSEEK_API_KEY')
-        if deepseek_key:
-            self.deepseek_client = openai.OpenAI(
-                api_key=deepseek_key,
-                base_url="https://api.deepseek.com"
-            )
-            self.clients['deepseek'] = True
+        if self.api_key:
+            print(f"Using Ollama Cloud URL: {self.base_url}")
+            print(f"Using model: {self.model}")
+            self.clients['ollama'] = True
+            print(f"Initialized Ollama Cloud Client.")
+        else:
+            print("Warning: OLLAMA_API_KEY not configured in .env")
 
-        # Anthropic
-        anthropic_key = os.getenv('ANTHROPIC_API_KEY')
-        if anthropic_key:
-            try:
-                self.anthropic_client = Anthropic(api_key=anthropic_key)
-                self.clients['claude'] = True
-            except Exception as e:
-                print(f"Failed to init Claude: {e}")
+        print(f"Available models: {list(self.clients.keys())}")
+
+    def query_ollama(self, prompt: str, model: str = None, use_cache: bool = True) -> str:
+        """Interroge Ollama Cloud avec le format natif"""
+        if 'ollama' not in self.clients:
+            return ""
         
-        # Google Gemini
-        google_key = os.getenv('GOOGLE_API_KEY')
-        if google_key:
+        # Check cache
+        cache_key = f"{model or self.model}:{prompt[:100]}"
+        if use_cache and cache_key in self.cache:
+            print(f"  [CACHE HIT] Using cached response")
+            return self.cache[cache_key]
+        
+        use_model = model or self.model
+        
+        # Optimisé: timeout 30s, 1 retry max
+        max_retries = 1
+        timeout = 30  # secondes
+        
+        for attempt in range(max_retries + 1):
             try:
-                genai.configure(api_key=google_key)
-                self.gemini_model = genai.GenerativeModel('gemini-pro')
-                self.clients['gemini'] = True
-            except Exception as e:
-                print(f"Failed to init Gemini: {e}")
+                url = f"{self.base_url}/chat"
+                headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': f'Bearer {self.api_key}'
+                }
+                payload = {
+                    'model': use_model,
+                    'messages': [
+                        {'role': 'user', 'content': prompt}
+                    ],
+                    'stream': False
+                }
                 
-        print(f"Initialized LLM Client. Available models: {list(self.clients.keys())}")
-    
-    def query_chatgpt(self, prompt: str) -> str:
-        """Interroge ChatGPT (GPT-4)"""
-        if 'chatgpt' not in self.clients: return ""
-        try:
-            response = self.openai_client.chat.completions.create(
-                model="gpt-4-turbo-preview",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=800
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            print(f"Erreur ChatGPT: {e}")
-            return ""
+                if attempt == 0:
+                    print(f"  Attempt {attempt + 1}/{max_retries + 1} (timeout: {timeout}s)...")
+                else:
+                    print(f"  Retry {attempt}/{max_retries}...")
+                    
+                response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+                response.raise_for_status()
+                
+                result = response.json()
+                message = result.get('message', {})
+                content = message.get('content', '')
+                print(f"  [OK] Response received ({len(content)} chars)")
+                
+                # Store in cache
+                if use_cache:
+                    self.cache[cache_key] = content
+                
+                return content
+                
+            except requests.exceptions.Timeout:
+                print(f"  [TIMEOUT] ({timeout}s)")
+                if attempt == max_retries:
+                    print(f"  [ERROR] Max retries reached")
+                    return ""
+            except requests.exceptions.HTTPError as e:
+                print(f"  [HTTP ERROR] {e}")
+                if hasattr(e, 'response'):
+                    print(f"     Response: {e.response.text[:200]}")
+                return ""
+            except requests.exceptions.RequestException as e:
+                print(f"  [CONNECTION ERROR] {e}")
+                return ""
+            except Exception as e:
+                print(f"  [ERROR] {e}")
+                return ""
+        
+        return ""
 
-    def query_deepseek(self, prompt: str) -> str:
-        """Interroge DeepSeek (DeepSeek-V3/R1)"""
-        if 'deepseek' not in self.clients: return ""
-        try:
-            # Utiliser deepseek-chat (ou deepseek-reasoner pour R1)
-            response = self.deepseek_client.chat.completions.create(
-                model="deepseek-chat",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=800,
-                stream=False
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            print(f"Erreur DeepSeek: {e}")
-            return ""
-    
-    def query_claude(self, prompt: str) -> str:
-        """Interroge Claude (Sonnet)"""
-        if 'claude' not in self.clients: return ""
-        try:
-            response = self.anthropic_client.messages.create(
-                model="claude-3-sonnet-20240229",
-                max_tokens=800,
-                temperature=0.7,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            return response.content[0].text
-        except Exception as e:
-            print(f"Erreur Claude: {e}")
-            return ""
-    
-    def query_gemini(self, prompt: str) -> str:
-        """Interroge Google Gemini"""
-        if 'gemini' not in self.clients: return ""
-        try:
-            response = self.gemini_model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            print(f"Erreur Gemini: {e}")
-            return ""
-    
-    def query_all(self, prompt: str) -> Dict[str, str]:
-        """Interroge tous les LLMs disponibles et retourne les résultats"""
+    def query_all_parallel(self, prompts: list, max_workers: int = 3) -> Dict[str, str]:
+        """Interroge Ollama en parallèle pour plusieurs prompts"""
         results = {}
         
-        if 'chatgpt' in self.clients:
-            print(f"Querying ChatGPT...")
-            results['chatgpt'] = self.query_chatgpt(prompt)
+        if 'ollama' not in self.clients:
+            return results
+        
+        print(f"\n[PARALLEL] Processing {len(prompts)} prompts with {max_workers} workers...")
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_prompt = {
+                executor.submit(self.query_ollama, prompt, None, True): prompt 
+                for prompt in prompts
+            }
             
-        if 'deepseek' in self.clients:
-            print(f"Querying DeepSeek...")
-            results['deepseek'] = self.query_deepseek(prompt)
+            for i, future in enumerate(as_completed(future_to_prompt), 1):
+                prompt = future_to_prompt[future]
+                try:
+                    result = future.result()
+                    results[prompt] = result
+                    print(f"[{i}/{len(prompts)}] Completed: {prompt[:50]}...")
+                except Exception as e:
+                    print(f"[{i}/{len(prompts)}] Error: {prompt[:50]}... - {e}")
+                    results[prompt] = ""
+        
+        return results
 
-        if 'claude' in self.clients:
-            print(f"Querying Claude...")
-            results['claude'] = self.query_claude(prompt)
-        
-        if 'gemini' in self.clients:
-            print(f"Querying Gemini...")
-            results['gemini'] = self.query_gemini(prompt)
-        
+    def query_all(self, prompt: str) -> Dict[str, str]:
+        """Interroge Ollama et retourne les résultats"""
+        results = {}
+
+        if 'ollama' in self.clients:
+            print(f"Querying Ollama (model: {self.model})...")
+            results['ollama'] = self.query_ollama(prompt)
+
         return results
 
     def get_active_models(self) -> Dict[str, bool]:
         """Retourne la liste des modèles actifs"""
         return self.clients
+
+    def clear_cache(self):
+        """Vide le cache"""
+        self.cache = {}
+        print("[CACHE] Cleared")
+
+    def get_cache_stats(self) -> dict:
+        """Retourne les statistiques du cache"""
+        return {
+            'size': len(self.cache),
+            'keys': list(self.cache.keys())[:5]
+        }

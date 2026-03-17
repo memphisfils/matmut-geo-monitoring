@@ -1,86 +1,120 @@
 /**
- * API Service - Communication avec le backend Flask
+ * API Service — GEO Monitor v2.0
+ * Communication avec le backend Flask — compatible toute marque
  */
 
 const API_URL = 'http://localhost:5000/api';
 
-// ========== DEMO DATA (fallback quand le backend n'est pas lancé) ==========
-const DEMO_DATA = {
-  metrics: {
-    "MAIF": { mention_count: 34, mention_rate: 85.0, avg_position: 1.65, top_of_mind: 32.5, first_position_count: 13, share_of_voice: 15.52, global_score: 55.19 },
-    "AXA": { mention_count: 33, mention_rate: 82.5, avg_position: 2.18, top_of_mind: 20.0, first_position_count: 8, share_of_voice: 15.07, global_score: 49.77 },
-    "Matmut": { mention_count: 28, mention_rate: 70.0, avg_position: 3.21, top_of_mind: 10.0, first_position_count: 4, share_of_voice: 12.79, global_score: 40.43 },
-    "MACIF": { mention_count: 30, mention_rate: 75.0, avg_position: 2.87, top_of_mind: 12.5, first_position_count: 5, share_of_voice: 13.7, global_score: 43.22 },
-    "Groupama": { mention_count: 29, mention_rate: 72.5, avg_position: 3.45, top_of_mind: 7.5, first_position_count: 3, share_of_voice: 13.24, global_score: 38.68 },
-    "GMF": { mention_count: 25, mention_rate: 62.5, avg_position: 3.88, top_of_mind: 5.0, first_position_count: 2, share_of_voice: 11.42, global_score: 34.2 },
-    "Allianz": { mention_count: 23, mention_rate: 57.5, avg_position: 4.13, top_of_mind: 5.0, first_position_count: 2, share_of_voice: 10.5, global_score: 31.67 },
-    "MMA": { mention_count: 20, mention_rate: 50.0, avg_position: 4.65, top_of_mind: 2.5, first_position_count: 1, share_of_voice: 9.13, global_score: 27.69 },
-    "MACSF": { mention_count: 18, mention_rate: 45.0, avg_position: 4.22, top_of_mind: 2.5, first_position_count: 1, share_of_voice: 8.22, global_score: 26.35 },
-    "Generali": { mention_count: 14, mention_rate: 35.0, avg_position: 5.14, top_of_mind: 0.0, first_position_count: 0, share_of_voice: 6.39, global_score: 20.12 },
-    "AG2R": { mention_count: 10, mention_rate: 25.0, avg_position: 5.6, top_of_mind: 0.0, first_position_count: 0, share_of_voice: 4.57, global_score: 15.27 },
-    "APRIL": { mention_count: 5, mention_rate: 12.5, avg_position: 6.2, top_of_mind: 2.5, first_position_count: 1, share_of_voice: 2.28, global_score: 10.55 }
-  },
-  ranking: [],
-  insights: {
-    rank: 5,
+// ========== DEMO DATA FACTORY — génère du démo pour n'importe quelle marque ==========
+export function DEMO_DATA_FACTORY(brand = 'Marque', competitors = []) {
+  const allBrands = [brand, ...competitors];
+  if (allBrands.length < 2) allBrands.push('Concurrent A', 'Concurrent B', 'Concurrent C');
+
+  // Scores de base aléatoires mais reproductibles
+  const seed = brand.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const rand = (min, max, offset = 0) => min + ((seed + offset) % (max - min));
+
+  const metrics = {};
+  allBrands.forEach((b, i) => {
+    const base = i === 0 ? rand(55, 80) : rand(30, 75, i * 17);
+    metrics[b] = {
+      mention_count: Math.round(base * 0.4),
+      mention_rate: base,
+      avg_position: parseFloat((1 + i * 0.8 + (seed % 10) * 0.1).toFixed(2)),
+      top_of_mind: Math.max(0, base - 40 - i * 8),
+      first_position_count: Math.max(0, Math.round(base * 0.04) - i),
+      share_of_voice: 0,
+      sentiment_score: Math.round(base * 0.6),
+      global_score: 0
+    };
+  });
+
+  // Share of voice
+  const totalMentions = Object.values(metrics).reduce((s, m) => s + m.mention_count, 0);
+  Object.keys(metrics).forEach(b => {
+    metrics[b].share_of_voice = parseFloat((metrics[b].mention_count / (totalMentions || 1) * 100).toFixed(2));
+  });
+
+  // Score global
+  Object.keys(metrics).forEach(b => {
+    const m = metrics[b];
+    const score = m.mention_rate * 0.4 +
+      (m.avg_position > 0 ? 100 / m.avg_position : 0) * 0.3 +
+      m.share_of_voice * 0.2 +
+      m.top_of_mind * 0.1 +
+      Math.max(m.sentiment_score, 0) * 0.1;
+    metrics[b].global_score = parseFloat(score.toFixed(2));
+  });
+
+  // Ranking
+  const ranking = Object.entries(metrics)
+    .map(([b, d]) => ({ brand: b, ...d }))
+    .sort((a, b) => b.global_score - a.global_score)
+    .map((item, idx) => ({ ...item, rank: idx + 1 }));
+
+  const mainBrand = allBrands[0];
+  const mainData = metrics[mainBrand] || {};
+  const mainRank = ranking.find(r => r.brand === mainBrand)?.rank;
+  const leader = ranking[0];
+
+  const insights = {
+    rank: mainRank,
+    main_brand: mainBrand,
     strengths: [
-      "Bonne visibilité générale (70% de mention)",
-      "Forte présence sur l'assurance auto (78% mention)",
-      "Bon positionnement mutualiste reconnu par les LLMs",
-      "Mentionnée dans 7 catégories sur 10 en assurance habitation"
-    ],
+      mainData.mention_rate > 60
+        ? `Bonne visibilité générale (${mainData.mention_rate}% de mention)`
+        : null,
+      mainData.avg_position <= 2 && mainData.avg_position > 0
+        ? `Excellente position moyenne (${mainData.avg_position})`
+        : null,
+    ].filter(Boolean),
     weaknesses: [
-      "Position moyenne perfectible (3.21)",
-      "Rarement citée en premier (10%)",
-      "Faible visibilité en assurance professionnelle (45%)",
-      "Share of Voice en dessous de la moyenne (12.79%)"
-    ],
+      mainData.mention_rate <= 60
+        ? `Visibilité limitée (${mainData.mention_rate}% de mention)`
+        : null,
+      mainData.avg_position > 3
+        ? `Position moyenne perfectible (${mainData.avg_position})`
+        : null,
+    ].filter(Boolean),
     recommendations: [
-      "Réduire l'écart avec MAIF (-14.8 points)",
-      "Renforcer contenu assurance professionnelle",
-      "Améliorer SEO/GEO sur requêtes génériques",
-      "Développer le contenu expert sur les thématiques santé",
-      "Créer des pages d'atterrissage optimisées pour les requêtes AI"
-    ]
-  },
-  category_data: {
-    assurance_auto: { Matmut: 72, MAIF: 88, AXA: 85, MACIF: 80, Groupama: 70, GMF: 68, Allianz: 55, MMA: 52 },
-    assurance_habitation: { Matmut: 68, MAIF: 82, AXA: 78, MACIF: 75, Groupama: 72, GMF: 65, Allianz: 58, MMA: 50 },
-    mutuelle_sante: { Matmut: 75, MAIF: 85, AXA: 70, MACIF: 70, Groupama: 65, GMF: 60, MACSF: 80, MMA: 45 },
-    assurance_pro: { Matmut: 45, MAIF: 72, AXA: 90, MACIF: 55, Groupama: 60, Allianz: 75, MMA: 50, GMF: 48 },
-    general: { Matmut: 78, MAIF: 92, AXA: 88, MACIF: 82, Groupama: 78, GMF: 70, Allianz: 65, MMA: 60 }
-  },
-  metadata: {
-    total_prompts: 20,
-    total_analyses: 40,
-    timestamp: new Date().toISOString(),
-    is_demo: true
-  }
-};
+      leader && leader.brand !== mainBrand
+        ? `Réduire l'écart avec ${leader.brand} (-${(leader.global_score - (mainData.global_score || 0)).toFixed(1)} pts)`
+        : null,
+      'Renforcer le contenu expert sur le secteur',
+      'Améliorer SEO/GEO sur requêtes génériques',
+    ].filter(Boolean)
+  };
 
-// Generate ranking from metrics
-function buildRanking(metrics) {
-  const ranking = Object.entries(metrics).map(([brand, data]) => ({
-    brand,
-    ...data
-  }));
-  ranking.sort((a, b) => b.global_score - a.global_score);
-  ranking.forEach((item, idx) => { item.rank = idx + 1; });
-  return ranking;
+  const categoryData = {
+    general: Object.fromEntries(allBrands.map((b) => [b, metrics[b]?.mention_rate || 0]))
+  };
+
+  return {
+    metrics,
+    ranking,
+    insights,
+    category_data: categoryData,
+    metadata: {
+      brand: mainBrand,
+      competitors,
+      total_prompts: 20,
+      total_analyses: 40,
+      timestamp: new Date().toISOString(),
+      is_demo: true
+    }
+  };
 }
-
-DEMO_DATA.ranking = buildRanking(DEMO_DATA.metrics);
 
 // ========== API FUNCTIONS ==========
 
-export async function fetchMetrics() {
+export async function fetchMetrics(options = {}) {
   try {
     const response = await fetch(`${API_URL}/metrics`);
     if (!response.ok) throw new Error('Backend not available');
     return await response.json();
-  } catch (error) {
-    console.warn('Backend not available, using demo data:', error.message);
-    return DEMO_DATA;
+  } catch {
+    console.warn('Backend not available, using demo data');
+    return DEMO_DATA_FACTORY(options.brand, options.competitors);
   }
 }
 
@@ -92,8 +126,8 @@ export async function runAnalysis(options = {}) {
       body: JSON.stringify(options)
     });
     return await response.json();
-  } catch (error) {
-    console.warn('Backend not available');
+  } catch {
+    console.warn('Backend not available, using demo mode');
     return { status: 'demo', message: 'Using demo data' };
   }
 }
@@ -103,40 +137,74 @@ export async function fetchExport() {
     const response = await fetch(`${API_URL}/export`);
     if (!response.ok) throw new Error('Export not available');
     return await response.json();
-  } catch (error) {
-    // Return demo export
-    return {
-      generated_at: new Date().toISOString(),
-      data_timestamp: DEMO_DATA.metadata.timestamp,
-      executive_summary: {
-        matmut_rank: DEMO_DATA.insights.rank,
-        total_brands_tracked: DEMO_DATA.ranking.length,
-        total_prompts_tested: DEMO_DATA.metadata.total_prompts
-      },
-      ranking: DEMO_DATA.ranking,
-      insights: DEMO_DATA.insights,
-      full_metrics: DEMO_DATA.metrics
-    };
+  } catch {
+    return { error: 'Backend not available' };
   }
 }
 
-export async function fetchHistory() {
+export async function fetchHistory(brand = null, ranking = null) {
   try {
     const response = await fetch(`${API_URL}/history`);
     if (!response.ok) throw new Error('History not available');
-    return await response.json();
-  } catch (error) {
-    // Return empty array or throw, handled by caller
-    console.warn('History API fetch failed:', error);
+    const historyData = await response.json();
+    
+    // Si on a des données réelles avec la bonne marque, les utiliser
+    if (historyData && historyData.length > 0 && brand) {
+      // Vérifier si l'historique contient cette marque
+      const hasBrand = historyData.some(h => h.brand === brand);
+      if (hasBrand) {
+        return historyData;
+      }
+    }
+    
+    return historyData;
+  } catch {
     return [];
   }
+}
+
+// Génère un historique fictif basé sur le ranking actuel pour le TrendChart
+export function generateTrendHistory(ranking, brand, days = 30) {
+  if (!ranking || !brand) return [];
+  
+  const today = new Date();
+  const history = [];
+  
+  // Get brand data and competitors
+  const brandData = ranking.find(r => r.brand === brand);
+  const competitors = ranking.filter(r => r.brand !== brand).slice(0, 3);
+  
+  if (!brandData) return [];
+  
+  // Generate historical data points
+  for (let i = days - 1; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    const dateStr = date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+    
+    const point = { date: dateStr };
+    
+    // Brand score with slight variation
+    const brandVariation = (Math.sin(i * 0.3) * 5) + (Math.random() * 3);
+    point[brand] = Math.min(100, Math.max(0, brandData.global_score + brandVariation));
+    
+    // Competitors scores
+    competitors.forEach((comp, idx) => {
+      const compVariation = (Math.sin(i * 0.4 + idx) * 4) + (Math.random() * 2);
+      point[comp.brand] = Math.min(100, Math.max(0, comp.global_score + compVariation));
+    });
+    
+    history.push(point);
+  }
+  
+  return history;
 }
 
 export async function checkStatus() {
   try {
     const response = await fetch(`${API_URL}/status`);
     return await response.json();
-  } catch (error) {
-    return { status: 'offline', message: 'Backend not connected' };
+  } catch {
+    return { status: 'offline' };
   }
 }

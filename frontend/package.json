@@ -10,13 +10,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^2.11.2",
+    "decimal.js-light": "^2.5.1",
     "framer-motion": "^12.34.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.1.0",
     "lucide-react": "^0.563.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "recharts": "^3.7.0"
+    "recharts": "^3.7.0",
+    "reselect": "^5.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
     PieChart, Pie, Legend,
@@ -8,24 +7,24 @@ import {
 import './Charts.css';
 
 const BRAND_COLORS = {
-    Matmut: '#003D7A',
-    MAIF: '#3B82F6',
-    AXA: '#10B981',
-    MACIF: '#8B5CF6',
-    Groupama: '#F59E0B',
-    GMF: '#EF4444',
-    Allianz: '#06B6D4',
-    MMA: '#EC4899',
-    MACSF: '#84CC16',
-    Generali: '#F97316',
-    AG2R: '#6366F1',
-    APRIL: '#14B8A6'
+    Matmut: '#FFD700', // Yellow for target
+    MAIF: '#a0a0a0',
+    AXA: '#a0a0a0',
+    MACIF: '#a0a0a0',
+    Groupama: '#a0a0a0',
+    GMF: '#a0a0a0',
+    Allianz: '#a0a0a0',
+    MMA: '#a0a0a0',
+    MACSF: '#a0a0a0',
+    Generali: '#a0a0a0',
+    AG2R: '#a0a0a0',
+    APRIL: '#a0a0a0'
 };
 
 const CHART_THEME = {
     background: 'transparent',
-    textColor: '#94A3B8',
-    gridColor: 'rgba(148, 163, 184, 0.08)',
+    textColor: '#666666',
+    gridColor: '#333333',
 };
 
 // Custom tooltip
@@ -44,44 +43,39 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 // ========== Mention Rate Bar Chart ==========
-export function MentionChart({ ranking }) {
+export function MentionChart({ ranking, brand }) {
     if (!ranking?.length) return null;
 
     const top8 = ranking.slice(0, 8).map(r => ({
         name: r.brand,
         value: r.mention_rate,
-        fill: r.brand === 'Matmut' ? '#003D7A' : '#334155'
+        fill: r.brand === brand ? '#FFD700' : '#333333'
     }));
 
     return (
-        <motion.div
-            className="card chart-card"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-        >
-            <div className="card-header">
-                <h3 className="card-title">📊 Taux de Mention</h3>
+        <div className="chart-container">
+            <div className="chart-header">
+                <h3>TAUX DE MENTION</h3>
             </div>
             <div className="chart-body">
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={top8} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.gridColor} />
                         <XAxis
                             dataKey="name"
-                            tick={{ fontSize: 11, fill: CHART_THEME.textColor }}
+                            tick={{ fontSize: 10, fill: CHART_THEME.textColor }}
                             axisLine={{ stroke: CHART_THEME.gridColor }}
                             tickLine={false}
                         />
                         <YAxis
-                            tick={{ fontSize: 11, fill: CHART_THEME.textColor }}
+                            tick={{ fontSize: 10, fill: CHART_THEME.textColor }}
                             axisLine={false}
                             tickLine={false}
                             tickFormatter={v => `${v}%`}
                             domain={[0, 100]}
                         />
                         <Tooltip content={<CustomTooltip />} />
-                        <Bar dataKey="value" name="Taux de mention" radius={[6, 6, 0, 0]} barSize={40}>
+                        <Bar dataKey="value" name="Taux" barSize={30}>
                             {top8.map((entry, index) => (
                                 <Cell key={index} fill={entry.fill} />
                             ))}
@@ -89,47 +83,38 @@ export function MentionChart({ ranking }) {
                     </BarChart>
                 </ResponsiveContainer>
             </div>
-        </motion.div>
+        </div>
     );
 }
 
 // ========== Share of Voice Doughnut ==========
-export function SovChart({ ranking }) {
+export function SovChart({ ranking, brand }) {
     if (!ranking?.length) return null;
 
     const top6 = ranking.slice(0, 6).map(r => ({
         name: r.brand,
         value: parseFloat(r.share_of_voice),
-        fill: BRAND_COLORS[r.brand] || '#64748B'
+        fill: r.brand === brand ? '#FFD700' : '#444444'
     }));
 
-    const othersValue = ranking.slice(6).reduce((s, r) => s + parseFloat(r.share_of_voice), 0);
-    if (othersValue > 0) {
-        top6.push({ name: 'Autres', value: parseFloat(othersValue.toFixed(1)), fill: '#334155' });
-    }
-
     return (
-        <motion.div
-            className="card chart-card"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-        >
-            <div className="card-header">
-                <h3 className="card-title">🎯 Share of Voice</h3>
+        <div className="chart-container">
+            <div className="chart-header">
+                <h3>SHARE OF VOICE</h3>
             </div>
             <div className="chart-body">
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={250}>
                     <PieChart>
                         <Pie
                             data={top6}
                             cx="50%"
                             cy="50%"
-                            innerRadius={60}
-                            outerRadius={110}
-                            paddingAngle={3}
+                            innerRadius={50}
+                            outerRadius={90}
+                            paddingAngle={2}
                             dataKey="value"
-                            stroke="transparent"
+                            stroke="#111111"
+                            strokeWidth={2}
                         >
                             {top6.map((entry, i) => (
                                 <Cell key={i} fill={entry.fill} />
@@ -139,23 +124,22 @@ export function SovChart({ ranking }) {
                         <Legend
                             iconType="circle"
                             iconSize={8}
-                            formatter={(value) => <span style={{ color: '#94A3B8', fontSize: 11 }}>{value}</span>}
+                            formatter={(value) => <span style={{ color: '#666666', fontSize: 10 }}>{value}</span>}
                         />
                     </PieChart>
                 </ResponsiveContainer>
             </div>
-        </motion.div>
+        </div>
     );
 }
 
 // ========== Radar Multi-Criteria ==========
-export function RadarCompare({ ranking }) {
+export function RadarCompare({ ranking, brand }) {
     if (!ranking?.length) return null;
 
-    // Matmut + top 3 competitors
-    const matmut = ranking.find(r => r.brand === 'Matmut');
-    const competitors = ranking.filter(r => r.brand !== 'Matmut').slice(0, 3);
-    const brands = matmut ? [matmut, ...competitors] : competitors.slice(0, 4);
+    const targetBrand = ranking.find(r => r.brand === brand);
+    const competitors = ranking.filter(r => r.brand !== brand).slice(0, 3);
+    const brands = targetBrand ? [targetBrand, ...competitors] : competitors.slice(0, 4);
 
     const radarData = [
         { subject: 'Mention', ...Object.fromEntries(brands.map(b => [b.brand, b.mention_rate])) },
@@ -166,23 +150,18 @@ export function RadarCompare({ ranking }) {
     ];
 
     return (
-        <motion.div
-            className="card chart-card chart-card-full"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-        >
-            <div className="card-header">
-                <h3 className="card-title">📈 Comparaison Multi-Critères</h3>
-                <span className="card-badge">Top 4</span>
+        <div className="chart-container chart-full">
+            <div className="chart-header">
+                <h3>COMPARAISON MULTI-CRITÈRES</h3>
+                <span className="chart-badge">TOP 4</span>
             </div>
             <div className="chart-body">
-                <ResponsiveContainer width="100%" height={380}>
+                <ResponsiveContainer width="100%" height={300}>
                     <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
                         <PolarGrid stroke={CHART_THEME.gridColor} />
                         <PolarAngleAxis
                             dataKey="subject"
-                            tick={{ fontSize: 11, fill: CHART_THEME.textColor }}
+                            tick={{ fontSize: 10, fill: CHART_THEME.textColor }}
                         />
                         <PolarRadiusAxis
                             angle={90}
@@ -194,56 +173,58 @@ export function RadarCompare({ ranking }) {
                                 key={b.brand}
                                 name={b.brand}
                                 dataKey={b.brand}
-                                stroke={BRAND_COLORS[b.brand] || `hsl(${i * 90}, 70%, 60%)`}
-                                fill={BRAND_COLORS[b.brand] || `hsl(${i * 90}, 70%, 60%)`}
-                                fillOpacity={b.brand === 'Matmut' ? 0.25 : 0.08}
-                                strokeWidth={b.brand === 'Matmut' ? 3 : 1.5}
+                                stroke={b.brand === brand ? '#FFD700' : '#666666'}
+                                fill={b.brand === brand ? '#FFD700' : '#666666'}
+                                fillOpacity={b.brand === brand ? 0.3 : 0.1}
+                                strokeWidth={b.brand === brand ? 2 : 1}
                             />
                         ))}
                         <Legend
                             iconType="circle"
                             iconSize={8}
-                            formatter={(value) => <span style={{ color: '#94A3B8', fontSize: 11 }}>{value}</span>}
+                            formatter={(value) => <span style={{ color: '#666666', fontSize: 10 }}>{value}</span>}
                         />
                         <Tooltip />
                     </RadarChart>
                 </ResponsiveContainer>
             </div>
-        </motion.div>
+        </div>
     );
 }
 
 // ========== Category Heatmap ==========
-export function CategoryHeatmap({ categoryData }) {
+export function CategoryHeatmap({ categoryData, brand, ranking }) {
     if (!categoryData) return null;
 
     const categories = Object.keys(categoryData);
-    const brands = ['Matmut', 'MAIF', 'AXA', 'MACIF', 'Groupama', 'GMF', 'Allianz', 'MMA'];
+    
+    // Get real brands from ranking data
+    const brandsList = ranking ? ranking.map(r => r.brand).slice(0, 6) : [brand];
 
     const categoryLabels = {
         assurance_auto: 'Auto',
         assurance_habitation: 'Habitation',
         mutuelle_sante: 'Santé',
         assurance_pro: 'Pro',
-        general: 'Général'
+        general: 'Général',
+        automobile: 'Auto',
+        banque: 'Banque',
+        telecoms: 'Télécoms',
+        energie: 'Énergie',
+        sante: 'Santé'
     };
 
     const getColor = (val) => {
-        if (val >= 80) return 'rgba(16, 185, 129, 0.4)';
-        if (val >= 60) return 'rgba(59, 130, 246, 0.3)';
-        if (val >= 40) return 'rgba(245, 158, 11, 0.25)';
-        return 'rgba(239, 68, 68, 0.2)';
+        if (val >= 80) return 'var(--accent-yellow)';
+        if (val >= 60) return '#666666';
+        if (val >= 40) return '#444444';
+        return '#222222';
     };
 
     return (
-        <motion.div
-            className="card chart-card chart-card-full"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
-        >
-            <div className="card-header">
-                <h3 className="card-title">🗺️ Performance par Catégorie</h3>
+        <div className="chart-container chart-full">
+            <div className="chart-header">
+                <h3>PERFORMANCE PAR CATÉGORIE</h3>
             </div>
             <div className="chart-body heatmap-body">
                 <table className="heatmap-table">
@@ -256,16 +237,16 @@ export function CategoryHeatmap({ categoryData }) {
                         </tr>
                     </thead>
                     <tbody>
-                        {brands.map(brand => (
-                            <tr key={brand} className={brand === 'Matmut' ? 'row-matmut' : ''}>
-                                <td className="heatmap-brand">{brand}</td>
+                        {brandsList.map(b => (
+                            <tr key={b} className={b === brand ? 'row-target' : ''}>
+                                <td className="heatmap-brand">{b}</td>
                                 {categories.map(cat => {
-                                    const val = categoryData[cat]?.[brand] ?? 0;
+                                    const val = categoryData[cat]?.[b] ?? 0;
                                     return (
                                         <td key={cat}>
                                             <span
                                                 className="heatmap-cell"
-                                                style={{ background: getColor(val) }}
+                                                style={{ backgroundColor: getColor(val), color: b === brand ? '#000' : '#fff' }}
                                             >
                                                 {val}%
                                             </span>
@@ -277,6 +258,6 @@ export function CategoryHeatmap({ categoryData }) {
                     </tbody>
                 </table>
             </div>
-        </motion.div>
+        </div>
     );
 }

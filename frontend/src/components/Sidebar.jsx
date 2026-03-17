@@ -1,21 +1,21 @@
 import React from 'react';
 import {
     BarChart3, Shield, TrendingUp, Download, RefreshCw,
-    Activity, Wifi, WifiOff
+    Activity, Wifi, WifiOff, Target
 } from 'lucide-react';
 import './Sidebar.css';
 
-export default function Sidebar({ isBackendOnline }) {
+export default function Sidebar({ isBackendOnline, brand, onReset }) {
     return (
         <aside className="sidebar">
             {/* Logo */}
             <div className="sidebar-logo">
                 <div className="logo-icon">
-                    <Shield size={28} strokeWidth={2.5} />
+                    <Target size={28} strokeWidth={2.5} />
                 </div>
                 <div className="logo-text">
-                    <span className="logo-title">Matmut</span>
-                    <span className="logo-subtitle">GEO Monitor</span>
+                    <span className="logo-title">{brand || 'GEO Monitor'}</span>
+                    <span className="logo-subtitle">Visibility Dashboard</span>
                 </div>
             </div>
 
@@ -42,7 +42,12 @@ export default function Sidebar({ isBackendOnline }) {
                     {isBackendOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
                     <span>{isBackendOnline ? 'API Connectée' : 'Mode Démo'}</span>
                 </div>
-                <div className="sidebar-version">v1.0.0 • Matmut GEO</div>
+                <div className="sidebar-version">v2.0.0 • GEO Monitor</div>
+                {onReset && (
+                    <button onClick={onReset} className="btn-reset-brand">
+                        Changer de marque
+                    </button>
+                )}
             </div>
         </aside>
     );

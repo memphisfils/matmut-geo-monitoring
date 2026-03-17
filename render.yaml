@@ -31,7 +31,7 @@ services:
       sizeGB: 1
 
   # Frontend React
-  - type: static
+  - type: staticSite
     name: geo-dashboard-frontend
     env: node
     region: frankfurt
@@ -43,7 +43,3 @@ services:
         value: 18.x
       - key: VITE_API_URL
         sync: false
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html

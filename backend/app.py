@@ -10,7 +10,7 @@ from datetime import datetime
 from analyzer import BrandAnalyzer
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 from database import init_db, save_analysis, get_history, generate_demo_history
 from alerts import send_slack_alert

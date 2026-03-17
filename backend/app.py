@@ -444,7 +444,9 @@ def export_report():
 
 if __name__ == '__main__':
     port = int(os.getenv('FLASK_PORT', 5000))
-    debug = os.getenv('FLASK_DEBUG', 'True') == 'True'
+    debug = os.getenv('FLASK_DEBUG', 'False') == 'True'
     print(f"\n[INFO] GEO Monitor API v2.0 — Plateforme générique")
     print(f"   Server: http://localhost:{port}")
+    print(f"   Database: {'PostgreSQL' if os.getenv('DATABASE_URL') else 'SQLite'}")
+    print(f"   Mode: {'Production' if not debug else 'Development'}")
     app.run(host='0.0.0.0', port=port, debug=debug)

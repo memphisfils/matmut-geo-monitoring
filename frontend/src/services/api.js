@@ -3,7 +3,8 @@
  * Communication avec le backend Flask — compatible toute marque
  */
 
-const API_URL = 'http://localhost:5000/api';
+// URL de l'API (dynamique selon l'environnement)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 // ========== DEMO DATA FACTORY — génère du démo pour n'importe quelle marque ==========
 export function DEMO_DATA_FACTORY(brand = 'Marque', competitors = []) {

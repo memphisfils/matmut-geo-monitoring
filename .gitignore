@@ -12,6 +12,7 @@ ENV/
 .env
 *.env
 !.env.example
+!.env.render
 
 # Data
 data/*.json
@@ -35,3 +36,6 @@ build/
 
 # Logs
 *.log
+
+# Render
+.webapps/

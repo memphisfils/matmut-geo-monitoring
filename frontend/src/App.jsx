@@ -42,15 +42,14 @@ export default function App() {
         fetchMetrics({ brand: cfg.brand, competitors: cfg.competitors }),
         fetchHistory(cfg.brand)
       ]);
-      setData(result);
-      setHistory(historyData);
-      
+      setData(result || null);
+      setHistory(historyData || []);
+
       // Génère l'historique pour le TrendChart basé sur le ranking actuel
-      const trendData = generateTrendHistory(result.ranking, cfg.brand);
-      setTrendHistory(trendData);
-    } catch {
-      // Fallback démo si backend absent
-      console.warn('Backend not available, loading demo data');
+      const trendData = generateTrendHistory(result?.ranking, cfg.brand);
+      setTrendHistory(trendData || []);
+    } catch (err) {
+      console.warn('Backend not available, loading demo data', err);
       const { DEMO_DATA_FACTORY } = await import('./services/api');
       const demoResult = DEMO_DATA_FACTORY(cfg.brand, cfg.competitors);
       setData(demoResult);
@@ -133,7 +132,7 @@ export default function App() {
             </div>
           )}
 
-          {data && (
+          {data && data.ranking && (
             <>
               {/* Section 1: KPI + Trend Chart + Duel */}
               <div className="dashboard-section">

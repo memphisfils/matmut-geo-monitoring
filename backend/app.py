@@ -1,8 +1,11 @@
 """
-API Flask — GEO Monitor Sprint 2
+API Flask — GEO Monitor Sprint 3
 Nouveautés :
-  - POST /api/run-analysis/stream  → SSE, résultats en temps réel prompt par prompt
-  - GET  /api/metrics/by-model     → scores par modèle LLM + score de confiance
+  - GET  /api/prompts/compare   → comparateur de prompts (mention rate par prompt)
+  - POST /api/alerts/test       → test manuel des alertes (Slack + Email + Telegram)
+  - GET  /api/alerts/status     → état des canaux d'alertes configurés
+  - POST /api/alerts/weekly     → déclenchement manuel du résumé hebdo
+  - Scheduler : résumé hebdo automatique (tous les lundis 09h00)
 """
 from flask import Flask, jsonify, request, Response, stream_with_context
 from flask_cors import CORS
@@ -25,16 +28,17 @@ CORS(app, resources={r"/*": {"origins": ALLOWED_ORIGINS}}, supports_credentials=
 
 from database import (init_db, save_analysis, get_history,
                       generate_demo_history, upsert_project, get_all_projects)
-from alerts import send_slack_alert
+from alerts import send_alert, alert_rank_lost, alert_weekly_summary, send_slack_alert
 init_db()
 
 DATA_DIR     = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
 RESULTS_FILE = os.path.join(DATA_DIR, 'results.json')
 
 
-# ── APScheduler ─────────────────────────────────────────────────────────────
+# ── Scheduler ────────────────────────────────────────────────────────────────
 
 def _scheduled_analysis():
+    """Analyse automatique toutes les 6h pour chaque projet enregistré."""
     projects = get_all_projects()
     if not projects:
         return
@@ -51,13 +55,44 @@ def _scheduled_analysis():
             print(f"[SCHEDULER] {brand} : {e}")
 
 
+def _scheduled_weekly_summary():
+    """Résumé hebdo envoyé le lundi à 09h00 pour chaque projet."""
+    results = _load_results()
+    if not results:
+        return
+
+    brand       = results.get('brand', 'Marque')
+    competitors = results.get('competitors', [])
+    all_brands  = [brand] + competitors
+    az          = BrandAnalyzer(brands=all_brands)
+
+    all_analyses = [d['analysis'] for r in results['responses']
+                    for d in r['llm_analyses'].values()]
+    metrics = az.calculate_metrics(all_analyses)
+    ranking = az.generate_ranking(metrics)
+
+    brand_data = metrics.get(brand, {})
+    brand_rank = next((r['rank'] for r in ranking if r['brand'] == brand), None)
+    top_competitors = [r for r in ranking if r['brand'] != brand][:5]
+
+    alert_weekly_summary(
+        brand=brand,
+        rank=brand_rank or 0,
+        score=brand_data.get('global_score', 0),
+        mention_rate=brand_data.get('mention_rate', 0),
+        top_competitors=top_competitors
+    )
+
+
 def _start_scheduler():
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         scheduler = BackgroundScheduler()
         scheduler.add_job(_scheduled_analysis, 'interval', hours=6, id='auto_analysis')
+        scheduler.add_job(_scheduled_weekly_summary, 'cron',
+                          day_of_week='mon', hour=9, minute=0, id='weekly_summary')
         scheduler.start()
-        print("[SCHEDULER] Actif — toutes les 6h")
+        print("[SCHEDULER] Actif — analyse 6h + résumé hebdo lundi 09h")
         return scheduler
     except ImportError:
         print("[SCHEDULER] apscheduler non installé")
@@ -67,7 +102,7 @@ def _start_scheduler():
         return None
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _ensure_data_dir():
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -88,12 +123,11 @@ def _brand_seed(b):
     return abs(hash(b)) % (2**31)
 
 def _sse(event_type: str, data: dict) -> str:
-    """Formate un événement SSE."""
     payload = json.dumps({'type': event_type, **data}, ensure_ascii=False)
     return f"data: {payload}\n\n"
 
 
-# ── Demo data (anti-biais Sprint 1) ──────────────────────────────────────────
+# ── Demo data (anti-biais) ───────────────────────────────────────────────────
 
 def generate_demo_data(brand='Marque', competitors=None, prompts=None):
     if not competitors:
@@ -177,19 +211,21 @@ def _save_and_alert(results, brand):
         az      = BrandAnalyzer(brands=all_brands)
         metrics = az.calculate_metrics(all_analyses)
         ranking = az.generate_ranking(metrics)
+
         if ranking and ranking[0]['brand'] != brand:
-            leader = ranking[0]
-            gap    = leader['global_score'] - metrics.get(brand, {}).get('global_score', 0)
-            send_slack_alert(f"⚠️ *{brand}* n'est plus #1 ! Leader : *{leader['brand']}* (-{gap:.1f} pts)")
+            leader   = ranking[0]
+            gap      = leader['global_score'] - metrics.get(brand, {}).get('global_score', 0)
+            new_rank = next((r['rank'] for r in ranking if r['brand'] == brand), None)
+            alert_rank_lost(brand, leader['brand'], gap, new_rank or 0)
     except Exception as e:
         print(f"[ALERT] {e}")
 
 
-# ── Routes existantes (Sprint 1) ─────────────────────────────────────────────
+# ── Routes existantes (Sprint 1 + 2) ─────────────────────────────────────────
 
 @app.route('/', methods=['GET'])
 def index():
-    return jsonify({'status': 'online', 'version': '2.2', 'message': 'GEO Monitor API Sprint 2'})
+    return jsonify({'status': 'online', 'version': '2.3', 'message': 'GEO Monitor API Sprint 3'})
 
 @app.route('/api/status', methods=['GET'])
 def status():
@@ -275,20 +311,8 @@ def run_analysis():
                     'timestamp': results['timestamp'],
                     'duration': round(time.time() - start, 2)})
 
-
-# ── SPRINT 2 — Route SSE streaming ──────────────────────────────────────────
-
 @app.route('/api/run-analysis/stream', methods=['POST'])
 def run_analysis_stream():
-    """
-    Analyse en temps réel via Server-Sent Events (SSE).
-
-    Événements envoyés :
-      start    → {brand, total_prompts, models}
-      progress → {current, total, prompt, brands_found, position}
-      complete → {timestamp, is_demo, duration}
-      error    → {message}
-    """
     data         = request.get_json() or {}
     brand        = data.get('brand', 'Marque')
     competitors  = data.get('competitors', [])
@@ -296,15 +320,12 @@ def run_analysis_stream():
     limit        = data.get('limit', min(len(prompts), 6) if prompts else 6)
     use_demo     = data.get('demo', False)
     sector       = data.get('sector', '')
-
-    all_brands = [brand] + competitors
-    az         = BrandAnalyzer(brands=all_brands)
+    all_brands   = [brand] + competitors
+    az           = BrandAnalyzer(brands=all_brands)
 
     def generate_events():
-        start = time.time()
-
-        # ── Essayer d'initialiser le client LLM ─────────────────────────────
-        llm_client = None
+        start         = time.time()
+        llm_client    = None
         active_models = ['demo']
 
         if not use_demo and prompts:
@@ -314,91 +335,61 @@ def run_analysis_stream():
                 active_models = llm_client.models if llm_client.clients else ['demo']
                 if not llm_client.clients:
                     llm_client = None
-            except Exception as e:
-                print(f"[STREAM] LLM unavailable: {e}")
+            except Exception:
                 llm_client = None
 
         is_demo = llm_client is None
 
-        # ── Événement START ──────────────────────────────────────────────────
-        yield _sse('start', {
-            'brand':         brand,
-            'total_prompts': limit,
-            'models':        active_models,
-            'is_demo':       is_demo
-        })
+        yield _sse('start', {'brand': brand, 'total_prompts': limit,
+                              'models': active_models, 'is_demo': is_demo})
 
         responses = []
 
         for i, prompt in enumerate(prompts[:limit]):
             prompt_start = time.time()
 
-            # Requête au LLM (ou simulation démo)
             if is_demo:
-                time.sleep(0.3)   # simulation délai réaliste
-                def mention_prob(b):
-                    rng = random.Random(_brand_seed(b))
-                    return 0.35 + rng.random() * 0.55
-                brands_in = [b for b in all_brands
-                             if random.Random(_brand_seed(b) + i * 997).random() < mention_prob(b)]
-                brands_in.sort(key=lambda b: _brand_seed(b))
-                text = f'[Demo prompt {i+1}]'
-                analyses = {
-                    'ollama': {
-                        'response': text,
-                        'analysis': {
-                            'brands_mentioned': brands_in,
-                            'positions':        {b: idx + 1 for idx, b in enumerate(brands_in)},
-                            'first_brand':      brands_in[0] if brands_in else None,
-                            'matmut_mentioned': brand in brands_in,
-                            'brand_mentioned':  brand in brands_in,
-                            'brand_position':   next((idx + 1 for idx, b in enumerate(brands_in) if b == brand), None),
-                            'matmut_position':  next((idx + 1 for idx, b in enumerate(brands_in) if b == brand), None),
-                        }
-                    }
-                }
-            else:
-                # Mode réel — interroger tous les modèles pour ce prompt
-                all_model_resp = llm_client.query_all_models_for_prompt(prompt)
-                analyses = {}
+                time.sleep(0.3)
                 brands_in = []
+                for b in all_brands:
+                    rng = random.Random(_brand_seed(b) + i * 997)
+                    if rng.random() < (0.35 + random.Random(_brand_seed(b)).random() * 0.55):
+                        brands_in.append(b)
+                brands_in.sort(key=lambda b: _brand_seed(b))
+                text     = f'[Demo prompt {i+1}]'
+                analyses = {'ollama': {'response': text, 'analysis': {
+                    'brands_mentioned': brands_in,
+                    'positions':        {b: idx+1 for idx, b in enumerate(brands_in)},
+                    'first_brand':      brands_in[0] if brands_in else None,
+                    'matmut_mentioned': brand in brands_in,
+                    'brand_mentioned':  brand in brands_in,
+                    'brand_position':   next((idx+1 for idx, b in enumerate(brands_in) if b == brand), None),
+                    'matmut_position':  next((idx+1 for idx, b in enumerate(brands_in) if b == brand), None),
+                }}}
+            else:
+                all_model_resp = llm_client.query_all_models_for_prompt(prompt)
+                analyses    = {}
+                brands_in   = []
                 for model, text in all_model_resp.items():
                     analysis = az.analyze_response(text)
                     analyses[model] = {'response': text, 'analysis': analysis}
                     brands_in = analysis.get('brands_mentioned', [])
 
             brand_pos = next(
-                (analyses[m]['analysis'].get('brand_position') for m in analyses if analyses[m]['analysis'].get('brand_position')),
-                None
-            )
+                (analyses[m]['analysis'].get('brand_position')
+                 for m in analyses if analyses[m]['analysis'].get('brand_position')), None)
+            responses.append({'category': 'general', 'prompt': prompt, 'llm_analyses': analyses})
 
-            responses.append({
-                'category':     'general',
-                'prompt':       prompt,
-                'llm_analyses': analyses
-            })
-
-            # ── Événement PROGRESS ───────────────────────────────────────────
             yield _sse('progress', {
-                'current':      i + 1,
-                'total':        limit,
-                'prompt':       prompt,
-                'brands_found': brands_in,
-                'brand_mentioned': brand in brands_in,
-                'brand_position':  brand_pos,
-                'duration_ms':  round((time.time() - prompt_start) * 1000)
+                'current': i + 1, 'total': limit, 'prompt': prompt,
+                'brands_found': brands_in, 'brand_mentioned': brand in brands_in,
+                'brand_position': brand_pos,
+                'duration_ms': round((time.time() - prompt_start) * 1000)
             })
 
-        # ── Sauvegarde ───────────────────────────────────────────────────────
-        results = {
-            'timestamp':    datetime.now().isoformat(),
-            'total_prompts': limit,
-            'llms_used':    active_models,
-            'brand':        brand,
-            'competitors':  competitors,
-            'responses':    responses,
-            'is_demo':      is_demo
-        }
+        results = {'timestamp': datetime.now().isoformat(), 'total_prompts': limit,
+                   'llms_used': active_models, 'brand': brand,
+                   'competitors': competitors, 'responses': responses, 'is_demo': is_demo}
         _save_and_alert(results, brand)
 
         try:
@@ -406,77 +397,14 @@ def run_analysis_stream():
         except Exception:
             pass
 
-        # ── Événement COMPLETE ───────────────────────────────────────────────
-        yield _sse('complete', {
-            'timestamp': results['timestamp'],
-            'is_demo':   is_demo,
-            'duration':  round(time.time() - start, 2)
-        })
+        yield _sse('complete', {'timestamp': results['timestamp'],
+                                'is_demo': is_demo, 'duration': round(time.time() - start, 2)})
 
-    return Response(
-        stream_with_context(generate_events()),
-        content_type='text/event-stream',
-        headers={
-            'Cache-Control':    'no-cache',
-            'X-Accel-Buffering': 'no',    # désactive le buffering nginx (Render)
-            'Connection':       'keep-alive'
-        }
-    )
-
-
-# ── SPRINT 2 — Métriques par modèle ─────────────────────────────────────────
-
-@app.route('/api/metrics/by-model', methods=['GET'])
-def get_metrics_by_model():
-    """
-    Retourne les métriques séparées par modèle LLM
-    + score de confiance (divergence inter-modèles).
-
-    Response:
-    {
-      "by_model": {
-        "qwen3.5":  {brand: {mention_rate, global_score, ...}},
-        "llama3.2": {brand: {...}}
-      },
-      "confidence": {
-        brand: {confidence, divergence_level, std_dev, per_model}
-      },
-      "main_brand_confidence": {...},
-      "models": ["qwen3.5", ...]
-    }
-    """
-    results = _load_results()
-    if not results:
-        return jsonify({'error': 'Aucune donnée disponible — lancez une analyse d\'abord'}), 404
-
-    brand       = results.get('brand', 'Marque')
-    competitors = results.get('competitors', [])
-    all_brands  = [brand] + competitors if competitors else None
-    az          = BrandAnalyzer(brands=all_brands)
-
-    report = az.get_full_confidence_report(results['responses'], main_brand=brand)
-
-    # Ajouter les rankings par modèle
-    rankings_by_model = {}
-    for model, metrics in report['by_model'].items():
-        rankings_by_model[model] = az.generate_ranking(metrics)
-
-    return jsonify({
-        'by_model':              report['by_model'],
-        'rankings_by_model':     rankings_by_model,
-        'confidence':            report['confidence'],
-        'main_brand_confidence': report['main_brand_confidence'],
-        'models':                list(report['by_model'].keys()),
-        'brand':                 brand,
-        'metadata': {
-            'timestamp':    results['timestamp'],
-            'is_demo':      results.get('is_demo', False),
-            'total_prompts': results['total_prompts']
-        }
-    })
-
-
-# ── Routes restantes ─────────────────────────────────────────────────────────
+    return Response(stream_with_context(generate_events()),
+                    content_type='text/event-stream',
+                    headers={'Cache-Control': 'no-cache',
+                             'X-Accel-Buffering': 'no',
+                             'Connection': 'keep-alive'})
 
 @app.route('/api/metrics', methods=['GET'])
 def get_metrics():
@@ -517,6 +445,29 @@ def get_metrics():
                                  'is_demo': results.get('is_demo', False),
                                  'models_used': results.get('llms_used', ['qwen3.5'])}})
 
+@app.route('/api/metrics/by-model', methods=['GET'])
+def get_metrics_by_model():
+    results = _load_results()
+    if not results:
+        return jsonify({'error': 'Aucune donnée — lancez une analyse'}), 404
+
+    brand       = results.get('brand', 'Marque')
+    competitors = results.get('competitors', [])
+    all_brands  = [brand] + competitors if competitors else None
+    az          = BrandAnalyzer(brands=all_brands)
+
+    report = az.get_full_confidence_report(results['responses'], main_brand=brand)
+    rankings_by_model = {model: az.generate_ranking(metrics)
+                         for model, metrics in report['by_model'].items()}
+
+    return jsonify({'by_model': report['by_model'], 'rankings_by_model': rankings_by_model,
+                    'confidence': report['confidence'],
+                    'main_brand_confidence': report['main_brand_confidence'],
+                    'models': list(report['by_model'].keys()), 'brand': brand,
+                    'metadata': {'timestamp': results['timestamp'],
+                                 'is_demo': results.get('is_demo', False),
+                                 'total_prompts': results['total_prompts']}})
+
 @app.route('/api/history', methods=['GET'])
 def get_history_data():
     brand    = request.args.get('brand')
@@ -552,6 +503,132 @@ def export_report():
                     'ranking': ranking, 'insights': insights, 'full_metrics': metrics})
 
 
+# ── SPRINT 3 — Comparateur de prompts ────────────────────────────────────────
+
+@app.route('/api/prompts/compare', methods=['GET'])
+def compare_prompts():
+    results = _load_results()
+    if not results:
+        return jsonify({'error': 'Aucune donnée — lancez une analyse'}), 404
+
+    brand       = results.get('brand', 'Marque')
+    competitors = results.get('competitors', [])
+    all_brands  = [brand] + competitors
+
+    prompt_stats = []
+
+    for response in results['responses']:
+        prompt = response.get('prompt', '')
+        if not prompt:
+            continue
+
+        analyses_for_prompt = [d['analysis'] for d in response['llm_analyses'].values()]
+        total_models = len(analyses_for_prompt)
+
+        if total_models == 0:
+            continue
+
+        mentions    = sum(1 for a in analyses_for_prompt if brand in a.get('brands_mentioned', []))
+        mention_pct = round(mentions / total_models * 100, 1)
+
+        positions = [a['positions'].get(brand) for a in analyses_for_prompt if a['positions'].get(brand) is not None]
+        avg_pos   = round(sum(positions) / len(positions), 2) if positions else None
+
+        first_counts = sum(1 for a in analyses_for_prompt if a.get('first_brand') == brand)
+        top_of_mind  = round(first_counts / total_models * 100, 1)
+
+        comp_mentions = {}
+        for a in analyses_for_prompt:
+            for b in a.get('brands_mentioned', []):
+                if b != brand:
+                    comp_mentions[b] = comp_mentions.get(b, 0) + 1
+        top_comps = sorted(comp_mentions.items(), key=lambda x: -x[1])
+        comps_list = [b for b, _ in top_comps[:3]]
+
+        score = (mention_pct * 0.5 + (100 / avg_pos if avg_pos and avg_pos > 0 else 0) * 0.3 + top_of_mind * 0.2)
+
+        prompt_stats.append({
+            'prompt':                prompt,
+            'mention_rate':          mention_pct,
+            'avg_position':          avg_pos,
+            'top_of_mind':           top_of_mind,
+            'brand_mentioned':       mentions > 0,
+            'brand_position':        positions[0] if positions else None,
+            'competitors_mentioned': comps_list,
+            'models_count':          total_models,
+            'score':                 round(score, 1)
+        })
+
+    prompt_stats.sort(key=lambda x: -x['score'])
+
+    return jsonify({
+        'brand':         brand,
+        'prompts':       prompt_stats,
+        'best_prompt':   prompt_stats[0]['prompt'] if prompt_stats else None,
+        'worst_prompt':  prompt_stats[-1]['prompt'] if prompt_stats else None,
+        'total_prompts': len(prompt_stats),
+        'metadata': {
+            'timestamp': results['timestamp'],
+            'is_demo':   results.get('is_demo', False),
+            'models':    results.get('llms_used', ['qwen3.5'])
+        }
+    })
+
+
+# ── SPRINT 3 — Alertes ───────────────────────────────────────────────────────
+
+@app.route('/api/alerts/status', methods=['GET'])
+def alerts_status():
+    return jsonify({
+        'slack': {
+            'configured': bool(os.environ.get('SLACK_WEBHOOK_URL')),
+            'channel': 'webhook'
+        },
+        'email': {
+            'configured': all([os.environ.get(k) for k in ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'ALERT_EMAIL']]),
+            'recipient': os.environ.get('ALERT_EMAIL', '—'),
+            'host': os.environ.get('SMTP_HOST', '—')
+        },
+        'telegram': {
+            'configured': all([os.environ.get('TELEGRAM_BOT_TOKEN'), os.environ.get('TELEGRAM_CHAT_ID')]),
+            'chat_id': os.environ.get('TELEGRAM_CHAT_ID', '—')
+        }
+    })
+
+
+@app.route('/api/alerts/test', methods=['POST'])
+def test_alert():
+    data    = request.get_json() or {}
+    channel = data.get('channel', 'all')
+    message = data.get('message', '🧪 Test GEO Monitor.')
+    results = {}
+
+    if channel in ('all', 'slack'):
+        results['slack'] = send_slack_alert(message)
+    if channel in ('all', 'email'):
+        from alerts import send_email_alert as _email
+        results['email'] = _email("Test GEO Monitor", message)
+    if channel in ('all', 'telegram'):
+        from alerts import send_telegram_alert as _tg
+        results['telegram'] = _tg(message)
+
+    success = any(results.values())
+    return jsonify({
+        'status': 'success' if success else 'failed',
+        'results': results,
+        'message': 'Au moins un canal a répondu' if success else 'Aucun canal configuré'
+    })
+
+
+@app.route('/api/alerts/weekly', methods=['POST'])
+def trigger_weekly():
+    try:
+        _scheduled_weekly_summary()
+        return jsonify({'status': 'success', 'message': 'Résumé hebdo envoyé'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 # ── Démarrage ─────────────────────────────────────────────────────────────────
 
 scheduler = None
@@ -561,7 +638,10 @@ if __name__ == '__main__':
     debug = os.getenv('FLASK_DEBUG', 'False') == 'True'
     if not debug:
         scheduler = _start_scheduler()
-    print(f"\n[INFO] GEO Monitor v2.2 — Sprint 2 — http://localhost:{port}")
-    print(f"   /api/run-analysis/stream  → SSE temps réel")
-    print(f"   /api/metrics/by-model     → score de confiance")
+    print(f"\n[INFO] GEO Monitor v2.3 — Sprint 3 — http://localhost:{port}")
+    print(f"   /api/prompts/compare  → Comparateur de prompts")
+    print(f"   /api/alerts/status    → État des canaux")
+    print(f"   /api/alerts/test      → Test alertes")
+    print(f"   /api/alerts/weekly    → Résumé hebdo manuel")
+    print(f"   Scheduler : analyse 6h + résumé hebdo lundi 09h")
     app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)

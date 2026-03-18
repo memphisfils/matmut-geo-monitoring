@@ -10,6 +10,8 @@ import DuelCard from './components/DuelCard';
 import InsightsPanel from './components/InsightsPanel';
 import AnalysisProgress from './components/AnalysisProgress';
 import LLMBreakdown from './components/LLMBreakdown';
+import PromptComparator from './components/PromptComparator';
+import AlertsPanel from './components/AlertsPanel';
 import {
   fetchMetrics, fetchExport, checkStatus, fetchHistory,
   runAnalysisStream, generateTrendHistory, DEMO_DATA_FACTORY
@@ -23,7 +25,7 @@ export default function App() {
   const [isBackendOnline, setIsBackendOnline] = useState(false);
   const [error, setError]             = useState(null);
 
-  // ── État analyse en temps réel (Sprint 2) ───────────────────────────────
+  // Sprint 2 — Analyse en temps réel
   const [isAnalyzing, setIsAnalyzing]         = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(null);
   const [completedPrompts, setCompletedPrompts] = useState([]);
@@ -31,7 +33,8 @@ export default function App() {
   const [isAnalysisComplete, setIsAnalysisComplete] = useState(false);
   const [isDemo, setIsDemo]                   = useState(false);
 
-  // ── Onboarding → lancement analyse streaming ────────────────────────────
+  // Sprint 3 — Onglets
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   const handleOnboardingComplete = useCallback(async (cfg) => {
     setConfig(cfg);
@@ -43,31 +46,22 @@ export default function App() {
 
     try {
       for await (const event of runAnalysisStream({
-        brand:       cfg.brand,
-        competitors: cfg.competitors,
-        prompts:     cfg.prompts,
-        products:    cfg.products,
-        sector:      cfg.sector,
-        demo:        false
+        brand: cfg.brand, competitors: cfg.competitors, prompts: cfg.prompts,
+        products: cfg.products, sector: cfg.sector, demo: false
       })) {
         if (event.type === 'start') {
           setAnalysisModels(event.models || []);
           setIsDemo(event.is_demo || false);
         }
-
         if (event.type === 'progress') {
           setAnalysisProgress(event);
           setCompletedPrompts(prev => [...prev, event]);
         }
-
         if (event.type === 'complete') {
           setIsAnalysisComplete(true);
           setIsAnalyzing(false);
-
-          // Charger les métriques finales
           await loadDashboardData(cfg);
         }
-
         if (event.type === 'error') {
           throw new Error(event.message || 'Erreur analyse');
         }
@@ -79,8 +73,6 @@ export default function App() {
       await loadDashboardData(cfg);
     }
   }, []);
-
-  // ── Chargement des données dashboard ────────────────────────────────────
 
   const loadDashboardData = useCallback(async (cfg) => {
     try {
@@ -97,8 +89,6 @@ export default function App() {
     }
   }, []);
 
-  // ── Refresh manuel ───────────────────────────────────────────────────────
-
   const handleRefresh = useCallback(async () => {
     if (!config) return;
     setIsAnalyzing(true);
@@ -108,11 +98,8 @@ export default function App() {
 
     try {
       for await (const event of runAnalysisStream({
-        brand:       config.brand,
-        competitors: config.competitors,
-        prompts:     config.prompts,
-        sector:      config.sector,
-        demo:        false
+        brand: config.brand, competitors: config.competitors,
+        prompts: config.prompts, sector: config.sector, demo: false
       })) {
         if (event.type === 'start')    setAnalysisModels(event.models || []);
         if (event.type === 'progress') {
@@ -135,9 +122,9 @@ export default function App() {
   const handleExport = useCallback(async () => {
     try {
       const report = await fetchExport();
-      const blob   = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-      const url    = URL.createObjectURL(blob);
-      const a      = document.createElement('a');
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
       a.href = url;
       a.download = `geo-${config?.brand || 'export'}-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
@@ -151,13 +138,9 @@ export default function App() {
     checkStatus().then(res => setIsBackendOnline(res?.status === 'ok'));
   }, []);
 
-  // ── Onboarding ───────────────────────────────────────────────────────────
-
   if (!config) {
     return <Onboarding onComplete={handleOnboardingComplete} />;
   }
-
-  const showProgress = isAnalyzing || (isAnalysisComplete && completedPrompts.length > 0 && !data);
 
   return (
     <div className="app-layout">
@@ -167,13 +150,30 @@ export default function App() {
         onExport={handleExport}
         isLoading={isAnalyzing}
         isBackendOnline={isBackendOnline}
-        onReset={() => { setConfig(null); setData(null); setCompletedPrompts([]); }}
+        onReset={() => { setConfig(null); setData(null); setCompletedPrompts([]); setActiveTab('dashboard'); }}
       />
+
+      {/* Onglets Sprint 3 */}
+      <div className="app-tabs">
+        {[
+          { key: 'dashboard', label: 'Dashboard' },
+          { key: 'prompts',   label: 'Prompts' },
+          { key: 'alerts',    label: 'Alertes' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            className={`app-tab ${activeTab === tab.key ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       <div className="main-content">
         <div className="page-content">
 
-          {/* ── Progression temps réel (Sprint 2) ── */}
+          {/* Progression temps réel (Sprint 2) */}
           {(isAnalyzing || (completedPrompts.length > 0 && !data)) && (
             <AnalysisProgress
               brand={config.brand}
@@ -185,7 +185,6 @@ export default function App() {
             />
           )}
 
-          {/* ── Loading texte (si pas encore de progress events) ── */}
           {isAnalyzing && !analysisProgress && (
             <div className="loading-state">
               <div className="loader" />
@@ -197,37 +196,43 @@ export default function App() {
             <div className="error-state"><p>❌ {error}</p></div>
           )}
 
-          {data && data.ranking && (
+          {/* Dashboard Tab */}
+          {activeTab === 'dashboard' && data && data.ranking && (
             <>
-              {/* Section 1 : KPI + Trend + Duel */}
               <div className="dashboard-section">
                 <KpiCards data={data} brand={config.brand} />
                 <TrendChart data={trendHistory} brand={config.brand} />
                 <DuelCard ranking={data.ranking} brand={config.brand} />
               </div>
 
-              {/* Section 2 : Ranking */}
               <div id="ranking">
                 <RankingTable ranking={data.ranking} brand={config.brand} />
               </div>
 
-              {/* Section 3 : LLM Breakdown (Sprint 2) */}
               <LLMBreakdown brand={config.brand} />
 
-              {/* Section 4 : Charts */}
               <div className="charts-row">
                 <SentimentChart ranking={data.ranking} brand={config.brand} />
                 <MentionChart ranking={data.ranking} brand={config.brand} />
                 <SovChart ranking={data.ranking} brand={config.brand} />
               </div>
 
-              {/* Section 5 : Insights */}
               <div id="insights">
                 <RadarCompare ranking={data.ranking} brand={config.brand} />
                 <CategoryHeatmap categoryData={data.category_data} brand={config.brand} ranking={data.ranking} />
                 <InsightsPanel insights={data.insights} brand={config.brand} />
               </div>
             </>
+          )}
+
+          {/* Prompts Tab (Sprint 3) */}
+          {activeTab === 'prompts' && (
+            <PromptComparator brand={config.brand} />
+          )}
+
+          {/* Alerts Tab (Sprint 3) */}
+          {activeTab === 'alerts' && (
+            <AlertsPanel brand={config.brand} />
           )}
 
         </div>

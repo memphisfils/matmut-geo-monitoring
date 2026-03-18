@@ -1,154 +1,170 @@
 """
-Client pour interroger Ollama Cloud API
-Format natif Ollama (pas OpenAI-compatible)
+LLM Client — GEO Monitor Sprint 1
+Un seul client Ollama Cloud, N modèles via OLLAMA_MODELS dans .env
+Format: OLLAMA_MODELS=qwen3.5
+Upgrade vers multi-modèles: OLLAMA_MODELS=qwen3.5,llama3.2:8b,deepseek-v3.1
 """
 import os
 import requests
-from typing import Dict
+from typing import Dict, List
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 load_dotenv()
 
+
 class LLMClient:
-    """Client pour Ollama Cloud API - Format natif"""
+    """Client unifié pour Ollama Cloud — supporte N modèles avec une seule clé API."""
 
     def __init__(self):
-        self.clients = {}
-        self.base_url = os.getenv('OLLAMA_BASE_URL', 'https://ollama.com/api')
-        self.api_key = os.getenv('OLLAMA_API_KEY')
-        self.model = os.getenv('OLLAMA_MODEL', 'llama3.2:8b')
-        self.cache = {}  # Cache mémoire simple
-        
+        self.base_url  = os.getenv('OLLAMA_BASE_URL', 'https://ollama.com/api')
+        self.api_key   = os.getenv('OLLAMA_API_KEY')
+        self.timeout   = int(os.getenv('OLLAMA_TIMEOUT', '30'))
+        self.cache: Dict[str, str] = {}
+
+        # ── Chargement des modèles depuis .env ──────────────────────────────
+        # Aujourd'hui : OLLAMA_MODELS=qwen3.5
+        # Demain :      OLLAMA_MODELS=qwen3.5,llama3.2:8b,deepseek-v3.1
+        raw_models = os.getenv('OLLAMA_MODELS', 'qwen3.5')
+        self.models: List[str] = [m.strip() for m in raw_models.split(',') if m.strip()]
+
+        # clients = dict {model_name: True} pour compat legacy
+        self.clients: Dict[str, bool] = {}
+
         if self.api_key:
-            print(f"Using Ollama Cloud URL: {self.base_url}")
-            print(f"Using model: {self.model}")
-            self.clients['ollama'] = True
-            print(f"Initialized Ollama Cloud Client.")
+            for model in self.models:
+                self.clients[model] = True
+            print(f"[LLMClient] Ollama Cloud — modèles actifs : {self.models}")
         else:
-            print("Warning: OLLAMA_API_KEY not configured in .env")
+            print("[LLMClient] OLLAMA_API_KEY manquante — mode démo activé")
 
-        print(f"Available models: {list(self.clients.keys())}")
+    # ── Requête vers un modèle spécifique ───────────────────────────────────
 
-    def query_ollama(self, prompt: str, model: str = None, use_cache: bool = True) -> str:
-        """Interroge Ollama Cloud avec le format natif"""
-        if 'ollama' not in self.clients:
+    def query_model(self, prompt: str, model: str, use_cache: bool = True) -> str:
+        """Interroge un modèle Ollama Cloud précis."""
+        if not self.api_key:
             return ""
-        
-        # Check cache
-        cache_key = f"{model or self.model}:{prompt[:100]}"
+
+        cache_key = f"{model}:{prompt[:120]}"
         if use_cache and cache_key in self.cache:
-            print(f"  [CACHE HIT] Using cached response")
+            print(f"  [CACHE] {model[:20]}")
             return self.cache[cache_key]
-        
-        use_model = model or self.model
-        
-        # Optimisé: timeout 30s, 1 retry max
-        max_retries = 1
-        timeout = 30  # secondes
-        
-        for attempt in range(max_retries + 1):
+
+        for attempt in range(2):
             try:
-                url = f"{self.base_url}/chat"
-                headers = {
-                    'Content-Type': 'application/json',
-                    'Authorization': f'Bearer {self.api_key}'
-                }
-                payload = {
-                    'model': use_model,
-                    'messages': [
-                        {'role': 'user', 'content': prompt}
-                    ],
-                    'stream': False
-                }
-                
-                if attempt == 0:
-                    print(f"  Attempt {attempt + 1}/{max_retries + 1} (timeout: {timeout}s)...")
-                else:
-                    print(f"  Retry {attempt}/{max_retries}...")
-                    
-                response = requests.post(url, headers=headers, json=payload, timeout=timeout)
-                response.raise_for_status()
-                
-                result = response.json()
-                message = result.get('message', {})
-                content = message.get('content', '')
-                print(f"  [OK] Response received ({len(content)} chars)")
-                
-                # Store in cache
+                print(f"  [{model}] tentative {attempt + 1}/2 (timeout={self.timeout}s)…")
+                resp = requests.post(
+                    f"{self.base_url}/chat",
+                    headers={
+                        'Content-Type': 'application/json',
+                        'Authorization': f'Bearer {self.api_key}'
+                    },
+                    json={
+                        'model': model,
+                        'messages': [{'role': 'user', 'content': prompt}],
+                        'stream': False
+                    },
+                    timeout=self.timeout
+                )
+                resp.raise_for_status()
+                content = resp.json().get('message', {}).get('content', '')
+                print(f"  [{model}] ✓ {len(content)} chars")
                 if use_cache:
                     self.cache[cache_key] = content
-                
                 return content
-                
+
             except requests.exceptions.Timeout:
-                print(f"  [TIMEOUT] ({timeout}s)")
-                if attempt == max_retries:
-                    print(f"  [ERROR] Max retries reached")
+                print(f"  [{model}] ✗ timeout")
+                if attempt == 1:
                     return ""
             except requests.exceptions.HTTPError as e:
-                print(f"  [HTTP ERROR] {e}")
-                if hasattr(e, 'response'):
-                    print(f"     Response: {e.response.text[:200]}")
-                return ""
-            except requests.exceptions.RequestException as e:
-                print(f"  [CONNECTION ERROR] {e}")
+                print(f"  [{model}] ✗ HTTP {e.response.status_code if e.response else '?'}")
                 return ""
             except Exception as e:
-                print(f"  [ERROR] {e}")
+                print(f"  [{model}] ✗ {e}")
                 return ""
-        
+
         return ""
 
-    def query_all_parallel(self, prompts: list, max_workers: int = 3) -> Dict[str, str]:
-        """Interroge Ollama en parallèle pour plusieurs prompts"""
-        results = {}
-        
-        if 'ollama' not in self.clients:
-            return results
-        
-        print(f"\n[PARALLEL] Processing {len(prompts)} prompts with {max_workers} workers...")
-        
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_prompt = {
-                executor.submit(self.query_ollama, prompt, None, True): prompt 
-                for prompt in prompts
-            }
-            
-            for i, future in enumerate(as_completed(future_to_prompt), 1):
-                prompt = future_to_prompt[future]
-                try:
-                    result = future.result()
-                    results[prompt] = result
-                    print(f"[{i}/{len(prompts)}] Completed: {prompt[:50]}...")
-                except Exception as e:
-                    print(f"[{i}/{len(prompts)}] Error: {prompt[:50]}... - {e}")
-                    results[prompt] = ""
-        
-        return results
+    # ── Requêtes multiples ───────────────────────────────────────────────────
 
     def query_all(self, prompt: str) -> Dict[str, str]:
-        """Interroge Ollama et retourne les résultats"""
+        """
+        Interroge tous les modèles configurés SÉQUENTIELLEMENT.
+        Retourne {model_name: response_text}.
+        """
         results = {}
+        for model in self.models:
+            results[model] = self.query_model(prompt, model)
+        return results
 
-        if 'ollama' in self.clients:
-            print(f"Querying Ollama (model: {self.model})...")
-            results['ollama'] = self.query_ollama(prompt)
+    def query_all_parallel(self, prompts: List[str], max_workers: int = 3) -> Dict[str, str]:
+        """
+        Interroge le(s) modèle(s) en parallèle pour une liste de prompts.
+        Retourne {prompt: response_text} (avec le modèle principal).
+        """
+        if not self.models:
+            return {}
+
+        primary_model = self.models[0]
+        results: Dict[str, str] = {}
+
+        print(f"\n[PARALLEL] {len(prompts)} prompts × modèle={primary_model} ({max_workers} workers)…")
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_map = {
+                executor.submit(self.query_model, prompt, primary_model): prompt
+                for prompt in prompts
+            }
+            for i, future in enumerate(as_completed(future_map), 1):
+                prompt = future_map[future]
+                try:
+                    results[prompt] = future.result()
+                    print(f"  [{i}/{len(prompts)}] ✓ {prompt[:50]}…")
+                except Exception as e:
+                    print(f"  [{i}/{len(prompts)}] ✗ {e}")
+                    results[prompt] = ""
 
         return results
 
+    def query_all_models_for_prompt(self, prompt: str) -> Dict[str, str]:
+        """
+        Interroge TOUS les modèles configurés pour un seul prompt.
+        Utilisé par le score de confiance (Sprint 2).
+        Retourne {model_name: response_text}.
+        """
+        if len(self.models) <= 1:
+            return self.query_all(prompt)
+
+        results: Dict[str, str] = {}
+        with ThreadPoolExecutor(max_workers=len(self.models)) as executor:
+            future_map = {
+                executor.submit(self.query_model, prompt, model): model
+                for model in self.models
+            }
+            for future in as_completed(future_map):
+                model = future_map[future]
+                try:
+                    results[model] = future.result()
+                except Exception as e:
+                    print(f"  [{model}] ✗ {e}")
+                    results[model] = ""
+        return results
+
+    # ── Helpers ─────────────────────────────────────────────────────────────
+
     def get_active_models(self) -> Dict[str, bool]:
-        """Retourne la liste des modèles actifs"""
         return self.clients
 
-    def clear_cache(self):
-        """Vide le cache"""
-        self.cache = {}
-        print("[CACHE] Cleared")
-
     def get_cache_stats(self) -> dict:
-        """Retourne les statistiques du cache"""
-        return {
-            'size': len(self.cache),
-            'keys': list(self.cache.keys())[:5]
-        }
+        return {'size': len(self.cache), 'keys': list(self.cache.keys())[:5]}
+
+    def clear_cache(self) -> None:
+        self.cache = {}
+        print("[CACHE] vidé")
+
+    # ── Alias legacy (gardé pour compat avec app.py existant) ───────────────
+
+    def query_ollama(self, prompt: str, model: str = None, use_cache: bool = True) -> str:
+        """Alias legacy — utilise le modèle principal si non spécifié."""
+        return self.query_model(prompt, model or (self.models[0] if self.models else 'qwen3.5'), use_cache)

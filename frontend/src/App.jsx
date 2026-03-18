@@ -12,6 +12,7 @@ import AnalysisProgress from './components/AnalysisProgress';
 import LLMBreakdown from './components/LLMBreakdown';
 import PromptComparator from './components/PromptComparator';
 import AlertsPanel from './components/AlertsPanel';
+import ExportButton from './components/ExportButton';
 import {
   fetchMetrics, fetchExport, checkStatus, fetchHistory,
   runAnalysisStream, generateTrendHistory, DEMO_DATA_FACTORY
@@ -151,6 +152,7 @@ export default function App() {
         isLoading={isAnalyzing}
         isBackendOnline={isBackendOnline}
         onReset={() => { setConfig(null); setData(null); setCompletedPrompts([]); setActiveTab('dashboard'); }}
+        exportSlot={<ExportButton brand={config.brand} />}
       />
 
       {/* Onglets Sprint 3 */}

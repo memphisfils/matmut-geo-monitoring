@@ -97,3 +97,6 @@ a {
   gap: 20px;
   grid-template-rows: auto 1fr auto;
 }
+  
+/* ÄÄ Sprint 4 - Mobile responsive ÄÄ */  
+@import './mobile.css';  

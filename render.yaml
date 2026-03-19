@@ -14,6 +14,8 @@ services:
     packageManager: pip
     # Gunicorn avec workers uvicorn pour support async + timeout 180s
     startCommand: "cd backend && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class uvicorn.workers.UvicornWorker --timeout 180 --keep-alive 180 --graceful-timeout 30"
+    healthCheckPath: /api/health
+    healthCheckInterval: 30s
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -31,6 +33,8 @@ services:
         sync: false
       - key: OLLAMA_TIMEOUT
         value: "40"
+      - key: RENDER_INSTANCE_TYPE
+        value: standard-0.5
     disk:
       name: data
       mountPath: /opt/render/project/src/data

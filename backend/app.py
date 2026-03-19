@@ -101,13 +101,17 @@ def _load_results():
     _ensure_data_dir()
     if os.path.exists(RESULTS_FILE):
         with open(RESULTS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+        print(f"[LOAD] results.json lu : {data.get('total_prompts')} prompts, is_demo={data.get('is_demo')}, brand={data.get('brand')}")
+        return data
+    print(f"[LOAD] results.json inexistant")
     return None
 
 def _save_results(data):
     _ensure_data_dir()
     with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    print(f"[SAVE] results.json écrit : {data.get('total_prompts')} prompts, is_demo={data.get('is_demo')}")
 
 def _brand_seed(b):
     return abs(hash(b)) % (2**31)
@@ -544,8 +548,10 @@ def run_analysis_stream():
 
 @app.route('/api/metrics', methods=['GET'])
 def get_metrics():
+    print(f"[METRICS] Appel de /api/metrics")
     results = _load_results()
     if not results:
+        print(f"[METRICS] results.json vide → génération démo")
         results = generate_demo_data()
         _save_results(results)
 

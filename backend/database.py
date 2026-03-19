@@ -65,9 +65,17 @@ def init_db():
             mention_rate    REAL,
             avg_position    REAL,
             top_of_mind     REAL,
-            sentiment_score REAL
+            sentiment_score  REAL
         )
     '''.replace('INTEGER  PRIMARY KEY AUTOINCREMENT', 'INTEGER PRIMARY KEY AUTOINCREMENT'))
+
+    # ── Migration : ajouter colonne model si elle manque (Sprint 2) ───────
+    try:
+        cur.execute("ALTER TABLE analysis_history ADD COLUMN model TEXT DEFAULT 'qwen3.5'")
+        conn.commit()
+        print("[DATABASE] Colonne 'model' ajoutée à analysis_history")
+    except Exception:
+        pass  # Colonne déjà existante
 
     conn.commit()
     conn.close()

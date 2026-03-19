@@ -12,8 +12,8 @@ services:
     plan: free
     # Force pip instead of Poetry
     packageManager: pip
-    # gthread worker avec timeout 45s pour llama3.2:8b (30s + marge)
-    startCommand: "cd backend && gunicorn --bind 0.0.0.0:$PORT --worker-class gthread --threads 4 --timeout 45 --graceful-timeout 10 app:app"
+    # gthread worker avec timeout 60s pour qwen3.5 (40s + marge)
+    startCommand: "cd backend && gunicorn --bind 0.0.0.0:$PORT --worker-class gthread --threads 4 --timeout 60 --graceful-timeout 10 app:app"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -24,13 +24,13 @@ services:
       - key: OLLAMA_BASE_URL
         value: https://ollama.com/api
       - key: OLLAMA_MODEL
-        value: llama3.2:8b
+        value: qwen3.5
       - key: OLLAMA_MODELS
-        value: llama3.2:8b
+        value: qwen3.5
       - key: OLLAMA_API_KEY
         sync: false
       - key: OLLAMA_TIMEOUT
-        value: "30"
+        value: "40"
     disk:
       name: data
       mountPath: /opt/render/project/src/data

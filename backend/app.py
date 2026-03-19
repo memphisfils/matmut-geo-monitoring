@@ -387,6 +387,7 @@ def run_analysis_stream():
         active_models = ['demo']
         llm_failures  = 0  # Compteur d'échecs LLM
         MAX_FAILURES  = 3  # Après 3 échecs → mode démo forcé (était 2)
+        MAX_TIME_PER_PROMPT = 50  # secondes
 
         if not use_demo and prompts:
             try:
@@ -420,6 +421,14 @@ def run_analysis_stream():
 
         for i, prompt in enumerate(prompts[:limit]):
             prompt_start = time.time()
+            elapsed_total = time.time() - start
+            
+            # TIMEOUT GLOBAL : si on dépasse limit * MAX_TIME_PER_PROMPT, fallback démo
+            if elapsed_total > limit * MAX_TIME_PER_PROMPT:
+                print(f"[STREAM] Timeout global ({elapsed_total:.0f}s > {limit * MAX_TIME_PER_PROMPT}s) → fallback démo")
+                is_demo = True
+                active_models = ['demo']
+
             if is_demo:
                 time.sleep(0.3)
                 brands_in = []
@@ -439,31 +448,12 @@ def run_analysis_stream():
                 }}}
             else:
                 # Mode réel avec FALLBACK si Ollama timeout/crash
-                try:
-                    all_model_resp = llm_client.query_all_models_for_prompt(prompt)
-                    analyses = {}
-                    brands_in = []
-                    for model, text in all_model_resp.items():
-                        if text:
-                            analysis = az.analyze_response(text)
-                            analyses[model] = {'response': text, 'analysis': analysis}
-                            brands_in = analysis.get('brands_mentioned', [])
-                    if not analyses:
-                        raise ValueError("Toutes les réponses LLM sont vides")
-                    llm_failures = 0  # Reset counter on success
-                except BaseException as _llm_err:
-                    # Attrape aussi SystemExit levé par Gunicorn/sys.exit(1)
-                    if isinstance(_llm_err, SystemExit):
-                        return  # Gunicorn kill propre
+                elapsed_prompt = time.time() - prompt_start
+                
+                # TIMEOUT PAR PROMPT : si > MAX_TIME_PER_PROMPT, fallback démo
+                if elapsed_prompt > MAX_TIME_PER_PROMPT:
+                    print(f"[STREAM] Timeout prompt {i+1} ({elapsed_prompt:.0f}s > {MAX_TIME_PER_PROMPT}s) → fallback démo")
                     llm_failures += 1
-                    print(f"[STREAM] LLM error prompt {i+1}: {_llm_err} (failures={llm_failures}/{MAX_FAILURES}) — fallback demo")
-                    
-                    # FORCE DEMO MODE après 2 échecs
-                    if llm_failures >= MAX_FAILURES:
-                        print(f"[STREAM] {MAX_FAILURES} échecs LLM → passage en mode démo forcé")
-                        is_demo = True
-                        active_models = ['demo']
-                    
                     brands_in = []
                     for b in all_brands:
                         rng = random.Random(_brand_seed(b) + i * 997)
@@ -479,7 +469,49 @@ def run_analysis_stream():
                         'brand_position': next((idx+1 for idx, b in enumerate(brands_in) if b == brand), None),
                         'matmut_position': next((idx+1 for idx, b in enumerate(brands_in) if b == brand), None),
                     }
-                    analyses = {'ollama': {'response': f'[Fallback {i+1}]', 'analysis': _demo_analysis}}
+                    analyses = {'ollama': {'response': f'[Timeout {i+1}]', 'analysis': _demo_analysis}}
+                else:
+                    try:
+                        all_model_resp = llm_client.query_all_models_for_prompt(prompt)
+                        analyses = {}
+                        brands_in = []
+                        for model, text in all_model_resp.items():
+                            if text:
+                                analysis = az.analyze_response(text)
+                                analyses[model] = {'response': text, 'analysis': analysis}
+                                brands_in = analysis.get('brands_mentioned', [])
+                        if not analyses:
+                            raise ValueError("Toutes les réponses LLM sont vides")
+                        llm_failures = 0  # Reset counter on success
+                    except BaseException as _llm_err:
+                        # Attrape aussi SystemExit levé par Gunicorn/sys.exit(1)
+                        if isinstance(_llm_err, SystemExit):
+                            return  # Gunicorn kill propre
+                        llm_failures += 1
+                        print(f"[STREAM] LLM error prompt {i+1}: {_llm_err} (failures={llm_failures}/{MAX_FAILURES}) — fallback demo")
+
+                        # FORCE DEMO MODE après 2 échecs
+                        if llm_failures >= MAX_FAILURES:
+                            print(f"[STREAM] {MAX_FAILURES} échecs LLM → passage en mode démo forcé")
+                            is_demo = True
+                            active_models = ['demo']
+
+                        brands_in = []
+                        for b in all_brands:
+                            rng = random.Random(_brand_seed(b) + i * 997)
+                            if rng.random() < (0.35 + random.Random(_brand_seed(b)).random() * 0.55):
+                                brands_in.append(b)
+                        brands_in.sort(key=lambda b: _brand_seed(b))
+                        _demo_analysis = {
+                            'brands_mentioned': brands_in,
+                            'positions': {b: idx+1 for idx, b in enumerate(brands_in)},
+                            'first_brand': brands_in[0] if brands_in else None,
+                            'matmut_mentioned': brand in brands_in,
+                            'brand_mentioned': brand in brands_in,
+                            'brand_position': next((idx+1 for idx, b in enumerate(brands_in) if b == brand), None),
+                            'matmut_position': next((idx+1 for idx, b in enumerate(brands_in) if b == brand), None),
+                        }
+                        analyses = {'ollama': {'response': f'[Fallback {i+1}]', 'analysis': _demo_analysis}}
 
             brand_pos = next(
                 (analyses[m]['analysis'].get('brand_position')

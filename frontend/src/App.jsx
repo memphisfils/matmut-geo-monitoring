@@ -76,14 +76,21 @@ export default function App() {
   }, []);
 
   const loadDashboardData = useCallback(async (cfg) => {
+    console.log('[APP] loadDashboardData avec config:', cfg);
     try {
+      // Petit délai pour laisser le temps à la sauvegarde results.json
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log('[APP] fetchMetrics...');
       const [result, historyData] = await Promise.all([
         fetchMetrics({ brand: cfg.brand, competitors: cfg.competitors }),
         fetchHistory()
       ]);
+      console.log('[APP] fetchMetrics result:', result?.metadata);
       setData(result);
       setTrendHistory(generateTrendHistory(result?.ranking, cfg.brand));
     } catch (err) {
+      console.error('[APP] loadDashboardData error:', err);
       const demo = DEMO_DATA_FACTORY(cfg.brand, cfg.competitors);
       setData(demo);
       setTrendHistory(generateTrendHistory(demo.ranking, cfg.brand));

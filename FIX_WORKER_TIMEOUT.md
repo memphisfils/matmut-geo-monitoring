@@ -11,21 +11,38 @@ Les logs Render montraient :
 
 ## Solution
 
-Ajouter la variable d'environnement `GUNICORN_TIMEOUT=120` pour permettre aux workers de rester actifs jusqu'à 120 secondes pendant l'analyse LLM.
+Utiliser **Gunicorn avec workers Uvicorn** et un timeout explicite de 120 secondes.
+
+### Commande de démarrage
+
+```bash
+gunicorn app:app \
+  --bind 0.0.0.0:$PORT \
+  --workers 2 \
+  --threads 4 \
+  --worker-class uvicorn.workers.UvicornWorker \
+  --timeout 120 \
+  --keep-alive 120
+```
+
+**Pourquoi cette configuration :**
+- `--worker-class uvicorn.workers.UvicornWorker` : Support async pour Flask
+- `--workers 2` : 2 workers pour gérer 2 requêtes simultanées
+- `--threads 4` : 4 threads par worker pour le streaming SSE
+- `--timeout 120` : Timeout worker à 120s (>> 40s Ollama)
+- `--keep-alive 120` : Keep-alive à 120s
 
 ## Fichiers modifiés
 
 ### 1. `render.yaml`
 ```yaml
-envVars:
-  - key: GUNICORN_TIMEOUT
-    value: "120"
+startCommand: "cd backend && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class uvicorn.workers.UvicornWorker --timeout 120 --keep-alive 120"
 ```
 
 ### 2. `backend/.env.render`
 ```env
-# Timeout Gunicorn (120s pour éviter worker timeout pendant analyse LLM)
-GUNICORN_TIMEOUT=120
+# Timeout Ollama (40s pour réponses LLM)
+OLLAMA_TIMEOUT=40
 ```
 
 ### 3. `backend/.env.example`
@@ -46,9 +63,11 @@ Après déploiement, les logs devraient montrer :
 - Plus de `[CRITICAL] WORKER TIMEOUT`
 - Les analyses LLM complètes sans interruption
 - Temps de réponse > 30s acceptés par Gunicorn
+- Workers avec `UvicornWorker` dans les logs
 
 ## Notes techniques
 
 - **OLLAMA_TIMEOUT = 40s** : temps max pour une réponse Ollama Cloud
 - **GUNICORN_TIMEOUT = 120s** : temps max avant kill du worker
 - Marge de sécurité : 120s > 40s × 2 (pour 2 modèles en séquentiel)
+- **uvicorn.workers.UvicornWorker** : requis pour le streaming SSE et l'async

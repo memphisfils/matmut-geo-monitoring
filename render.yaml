@@ -12,8 +12,8 @@ services:
     plan: free
     # Force pip instead of Poetry
     packageManager: pip
-    # Uvicorn pour support async (Option 1) - timeout 120s pour LLM
-    startCommand: "cd backend && uvicorn app:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 120 --loop asyncio"
+    # Gunicorn avec workers uvicorn pour support async + timeout 120s
+    startCommand: "cd backend && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class uvicorn.workers.UvicornWorker --timeout 120 --keep-alive 120"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -31,8 +31,6 @@ services:
         sync: false
       - key: OLLAMA_TIMEOUT
         value: "40"
-      - key: GUNICORN_TIMEOUT
-        value: "120"
     disk:
       name: data
       mountPath: /opt/render/project/src/data

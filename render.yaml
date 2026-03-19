@@ -12,8 +12,8 @@ services:
     plan: free
     # Force pip instead of Poetry
     packageManager: pip
-    buildCommand: "apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 && pip install -r backend/requirements.txt"
-    startCommand: "cd backend && gunicorn --bind 0.0.0.0:$PORT app:app"
+    # gthread worker avec timeout 120s pour streaming SSE
+    startCommand: "cd backend && gunicorn --bind 0.0.0.0:$PORT --worker-class gthread --threads 4 --timeout 120 app:app"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0

@@ -1,8 +1,7 @@
 """
-LLM Client — GEO Monitor Sprint 1
-Un seul client Ollama Cloud, N modèles via OLLAMA_MODELS dans .env
-Format: OLLAMA_MODELS=qwen3.5
-Upgrade vers multi-modèles: OLLAMA_MODELS=qwen3.5,llama3.2:8b,deepseek-v3.1
+LLM Client — GEO Monitor Sprint 1 + FIX timeout
+TIMEOUT réduit à 10s : fail fast → fallback démo immédiat
+Au lieu d'attendre 30-90s et tuer le worker Gunicorn.
 """
 import os
 import requests
@@ -19,7 +18,9 @@ class LLMClient:
     def __init__(self):
         self.base_url  = os.getenv('OLLAMA_BASE_URL', 'https://ollama.com/api')
         self.api_key   = os.getenv('OLLAMA_API_KEY')
-        self.timeout   = int(os.getenv('OLLAMA_TIMEOUT', '30'))
+        # FIX : timeout court → fail fast → fallback démo immédiat
+        # Si OLLAMA_TIMEOUT non défini, utilise 10s (était 30s)
+        self.timeout   = int(os.getenv('OLLAMA_TIMEOUT', '10'))
         self.cache: Dict[str, str] = {}
 
         # ── Chargement des modèles depuis .env ──────────────────────────────
@@ -34,14 +35,14 @@ class LLMClient:
         if self.api_key:
             for model in self.models:
                 self.clients[model] = True
-            print(f"[LLMClient] Ollama Cloud — modèles actifs : {self.models}")
+            print(f"[LLMClient] Ollama Cloud — modèles actifs : {self.models} (timeout={self.timeout}s)")
         else:
             print("[LLMClient] OLLAMA_API_KEY manquante — mode démo activé")
 
     # ── Requête vers un modèle spécifique ───────────────────────────────────
 
     def query_model(self, prompt: str, model: str, use_cache: bool = True) -> str:
-        """Interroge un modèle Ollama Cloud précis."""
+        """Interroge un modèle Ollama Cloud précis. Retourne '' si échec."""
         if not self.api_key:
             return ""
 
@@ -50,41 +51,39 @@ class LLMClient:
             print(f"  [CACHE] {model[:20]}")
             return self.cache[cache_key]
 
-        for attempt in range(2):
-            try:
-                print(f"  [{model}] tentative {attempt + 1}/2 (timeout={self.timeout}s)…")
-                resp = requests.post(
-                    f"{self.base_url}/chat",
-                    headers={
-                        'Content-Type': 'application/json',
-                        'Authorization': f'Bearer {self.api_key}'
-                    },
-                    json={
-                        'model': model,
-                        'messages': [{'role': 'user', 'content': prompt}],
-                        'stream': False
-                    },
-                    timeout=self.timeout
-                )
-                resp.raise_for_status()
-                content = resp.json().get('message', {}).get('content', '')
-                print(f"  [{model}] ✓ {len(content)} chars")
-                if use_cache:
-                    self.cache[cache_key] = content
-                return content
+        # UNE seule tentative (pas de retry) pour fail fast
+        try:
+            print(f"  [{model}] tentative unique (timeout={self.timeout}s)…")
+            resp = requests.post(
+                f"{self.base_url}/chat",
+                headers={
+                    'Content-Type': 'application/json',
+                    'Authorization': f'Bearer {self.api_key}'
+                },
+                json={
+                    'model': model,
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'stream': False
+                },
+                timeout=self.timeout
+            )
+            resp.raise_for_status()
+            content = resp.json().get('message', {}).get('content', '')
+            print(f"  [{model}] ✓ {len(content)} chars")
+            if use_cache and content:
+                self.cache[cache_key] = content
+            return content
 
-            except requests.exceptions.Timeout:
-                print(f"  [{model}] ✗ timeout")
-                if attempt == 1:
-                    return ""
-            except requests.exceptions.HTTPError as e:
-                print(f"  [{model}] ✗ HTTP {e.response.status_code if e.response else '?'}")
-                return ""
-            except Exception as e:
-                print(f"  [{model}] ✗ {e}")
-                return ""
-
-        return ""
+        except requests.exceptions.Timeout:
+            print(f"  [{model}] ✗ timeout ({self.timeout}s)")
+            return ""
+        except requests.exceptions.HTTPError as e:
+            code = e.response.status_code if e.response else '?'
+            print(f"  [{model}] ✗ HTTP {code}")
+            return ""
+        except Exception as e:
+            print(f"  [{model}] ✗ {type(e).__name__}: {e}")
+            return ""
 
     # ── Requêtes multiples ───────────────────────────────────────────────────
 

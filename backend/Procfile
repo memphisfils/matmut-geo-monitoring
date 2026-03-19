@@ -2,3 +2,7 @@
 # Worker gthread avec timeout 30s + graceful-timeout 10s pour SSE
 # Timeout court pour abandonner vite et redémarrer proprement
 web: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 4 --timeout 30 --graceful-timeout 10
+
+# ── Alternative : Uvicorn (Async) ────────────────────────────────────────────
+# Décommenter pour utiliser uvicorn (async) à la place de gunicorn
+# web: uvicorn app:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 120 --loop asyncio

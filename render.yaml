@@ -12,8 +12,8 @@ services:
     plan: free
     # Force pip instead of Poetry
     packageManager: pip
-    # gthread worker avec timeout 60s pour qwen3.5 (40s + marge)
-    startCommand: "cd backend && gunicorn --bind 0.0.0.0:$PORT --worker-class gthread --threads 4 --timeout 60 --graceful-timeout 10 app:app"
+    # Uvicorn pour support async (Option 1) - timeout 120s pour LLM
+    startCommand: "cd backend && uvicorn app:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 120 --loop asyncio"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0

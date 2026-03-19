@@ -6,6 +6,10 @@ psycopg2-binary>=2.9.9
 gunicorn>=21.2.0
 apscheduler>=3.10.0
 
+# Async support (Option 1 - Backend Asynchrone)
+aiohttp>=3.9.0
+uvicorn>=0.25.0
+
 # Sprint 4 — Export PDF
 # WeasyPrint nécessite libpango sur le système (voir render.yaml)
 # Décommenter si les apt packages sont installés :

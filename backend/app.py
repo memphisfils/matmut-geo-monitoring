@@ -4,6 +4,7 @@ Nouveautés :
   - GET  /api/export/pdf     → rapport PDF complet (WeasyPrint)
   - GET  /api/export/pdf/check → vérifie disponibilité WeasyPrint
   - GET  /api/health         → health check enrichi (version, uptime)
+  - POST /api/run-analysis/stream (async) → streaming SSE non-bloquant
 """
 from flask import Flask, jsonify, request, Response, stream_with_context
 from flask_cors import CORS
@@ -11,6 +12,7 @@ import json
 import os
 import random
 import time
+import asyncio
 from datetime import datetime
 from analyzer import BrandAnalyzer
 
@@ -732,6 +734,152 @@ def check_pdf_support():
             'install': 'pip install weasyprint --break-system-packages',
             'fallback': 'Le format HTML est disponible via ?format=html'
         })
+
+
+# ── Endpoints Asynchrones (Option 1 - Backend Async) ────────────────────────
+
+async def async_generate_events(brand, competitors, prompts, limit, sector, use_demo):
+    """Générateur SSE asynchrone pour le streaming."""
+    import aiohttp
+    from async_llm_client import AsyncLLMClient
+    
+    start = time.time()
+    llm_client = None
+    active_models = ['demo']
+    llm_failures = 0
+    MAX_FAILURES = 3
+    all_brands = [brand] + competitors
+    az = BrandAnalyzer(brands=all_brands)
+
+    if not use_demo and prompts:
+        try:
+            llm_client = AsyncLLMClient()
+            active_models = llm_client.models if llm_client.clients else ['demo']
+            if not llm_client.clients:
+                llm_client = None
+        except Exception:
+            llm_client = None
+
+    is_demo = llm_client is None
+
+    # Test Ollama UNE fois avant la boucle (fail fast)
+    if not is_demo and llm_client:
+        try:
+            async with aiohttp.ClientSession() as session:
+                _ping = await llm_client.query_model("ok", llm_client.models[0], use_cache=False, session=session)
+                if not _ping:
+                    raise ValueError("vide")
+        except Exception as _e:
+            print(f"[STREAM] Ping Ollama échoué ({_e}) → démo")
+            is_demo = True
+            llm_client = None
+            active_models = ['demo']
+
+    def _sse(event_type, data):
+        return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+    yield _sse('start', {'brand': brand, 'total_prompts': limit, 'models': active_models, 'is_demo': is_demo})
+    responses = []
+
+    for i, prompt in enumerate(prompts[:limit]):
+        prompt_start = time.time()
+        if is_demo:
+            await asyncio.sleep(0.3)
+            brands_in = []
+            for b in all_brands:
+                rng = random.Random(_brand_seed(b) + i * 997)
+                if rng.random() < (0.35 + random.Random(_brand_seed(b)).random() * 0.55):
+                    brands_in.append(b)
+            brands_in.sort(key=lambda b: _brand_seed(b))
+            text = f'[Demo {i+1}]'
+            analyses = {'ollama': {'response': text, 'analysis': {
+                'brands_mentioned': brands_in,
+                'positions': {b: idx+1 for idx, b in enumerate(brands_in)},
+                'first_brand': brands_in[0] if brands_in else None,
+                'matmut_mentioned': brand in brands_in, 'brand_mentioned': brand in brands_in,
+                'brand_position': next((idx+1 for idx, b in enumerate(brands_in) if b == brand), None),
+                'matmut_position': next((idx+1 for idx, b in enumerate(brands_in) if b == brand), None),
+            }}}
+        else:
+            try:
+                all_model_resp = await llm_client.query_all_models_for_prompt(prompt)
+                analyses = {}
+                brands_in = []
+                for model, text in all_model_resp.items():
+                    if text:
+                        analysis = az.analyze_response(text)
+                        analyses[model] = {'response': text, 'analysis': analysis}
+                        brands_in = analysis.get('brands_mentioned', [])
+                if not analyses:
+                    raise ValueError("Toutes les réponses LLM sont vides")
+                llm_failures = 0
+            except Exception as _llm_err:
+                llm_failures += 1
+                print(f"[STREAM] LLM error prompt {i+1}: {_llm_err} (failures={llm_failures}/{MAX_FAILURES}) — fallback demo")
+                
+                if llm_failures >= MAX_FAILURES:
+                    print(f"[STREAM] {MAX_FAILURES} échecs LLM → passage en mode démo forcé")
+                    is_demo = True
+                    active_models = ['demo']
+                
+                brands_in = []
+                for b in all_brands:
+                    rng = random.Random(_brand_seed(b) + i * 997)
+                    if rng.random() < (0.35 + random.Random(_brand_seed(b)).random() * 0.55):
+                        brands_in.append(b)
+                brands_in.sort(key=lambda b: _brand_seed(b))
+                _demo_analysis = {
+                    'brands_mentioned': brands_in,
+                    'positions': {b: idx+1 for idx, b in enumerate(brands_in)},
+                    'first_brand': brands_in[0] if brands_in else None,
+                    'matmut_mentioned': brand in brands_in,
+                    'brand_mentioned': brand in brands_in,
+                    'brand_position': next((idx+1 for idx, b in enumerate(brands_in) if b == brand), None),
+                    'matmut_position': next((idx+1 for idx, b in enumerate(brands_in) if b == brand), None),
+                }
+                analyses = {'ollama': {'response': f'[Fallback {i+1}]', 'analysis': _demo_analysis}}
+
+        brand_pos = next((analyses[m]['analysis'].get('brand_position') for m in analyses if analyses[m]['analysis'].get('brand_position')), None)
+        responses.append({'category': 'general', 'prompt': prompt, 'llm_analyses': analyses})
+
+        yield _sse('progress', {
+            'current': i+1, 'total': limit, 'prompt': prompt,
+            'brands_found': brands_in, 'brand_mentioned': brand in brands_in,
+            'brand_position': brand_pos,
+            'duration_ms': round((time.time() - prompt_start) * 1000)
+        })
+
+    results = {'timestamp': datetime.now().isoformat(), 'total_prompts': limit,
+               'llms_used': active_models, 'brand': brand,
+               'competitors': competitors, 'responses': responses, 'is_demo': is_demo}
+    _save_and_alert(results, brand)
+    try:
+        upsert_project(brand, sector, competitors, prompts, active_models)
+    except Exception:
+        pass
+
+    yield _sse('complete', {'timestamp': results['timestamp'], 'is_demo': is_demo, 'duration': round(time.time() - start, 2)})
+
+
+@app.route('/api/run-analysis/stream', methods=['POST'])
+async def run_analysis_stream_async():
+    """Version asynchrone du streaming SSE."""
+    from flask import Response
+    
+    data = request.get_json() or {}
+    brand = data.get('brand', 'Marque')
+    competitors = data.get('competitors', [])
+    prompts = data.get('prompts', [])
+    limit = data.get('limit', min(len(prompts), 6) if prompts else 6)
+    use_demo = data.get('demo', False)
+    sector = data.get('sector', '')
+
+    async def generate():
+        async for event in async_generate_events(brand, competitors, prompts, limit, sector, use_demo):
+            yield event
+
+    return Response(generate(), content_type='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no', 'Connection': 'keep-alive'})
 
 
 # ── Démarrage ─────────────────────────────────────────────────────────────────

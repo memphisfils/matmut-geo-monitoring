@@ -28,7 +28,7 @@ services:
       - key: OLLAMA_API_KEY
         sync: false
       - key: OLLAMA_TIMEOUT
-        value: "10"
+        value: "5"
     disk:
       name: data
       mountPath: /opt/render/project/src/data

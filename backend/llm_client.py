@@ -18,9 +18,9 @@ class LLMClient:
     def __init__(self):
         self.base_url  = os.getenv('OLLAMA_BASE_URL', 'https://ollama.com/api')
         self.api_key   = os.getenv('OLLAMA_API_KEY')
-        # FIX : timeout court → fail fast → fallback démo immédiat
-        # Si OLLAMA_TIMEOUT non défini, utilise 10s (était 30s)
-        self.timeout   = int(os.getenv('OLLAMA_TIMEOUT', '10'))
+        # FIX : timeout très court → fail fast → fallback démo immédiat
+        # Si OLLAMA_TIMEOUT non défini, utilise 5s (était 10s/30s)
+        self.timeout   = int(os.getenv('OLLAMA_TIMEOUT', '5'))
         self.cache: Dict[str, str] = {}
 
         # ── Chargement des modèles depuis .env ──────────────────────────────

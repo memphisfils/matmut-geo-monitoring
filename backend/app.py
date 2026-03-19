@@ -383,6 +383,8 @@ def run_analysis_stream():
         start         = time.time()
         llm_client    = None
         active_models = ['demo']
+        llm_failures  = 0  # Compteur d'échecs LLM
+        MAX_FAILURES  = 2  # Après 2 échecs → mode démo forcé
 
         if not use_demo and prompts:
             try:
@@ -446,11 +448,20 @@ def run_analysis_stream():
                             brands_in = analysis.get('brands_mentioned', [])
                     if not analyses:
                         raise ValueError("Toutes les réponses LLM sont vides")
+                    llm_failures = 0  # Reset counter on success
                 except BaseException as _llm_err:
                     # Attrape aussi SystemExit levé par Gunicorn/sys.exit(1)
                     if isinstance(_llm_err, SystemExit):
                         return  # Gunicorn kill propre
-                    print(f"[STREAM] LLM error prompt {i+1}: {_llm_err} — fallback demo")
+                    llm_failures += 1
+                    print(f"[STREAM] LLM error prompt {i+1}: {_llm_err} (failures={llm_failures}/{MAX_FAILURES}) — fallback demo")
+                    
+                    # FORCE DEMO MODE après 2 échecs
+                    if llm_failures >= MAX_FAILURES:
+                        print(f"[STREAM] {MAX_FAILURES} échecs LLM → passage en mode démo forcé")
+                        is_demo = True
+                        active_models = ['demo']
+                    
                     brands_in = []
                     for b in all_brands:
                         rng = random.Random(_brand_seed(b) + i * 997)

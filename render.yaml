@@ -31,6 +31,8 @@ services:
         sync: false
       - key: OLLAMA_TIMEOUT
         value: "40"
+      - key: GUNICORN_TIMEOUT
+        value: "120"
     disk:
       name: data
       mountPath: /opt/render/project/src/data

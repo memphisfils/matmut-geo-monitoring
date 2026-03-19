@@ -12,8 +12,8 @@ services:
     plan: free
     # Force pip instead of Poetry
     packageManager: pip
-    # Gunicorn avec workers uvicorn pour support async + timeout 120s
-    startCommand: "cd backend && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class uvicorn.workers.UvicornWorker --timeout 120 --keep-alive 120"
+    # Gunicorn avec workers uvicorn pour support async + timeout 180s
+    startCommand: "cd backend && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class uvicorn.workers.UvicornWorker --timeout 180 --keep-alive 180 --graceful-timeout 30"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0

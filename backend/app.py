@@ -396,6 +396,20 @@ def run_analysis_stream():
 
         is_demo = llm_client is None
 
+        # NOUVEAU : test Ollama UNE fois avant la boucle (fail fast)
+        if not is_demo and llm_client:
+            try:
+                _ping = llm_client.query_model(
+                    "ok", llm_client.models[0], use_cache=False
+                )
+                if not _ping:
+                    raise ValueError("vide")
+            except Exception as _e:
+                print(f"[STREAM] Ping Ollama échoué ({_e}) → démo")
+                is_demo = True
+                llm_client = None
+                active_models = ['demo']
+
         yield _sse('start', {'brand': brand, 'total_prompts': limit,
                               'models': active_models, 'is_demo': is_demo})
         responses = []
@@ -432,7 +446,10 @@ def run_analysis_stream():
                             brands_in = analysis.get('brands_mentioned', [])
                     if not analyses:
                         raise ValueError("Toutes les réponses LLM sont vides")
-                except Exception as _llm_err:
+                except BaseException as _llm_err:
+                    # Attrape aussi SystemExit levé par Gunicorn/sys.exit(1)
+                    if isinstance(_llm_err, SystemExit):
+                        return  # Gunicorn kill propre
                     print(f"[STREAM] LLM error prompt {i+1}: {_llm_err} — fallback demo")
                     brands_in = []
                     for b in all_brands:

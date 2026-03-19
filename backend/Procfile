@@ -1,3 +1,4 @@
 # Procfile pour Render (Gunicorn)
-# Worker gthread avec timeout 120s pour les requêtes LLM longues
-web: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 4 --timeout 120
+# Worker gthread avec timeout 30s + graceful-timeout 10s pour SSE
+# Timeout court pour abandonner vite et redémarrer proprement
+web: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 4 --timeout 30 --graceful-timeout 10

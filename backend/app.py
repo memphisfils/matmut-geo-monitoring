@@ -384,7 +384,7 @@ def run_analysis_stream():
         llm_client    = None
         active_models = ['demo']
         llm_failures  = 0  # Compteur d'échecs LLM
-        MAX_FAILURES  = 2  # Après 2 échecs → mode démo forcé
+        MAX_FAILURES  = 3  # Après 3 échecs → mode démo forcé (était 2)
 
         if not use_demo and prompts:
             try:

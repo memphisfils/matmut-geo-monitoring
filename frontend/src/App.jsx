@@ -53,12 +53,15 @@ export default function App() {
         if (event.type === 'start') {
           setAnalysisModels(event.models || []);
           setIsDemo(event.is_demo || false);
+          console.log('[APP] Streaming start — models:', event.models, 'is_demo:', event.is_demo);
         }
         if (event.type === 'progress') {
           setAnalysisProgress(event);
           setCompletedPrompts(prev => [...prev, event]);
+          console.log(`[APP] Progress ${event.current}/${event.total} — brand_position:`, event.brand_position);
         }
         if (event.type === 'complete') {
+          console.log('[APP] Streaming COMPLETE — is_demo:', event.is_demo, 'timestamp:', event.timestamp);
           setIsAnalysisComplete(true);
           setIsAnalyzing(false);
           await loadDashboardData(cfg);
@@ -78,9 +81,11 @@ export default function App() {
   const loadDashboardData = useCallback(async (cfg) => {
     console.log('[APP] loadDashboardData avec config:', cfg);
     try {
-      // Petit délai pour laisser le temps à la sauvegarde results.json
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+      // Délai pour laisser le temps à la sauvegarde results.json (fix race condition)
+      // Le backend doit avoir fini l'écriture AVANT d'appeler /api/metrics
+      // Timeout typique : 40s par prompt × 6 prompts = 240s max
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
       console.log('[APP] fetchMetrics...');
       const [result, historyData] = await Promise.all([
         fetchMetrics({ brand: cfg.brand, competitors: cfg.competitors }),

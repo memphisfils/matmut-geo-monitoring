@@ -128,7 +128,8 @@ export async function* runAnalysisStream(options = {}) {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(options),
-      signal:  AbortSignal.timeout(60000)
+      // Timeout : 300s (5 minutes) pour 6 prompts × 40s max = 240s
+      signal:  AbortSignal.timeout(300000)
     });
 
     if (!response.ok || !response.body) throw new Error('stream unavailable');

@@ -8,6 +8,7 @@ Nouveautés :
 """
 from flask import Flask, jsonify, request, Response, stream_with_context
 from flask_cors import CORS
+from dotenv import load_dotenv
 import json
 import os
 import random
@@ -15,6 +16,8 @@ import time
 import asyncio
 from datetime import datetime
 from analyzer import BrandAnalyzer
+
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -382,6 +385,10 @@ def run_analysis_stream():
     limit        = data.get('limit', min(len(prompts), 6) if prompts else 6)
     use_demo     = data.get('demo', False)
     sector       = data.get('sector', '')
+    
+    # DEBUG : log des données reçues
+    print(f"[STREAM] Reçu : brand={brand}, prompts={len(prompts)}, demo={use_demo}")
+    
     all_brands   = [brand] + competitors
     az           = BrandAnalyzer(brands=all_brands)
 
@@ -427,6 +434,8 @@ def run_analysis_stream():
             prompt_start = time.time()
             elapsed_total = time.time() - start
             
+            print(f"[STREAM] Prompt {i+1}/{limit} début — elapsed: {elapsed_total:.1f}s")
+
             # TIMEOUT GLOBAL : si on dépasse limit * MAX_TIME_PER_PROMPT, fallback démo
             if elapsed_total > limit * MAX_TIME_PER_PROMPT:
                 print(f"[STREAM] Timeout global ({elapsed_total:.0f}s > {limit * MAX_TIME_PER_PROMPT}s) → fallback démo")
@@ -434,6 +443,7 @@ def run_analysis_stream():
                 active_models = ['demo']
 
             if is_demo:
+                print(f"[STREAM] Prompt {i+1}/{limit} — MODE DÉMO (is_demo=True)")
                 time.sleep(0.3)
                 brands_in = []
                 for b in all_brands:
@@ -476,6 +486,7 @@ def run_analysis_stream():
                     analyses = {'ollama': {'response': f'[Timeout {i+1}]', 'analysis': _demo_analysis}}
                 else:
                     try:
+                        print(f"[STREAM] Prompt {i+1}/{limit} — Appel LLM en cours...")
                         all_model_resp = llm_client.query_all_models_for_prompt(prompt)
                         analyses = {}
                         brands_in = []
@@ -484,19 +495,27 @@ def run_analysis_stream():
                                 analysis = az.analyze_response(text)
                                 analyses[model] = {'response': text, 'analysis': analysis}
                                 brands_in = analysis.get('brands_mentioned', [])
+                                print(f"[STREAM]   → {model}: ✓ {len(text)} chars, brands={brands_in}")
+                            else:
+                                print(f"[STREAM]   → {model}: ✗ réponse vide")
+                        
                         if not analyses:
+                            print(f"[STREAM] Prompt {i+1}/{limit} — ÉCHEC: Aucune réponse LLM valide")
                             raise ValueError("Toutes les réponses LLM sont vides")
+                        
+                        print(f"[STREAM] Prompt {i+1}/{limit} — ✓ VALIDÉ (brands: {brands_in})")
                         llm_failures = 0  # Reset counter on success
                     except BaseException as _llm_err:
                         # Attrape aussi SystemExit levé par Gunicorn/sys.exit(1)
                         if isinstance(_llm_err, SystemExit):
+                            print(f"[STREAM] Prompt {i+1}/{limit} — SystemExit (Gunicorn kill)")
                             return  # Gunicorn kill propre
                         llm_failures += 1
-                        print(f"[STREAM] LLM error prompt {i+1}: {_llm_err} (failures={llm_failures}/{MAX_FAILURES}) — fallback demo")
+                        print(f"[STREAM] Prompt {i+1}/{limit} — ✗ ÉCHEC LLM: {_llm_err} (failures={llm_failures}/{MAX_FAILURES})")
 
                         # FORCE DEMO MODE après 2 échecs
                         if llm_failures >= MAX_FAILURES:
-                            print(f"[STREAM] {MAX_FAILURES} échecs LLM → passage en mode démo forcé")
+                            print(f"[STREAM] ⚠ {MAX_FAILURES} échecs LLM → passage en mode démo forcé pour les prompts restants")
                             is_demo = True
                             active_models = ['demo']
 
@@ -516,6 +535,7 @@ def run_analysis_stream():
                             'matmut_position': next((idx+1 for idx, b in enumerate(brands_in) if b == brand), None),
                         }
                         analyses = {'ollama': {'response': f'[Fallback {i+1}]', 'analysis': _demo_analysis}}
+                        print(f"[STREAM] Prompt {i+1}/{limit} — ↻ FALLBACK DÉMO (brands: {brands_in})")
 
             brand_pos = next(
                 (analyses[m]['analysis'].get('brand_position')
@@ -528,11 +548,14 @@ def run_analysis_stream():
                 'brand_position': brand_pos,
                 'duration_ms': round((time.time() - prompt_start) * 1000)
             })
+            
+            print(f"[STREAM] Prompt {i+1}/{limit} terminé — duration: {time.time() - prompt_start:.1f}s")
 
         results = {'timestamp': datetime.now().isoformat(), 'total_prompts': limit,
                    'llms_used': active_models, 'brand': brand,
                    'competitors': competitors, 'responses': responses, 'is_demo': is_demo}
         _save_and_alert(results, brand)
+        print(f"[STREAM] ✓ Sauvegarde terminée — {limit} prompts, is_demo={is_demo}")
         try:
             upsert_project(brand, sector, competitors, prompts, active_models)
         except Exception:
@@ -549,9 +572,20 @@ def run_analysis_stream():
 @app.route('/api/metrics', methods=['GET'])
 def get_metrics():
     print(f"[METRICS] Appel de /api/metrics")
-    results = _load_results()
+    
+    # Essayer de charger results.json — s'il n'existe pas, attendre et réessayer
+    # Ça évite de générer des données démo pendant qu'un streaming est en cours
+    results = None
+    for attempt in range(5):  # 5 tentatives × 2s = 10s max
+        results = _load_results()
+        if results:
+            print(f"[METRICS] results.json trouvé après {attempt+1} tentative(s)")
+            break
+        print(f"[METRICS] results.json inexistant — attente 2s (tentative {attempt+1}/5)")
+        time.sleep(2)
+    
     if not results:
-        print(f"[METRICS] results.json vide → génération démo")
+        print(f"[METRICS] results.json toujours vide → génération démo")
         results = generate_demo_data()
         _save_results(results)
 

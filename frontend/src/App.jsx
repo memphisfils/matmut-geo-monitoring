@@ -13,6 +13,7 @@ import LLMBreakdown from './components/LLMBreakdown';
 import PromptComparator from './components/PromptComparator';
 import AlertsPanel from './components/AlertsPanel';
 import ExportButton from './components/ExportButton';
+import Benchmark from './components/Benchmark';
 import {
   fetchMetrics, fetchExport, checkStatus, fetchHistory,
   runAnalysisStream, generateTrendHistory, DEMO_DATA_FACTORY
@@ -89,11 +90,18 @@ export default function App() {
       console.log('[APP] fetchMetrics...');
       const [result, historyData] = await Promise.all([
         fetchMetrics({ brand: cfg.brand, competitors: cfg.competitors }),
-        fetchHistory()
+        fetchHistory({ brand: cfg.brand })
       ]);
       console.log('[APP] fetchMetrics result:', result?.metadata);
       setData(result);
-      setTrendHistory(generateTrendHistory(result?.ranking, cfg.brand));
+      // Utiliser l'historique réel si disponible, sinon générer du fake
+      if (historyData && historyData.length > 0) {
+        console.log('[APP] Historique réel:', historyData.length, 'points');
+        setTrendHistory(historyData);
+      } else {
+        console.log('[APP] Pas dhistorique, génération de données fake');
+        setTrendHistory(generateTrendHistory(result?.ranking, cfg.brand));
+      }
     } catch (err) {
       console.error('[APP] loadDashboardData error:', err);
       const demo = DEMO_DATA_FACTORY(cfg.brand, cfg.competitors);
@@ -151,6 +159,44 @@ export default function App() {
     checkStatus().then(res => setIsBackendOnline(res?.status === 'ok'));
   }, []);
 
+  // Benchmark accessible sans config
+  if (!config && activeTab === 'benchmark') {
+    return (
+      <div className="app-layout">
+        <TopNavbar
+          brand={null}
+          onRefresh={null}
+          onExport={null}
+          isLoading={false}
+          isBackendOnline={isBackendOnline}
+          onReset={() => setActiveTab('dashboard')}
+          exportSlot={null}
+        />
+        <div className="app-tabs">
+          {[
+            { key: 'dashboard', label: 'Dashboard' },
+            { key: 'benchmark', label: 'Benchmark' },
+            { key: 'prompts',   label: 'Prompts' },
+            { key: 'alerts',    label: 'Alertes' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              className={`app-tab ${activeTab === tab.key ? 'active' : ''}`}
+              onClick={() => tab.key === 'dashboard' ? setConfig({}) : setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="main-content">
+          <div className="page-content">
+            <Benchmark />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!config) {
     return <Onboarding onComplete={handleOnboardingComplete} />;
   }
@@ -171,6 +217,7 @@ export default function App() {
       <div className="app-tabs">
         {[
           { key: 'dashboard', label: 'Dashboard' },
+          { key: 'benchmark', label: 'Benchmark' },
           { key: 'prompts',   label: 'Prompts' },
           { key: 'alerts',    label: 'Alertes' },
         ].map(tab => (
@@ -242,6 +289,11 @@ export default function App() {
           {/* Prompts Tab (Sprint 3) */}
           {activeTab === 'prompts' && (
             <PromptComparator brand={config.brand} />
+          )}
+
+          {/* Benchmark Tab */}
+          {activeTab === 'benchmark' && (
+            <Benchmark />
           )}
 
           {/* Alerts Tab (Sprint 3) */}

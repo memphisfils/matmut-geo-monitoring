@@ -2,9 +2,14 @@ import React, { useState } from 'react';
 import { Search, ChevronRight, Plus, X, Check, Sparkles, Loader2, Target } from 'lucide-react';
 import './Onboarding.css';
 
+// Secteurs populaires en premier, puis les autres
 const SECTORS = [
-  'Assurance', 'Banque', 'Santé', 'Énergie', 'Télécoms',
-  'Automobile', 'Distribution', 'Immobilier', 'Tech / SaaS', 'Autre'
+  // Populaires
+  'Assurance', 'Banque', 'Santé', 'Tech / SaaS', 'Automobile',
+  'Énergie', 'Télécoms', 'Distribution', 'Immobilier',
+  // Autres
+  'Alimentaire', 'Mode', 'Sport', 'Voyage', 'Éducation',
+  'Loisirs', 'Services B2B', 'Autre'
 ];
 
 // ← FIX : utilise la variable d'env, pas localhost hardcodé
@@ -20,8 +25,11 @@ export default function Onboarding({ onComplete }) {
   const [competitors, setCompetitors] = useState([]);
   const [newCompetitor, setNewCompetitor] = useState('');
 
+  const [errorMessage, setErrorMessage] = useState('');
+
   const generateWithAI = async () => {
     setIsGenerating(true);
+    setErrorMessage('');
     try {
       const response = await fetch(`${API_URL}/generate-config`, {
         method: 'POST',
@@ -29,20 +37,23 @@ export default function Onboarding({ onComplete }) {
         body: JSON.stringify({ brand, sector })
       });
 
-      if (!response.ok) throw new Error('API call failed');
       const data = await response.json();
+
+      // Erreur 500 = LLM a échoué, pas de fallback
+      if (!response.ok || data.status === 'error') {
+        setErrorMessage(data.error || 'Génération IA impossible. Veuillez saisir vos concurrents manuellement.');
+        // On reste à l'étape 1 pour que l'utilisateur puisse continuer manuellement
+        return;
+      }
+
       const parsed = data.config;
       setGenerated(parsed);
       setSelectedProducts(parsed.products.map(p => p.id));
       setCompetitors(parsed.suggested_competitors.slice(0, 4));
       setStep(2);
     } catch (err) {
-      console.warn('Backend unavailable, using fallback data:', err.message);
-      const demo = getDemoData(brand, sector);
-      setGenerated(demo);
-      setSelectedProducts(demo.products.map(p => p.id));
-      setCompetitors(demo.suggested_competitors.slice(0, 4));
-      setStep(2);
+      console.error('Erreur generate-config:', err);
+      setErrorMessage('Connexion au backend impossible. Veuillez vérifier que le serveur est actif.');
     } finally {
       setIsGenerating(false);
     }
@@ -136,6 +147,35 @@ export default function Onboarding({ onComplete }) {
               {isGenerating ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
               {isGenerating ? 'GENERATION...' : 'ANALYSER AVEC IA'}
             </button>
+
+            {errorMessage && (
+              <div className="error-message">
+                <p>{errorMessage}</p>
+                <button
+                  className="btn-secondary"
+                  onClick={() => {
+                    // Passage en mode manuel : générer des données vides et avancer
+                    const manual = {
+                      products: [
+                        { id: 'p1', name: `${brand} Standard`, description: 'Offre principale',
+                          prompts: [`Meilleur ${sector}`, `Comparatif ${sector}`] },
+                        { id: 'p2', name: `${brand} Premium`, description: 'Offre haut de gamme',
+                          prompts: [`Top ${sector}`, `Meilleur ${sector}`] },
+                      ],
+                      suggested_competitors: [],
+                      sector_fr: sector
+                    };
+                    setGenerated(manual);
+                    setSelectedProducts(['p1', 'p2']);
+                    setCompetitors([]);
+                    setErrorMessage('');
+                    setStep(2);
+                  }}
+                >
+                  Continuer sans concurrents IA
+                </button>
+              </div>
+            )}
           </div>
         )}
 

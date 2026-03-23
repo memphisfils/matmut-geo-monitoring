@@ -41,7 +41,8 @@ class LLMClient:
 
     # ── Requête vers un modèle spécifique ───────────────────────────────────
 
-    def query_model(self, prompt: str, model: str, use_cache: bool = True) -> str:
+    def query_model(self, prompt: str, model: str, use_cache: bool = True,
+                    system_prompt: str = None) -> str:
         """Interroge un modèle Ollama Cloud précis. Retourne '' si échec."""
         if not self.api_key:
             return ""
@@ -50,6 +51,12 @@ class LLMClient:
         if use_cache and cache_key in self.cache:
             print(f"  [CACHE] {model[:20]}")
             return self.cache[cache_key]
+
+        # Construction des messages (avec system prompt si fourni)
+        messages = []
+        if system_prompt:
+            messages.append({'role': 'system', 'content': system_prompt})
+        messages.append({'role': 'user', 'content': prompt})
 
         # UNE seule tentative (pas de retry) pour fail fast
         try:
@@ -62,42 +69,44 @@ class LLMClient:
                 },
                 json={
                     'model': model,
-                    'messages': [{'role': 'user', 'content': prompt}],
+                    'messages': messages,
+                    'think': False,
                     'stream': False
                 },
                 timeout=self.timeout
             )
             resp.raise_for_status()
             content = resp.json().get('message', {}).get('content', '')
-            print(f"  [{model}] ✓ {len(content)} chars")
+            print(f"  [{model}] OK {len(content)} chars")
             if use_cache and content:
                 self.cache[cache_key] = content
             return content
 
         except requests.exceptions.Timeout:
-            print(f"  [{model}] ✗ timeout ({self.timeout}s)")
+            print(f"  [{model}] X timeout ({self.timeout}s)")
             return ""
         except requests.exceptions.HTTPError as e:
             code = e.response.status_code if e.response else '?'
-            print(f"  [{model}] ✗ HTTP {code}")
+            print(f"  [{model}] X HTTP {code}")
             return ""
         except Exception as e:
-            print(f"  [{model}] ✗ {type(e).__name__}: {e}")
+            print(f"  [{model}] X {type(e).__name__}: {e}")
             return ""
 
     # ── Requêtes multiples ───────────────────────────────────────────────────
 
-    def query_all(self, prompt: str) -> Dict[str, str]:
+    def query_all(self, prompt: str, system_prompt: str = None) -> Dict[str, str]:
         """
         Interroge tous les modèles configurés SÉQUENTIELLEMENT.
         Retourne {model_name: response_text}.
         """
         results = {}
         for model in self.models:
-            results[model] = self.query_model(prompt, model)
+            results[model] = self.query_model(prompt, model, system_prompt=system_prompt)
         return results
 
-    def query_all_parallel(self, prompts: List[str], max_workers: int = 3) -> Dict[str, str]:
+    def query_all_parallel(self, prompts: List[str], max_workers: int = 3,
+                          system_prompt: str = None) -> Dict[str, str]:
         """
         Interroge le(s) modèle(s) en parallèle pour une liste de prompts.
         Retourne {prompt: response_text} (avec le modèle principal).
@@ -112,33 +121,32 @@ class LLMClient:
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_map = {
-                executor.submit(self.query_model, prompt, primary_model): prompt
+                executor.submit(self.query_model, prompt, primary_model, system_prompt=system_prompt): prompt
                 for prompt in prompts
             }
             for i, future in enumerate(as_completed(future_map), 1):
                 prompt = future_map[future]
                 try:
                     results[prompt] = future.result()
-                    print(f"  [{i}/{len(prompts)}] ✓ {prompt[:50]}…")
+                    print(f"  [{i}/{len(prompts)}] OK {prompt[:50]}…")
                 except Exception as e:
-                    print(f"  [{i}/{len(prompts)}] ✗ {e}")
+                    print(f"  [{i}/{len(prompts)}] X {e}")
                     results[prompt] = ""
 
         return results
 
-    def query_all_models_for_prompt(self, prompt: str) -> Dict[str, str]:
+    def query_all_models_for_prompt(self, prompt: str, system_prompt: str = None) -> Dict[str, str]:
         """
         Interroge TOUS les modèles configurés pour un seul prompt.
-        Utilisé par le score de confiance (Sprint 2).
         Retourne {model_name: response_text}.
         """
         if len(self.models) <= 1:
-            return self.query_all(prompt)
+            return self.query_all(prompt, system_prompt=system_prompt)
 
         results: Dict[str, str] = {}
         with ThreadPoolExecutor(max_workers=len(self.models)) as executor:
             future_map = {
-                executor.submit(self.query_model, prompt, model): model
+                executor.submit(self.query_model, prompt, model, system_prompt=system_prompt): model
                 for model in self.models
             }
             for future in as_completed(future_map):
@@ -146,7 +154,7 @@ class LLMClient:
                 try:
                     results[model] = future.result()
                 except Exception as e:
-                    print(f"  [{model}] ✗ {e}")
+                    print(f"  [{model}] X {e}")
                     results[model] = ""
         return results
 
@@ -164,6 +172,8 @@ class LLMClient:
 
     # ── Alias legacy (gardé pour compat avec app.py existant) ───────────────
 
-    def query_ollama(self, prompt: str, model: str = None, use_cache: bool = True) -> str:
+    def query_ollama(self, prompt: str, model: str = None, use_cache: bool = True,
+                    system_prompt: str = None) -> str:
         """Alias legacy — utilise le modèle principal si non spécifié."""
-        return self.query_model(prompt, model or (self.models[0] if self.models else 'qwen3.5'), use_cache)
+        return self.query_model(prompt, model or (self.models[0] if self.models else 'qwen3.5'),
+                              use_cache, system_prompt=system_prompt)

@@ -125,19 +125,16 @@ class AsyncLLMClient:
         return results
 
     async def query_all_models_for_prompt(self, prompt: str) -> Dict[str, str]:
-        """Interroge TOUS les modèles pour un seul prompt en parallèle."""
+        """Interroge TOUS les modèles pour un seul prompt en parallèle via asyncio.gather."""
         if len(self.models) <= 1:
             return await self.query_all(prompt)
 
         results: Dict[str, str] = {}
         async with aiohttp.ClientSession() as session:
-            tasks = [(model, self.query_model(prompt, model, session=session)) for model in self.models]
-            for model, task in tasks:
-                try:
-                    results[model] = await task
-                except Exception as e:
-                    print(f"  [{model}] ✗ {e}")
-                    results[model] = ""
+            tasks = [self.query_model(prompt, model, session=session) for model in self.models]
+            responses = await asyncio.gather(*tasks, return_exceptions=True)
+            for model, response in zip(self.models, responses):
+                results[model] = response if isinstance(response, str) else ""
         return results
 
     def get_active_models(self) -> Dict[str, bool]:

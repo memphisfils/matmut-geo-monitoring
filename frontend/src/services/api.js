@@ -247,11 +247,101 @@ export async function fetchExport() {
   }
 }
 
-export async function fetchHistory() {
+// ── Benchmark Multi-Marques ────────────────────────────────────────────────────
+
+export async function createBenchmark(brands = []) {
   try {
-    const r = await fetch(`${API_URL}/history`);
+    const r = await fetch(`${API_URL}/benchmark`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brands })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Benchmark creation failed');
+    return data;
+  } catch (err) {
+    return { status: 'error', error: err.message };
+  }
+}
+
+export async function* runBenchmarkStream(options = {}) {
+  const { name, brands = [], prompts = [], demo = false } = options;
+  const limit = Math.min(prompts.length || 6, 6);
+
+  const tryReal = async function* () {
+    const response = await fetch(`${API_URL}/run-benchmark/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, brands, prompts, limit }),
+      signal: AbortSignal.timeout(300000)
+    });
+
+    if (!response.ok || !response.body) throw new Error('stream unavailable');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            yield JSON.parse(line.slice(6));
+          } catch {
+            // ignore malformed
+          }
+        }
+      }
+    }
+  };
+
+  if (!demo && prompts.length > 0) {
+    try {
+      yield* tryReal();
+      return;
+    } catch (err) {
+      console.warn('[BENCHMARK] Fallback démo —', err.message);
+    }
+  }
+
+  // Fallback démo
+  yield {
+    type: 'start', name, brands, total_prompts: limit,
+    models: ['demo'], is_demo: true, mode: 'benchmark'
+  };
+
+  const delay = (ms) => new Promise(r => setTimeout(r, ms));
+
+  for (let i = 0; i < limit; i++) {
+    await delay(400 + Math.random() * 300);
+    yield {
+      type: 'progress', current: i + 1, total: limit,
+      prompt: prompts[i] || `Benchmark démo ${i + 1}`,
+      brands_mentioned: brands.slice(0, 3),
+      elapsed: i * 0.5, is_demo: true
+    };
+  }
+
+  yield {
+    type: 'complete', timestamp: new Date().toISOString(),
+    total_prompts: limit, is_demo: true, duration: limit * 0.5
+  };
+}
+
+export async function fetchHistory({ brand } = {}) {
+  try {
+    const url = brand ? `${API_URL}/history?brand=${encodeURIComponent(brand)}` : `${API_URL}/history`;
+    const r = await fetch(url);
     if (!r.ok) throw new Error();
-    return await r.json();
+    const data = await r.json();
+    // Si la réponse est un array vide ou n'a pas de données réelles, retourner []
+    return Array.isArray(data) ? data : [];
   } catch {
     return [];
   }

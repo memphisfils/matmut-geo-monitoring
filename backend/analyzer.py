@@ -4,6 +4,8 @@ Version 2.0 — Support dynamique de n'importe quelle marque
 Sprint 2   — Score de confiance par modèle (divergence inter-LLM)
 """
 import re
+import unicodedata
+import json
 from typing import List, Dict, Tuple, Optional
 
 
@@ -19,13 +21,60 @@ class BrandAnalyzer:
 
     # ── Extraction ──────────────────────────────────────────────────────────
 
+    def _normalize(self, text: str) -> str:
+        """Normalise un texte: minuscules + suppression des accents."""
+        return unicodedata.normalize('NFD', text.lower()).encode('ascii', 'ignore').decode('ascii')
+
+    def _extract_json_from_response(self, text: str) -> tuple:
+        """
+        Extrait le JSON de la réponse LLM et retourne (narrative, json_data).
+        Le JSON est détecté entre ```json...``` ou entre ```...``` ou entre {...}.
+        """
+        if not text:
+            return text, None
+
+        import re as re_mod, json as json_mod
+
+        # Chercher un bloc JSON (```json ... ``` ou ``` ... ```)
+        json_patterns = [
+            r'```json\s*(\{[\s\S]*?\})\s*```',  # ```json { ... } ```
+            r'```\s*(\{[\s\S]*?\})\s*```',       # ```{ ... } ```
+        ]
+
+        for pattern in json_patterns:
+            match = re_mod.search(pattern, text, re_mod.DOTALL)
+            if match:
+                json_str = match.group(1)
+                narrative = text[:match.start()].strip()
+                try:
+                    json_data = json_mod.loads(json_str)
+                    return narrative, json_data
+                except Exception:
+                    pass
+
+        # Chercher le dernier {...} comme fallback
+        last_brace = text.rfind('{')
+        last_brace_end = text.rfind('}')
+        if last_brace != -1 and last_brace_end > last_brace:
+            json_candidate = text[last_brace:last_brace_end+1]
+            narrative = text[:last_brace].strip()
+            try:
+                json_data = json_mod.loads(json_candidate)
+                return narrative, json_data
+            except Exception:
+                pass
+
+        return text, None
+
     def extract_brands(self, text: str) -> List[Tuple[str, int]]:
         if not text:
             return []
         mentions = []
-        text_lower = text.lower()
+        # N'extraire que de la partie narrative (pas du JSON)
+        narrative, _ = self._extract_json_from_response(text)
+        text_lower = self._normalize(narrative)
         for brand in self.brands:
-            pattern = r'\b' + re.escape(brand.lower()) + r'\b'
+            pattern = r'\b' + re.escape(self._normalize(brand)) + r'\b'
             matches = list(re.finditer(pattern, text_lower))
             if matches:
                 mentions.append((brand, matches[0].start()))

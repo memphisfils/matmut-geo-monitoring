@@ -189,6 +189,29 @@ h2 {
   border-color: var(--text-secondary);
 }
 
+.error-message {
+  background: rgba(255, 59, 48, 0.1);
+  border: 1px solid #ff3b30;
+  padding: 16px;
+  margin-top: 16px;
+  text-align: center;
+}
+
+.error-message p {
+  color: #ff3b30;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Config Grid */
 .config-grid {
   display: grid;

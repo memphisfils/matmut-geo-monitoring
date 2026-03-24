@@ -159,8 +159,16 @@ export default function App() {
     checkStatus().then(res => setIsBackendOnline(res?.status === 'ok'));
   }, []);
 
-  // Benchmark accessible sans config
-  if (!config && activeTab === 'benchmark') {
+  // Gestion du changement d'onglet
+  const handleTabChange = (tabKey) => {
+    if (tabKey === 'dashboard' && !config) {
+      // Retour dashboard sans config = montrer onboarding
+    }
+    setActiveTab(tabKey);
+  };
+
+  // Si pas de config, montrer Onboarding + onglets
+  if (!config) {
     return (
       <div className="app-layout">
         <TopNavbar
@@ -170,35 +178,31 @@ export default function App() {
           isLoading={false}
           isBackendOnline={isBackendOnline}
           onReset={() => setActiveTab('dashboard')}
-          exportSlot={null}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
         />
-        <div className="app-tabs">
-          {[
-            { key: 'dashboard', label: 'Dashboard' },
-            { key: 'benchmark', label: 'Benchmark' },
-            { key: 'prompts',   label: 'Prompts' },
-            { key: 'alerts',    label: 'Alertes' },
-          ].map(tab => (
-            <button
-              key={tab.key}
-              className={`app-tab ${activeTab === tab.key ? 'active' : ''}`}
-              onClick={() => tab.key === 'dashboard' ? setConfig({}) : setActiveTab(tab.key)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
         <div className="main-content">
           <div className="page-content">
-            <Benchmark />
+            {activeTab === 'dashboard' && (
+              <Onboarding onComplete={handleOnboardingComplete} />
+            )}
+            {activeTab === 'benchmark' && (
+              <Benchmark />
+            )}
+            {activeTab === 'prompts' && (
+              <div style={{padding:'40px',textAlign:'center',color:'#666'}}>
+                Faire d'abord une analyse pour voir les prompts
+              </div>
+            )}
+            {activeTab === 'alerts' && (
+              <div style={{padding:'40px',textAlign:'center',color:'#666'}}>
+                Faire d'abord une analyse pour configurer les alertes
+              </div>
+            )}
           </div>
         </div>
       </div>
     );
-  }
-
-  if (!config) {
-    return <Onboarding onComplete={handleOnboardingComplete} />;
   }
 
   return (
@@ -210,26 +214,10 @@ export default function App() {
         isLoading={isAnalyzing}
         isBackendOnline={isBackendOnline}
         onReset={() => { setConfig(null); setData(null); setCompletedPrompts([]); setActiveTab('dashboard'); }}
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
         exportSlot={<ExportButton brand={config.brand} />}
       />
-
-      {/* Onglets Sprint 3 */}
-      <div className="app-tabs">
-        {[
-          { key: 'dashboard', label: 'Dashboard' },
-          { key: 'benchmark', label: 'Benchmark' },
-          { key: 'prompts',   label: 'Prompts' },
-          { key: 'alerts',    label: 'Alertes' },
-        ].map(tab => (
-          <button
-            key={tab.key}
-            className={`app-tab ${activeTab === tab.key ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
 
       <div className="main-content">
         <div className="page-content">

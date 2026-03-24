@@ -14,7 +14,7 @@ import os
 import random
 import time
 from datetime import datetime
-from analyzer import BrandAnalyzer
+from services import BrandAnalyzer
 
 load_dotenv()
 
@@ -28,10 +28,10 @@ ALLOWED_ORIGINS = [
 ]
 CORS(app, resources={r"/*": {"origins": ALLOWED_ORIGINS}}, supports_credentials=False)
 
-from database import (init_db, save_analysis, get_history,
-                      generate_demo_history, upsert_project, get_all_projects)
+from models import (init_db, save_analysis, get_history,
+                   generate_demo_history, upsert_project, get_all_projects)
 from alerts import send_alert, alert_rank_lost, alert_weekly_summary, send_slack_alert
-from prompts import build_geo_prompt, GEO_SYSTEM_PROMPT, generate_benchmark_prompt
+from utils import build_geo_prompt, GEO_SYSTEM_PROMPT, generate_benchmark_prompt
 init_db()
 
 DATA_DIR     = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')

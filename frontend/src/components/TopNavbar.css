@@ -92,6 +92,38 @@
   border-color: var(--accent-yellow);
 }
 
+.nav-tabs {
+  display: flex;
+  gap: 4px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.nav-tab {
+  background: transparent;
+  border: none;
+  color: #888888;
+  padding: 8px 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-bottom: 2px solid transparent;
+}
+
+.nav-tab:hover {
+  color: #CCCCCC;
+}
+
+.nav-tab.active {
+  color: #FFD700;
+  border-bottom-color: #FFD700;
+}
+
 .spin {
   animation: spin 1s linear infinite;
 }

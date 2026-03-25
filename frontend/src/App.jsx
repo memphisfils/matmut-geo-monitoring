@@ -16,7 +16,7 @@ import ExportButton from './components/ExportButton';
 import Benchmark from './components/Benchmark';
 import {
   fetchMetrics, fetchExport, checkStatus, fetchHistory,
-  runAnalysisStream, generateTrendHistory, DEMO_DATA_FACTORY
+  runAnalysisStream, generateTrendHistory, DEMO_DATA_FACTORY, fetchSession
 } from './services/api';
 import './App.css';
 
@@ -157,54 +157,46 @@ export default function App() {
 
   useEffect(() => {
     checkStatus().then(res => setIsBackendOnline(res?.status === 'ok'));
+    
+    // Auto-load session au démarrage
+    fetchSession().then(session => {
+      if (session.has_session && session.project) {
+        const project = session.project;
+        const config = {
+          brand: project.brand,
+          sector: project.sector,
+          competitors: project.competitors ? JSON.parse(project.competitors) : [],
+          prompts: project.prompts ? JSON.parse(project.prompts) : []
+        };
+        setConfig(config);
+        
+        // Charger les données si results.json existe
+        if (session.results) {
+          setData(session.results);
+        }
+      }
+    });
   }, []);
 
   // Gestion du changement d'onglet
   const handleTabChange = (tabKey) => {
-    if (tabKey === 'dashboard' && !config) {
-      // Retour dashboard sans config = montrer onboarding
-    }
     setActiveTab(tabKey);
   };
 
-  // Si pas de config, montrer Onboarding + onglets
+  // SI PAS DE CONFIG = Onboarding SEULEMENT (pas de TopNavbar)
   if (!config) {
     return (
       <div className="app-layout">
-        <TopNavbar
-          brand={null}
-          onRefresh={null}
-          onExport={null}
-          isLoading={false}
-          isBackendOnline={isBackendOnline}
-          onReset={() => setActiveTab('dashboard')}
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-        />
-        <div className="main-content">
+        <div className="main-content" style={{marginTop: 0}}>
           <div className="page-content">
-            {activeTab === 'dashboard' && (
-              <Onboarding onComplete={handleOnboardingComplete} />
-            )}
-            {activeTab === 'benchmark' && (
-              <Benchmark />
-            )}
-            {activeTab === 'prompts' && (
-              <div style={{padding:'40px',textAlign:'center',color:'#666'}}>
-                Faire d'abord une analyse pour voir les prompts
-              </div>
-            )}
-            {activeTab === 'alerts' && (
-              <div style={{padding:'40px',textAlign:'center',color:'#666'}}>
-                Faire d'abord une analyse pour configurer les alertes
-              </div>
-            )}
+            <Onboarding onComplete={handleOnboardingComplete} />
           </div>
         </div>
       </div>
     );
   }
 
+  // AVEC CONFIG = TopNavbar + Dashboard
   return (
     <div className="app-layout">
       <TopNavbar
@@ -281,7 +273,7 @@ export default function App() {
 
           {/* Benchmark Tab */}
           {activeTab === 'benchmark' && (
-            <Benchmark />
+            <Benchmark sector={config.sector} />
           )}
 
           {/* Alerts Tab (Sprint 3) */}

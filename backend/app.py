@@ -77,15 +77,59 @@ def _scheduled_weekly_summary():
                          top_competitors=top_competitors)
 
 
+def _scheduled_daily_alert():
+    """Alerte quotidienne - compare avec la dernière analyse connue."""
+    from models import get_history
+    results = _load_results()
+    if not results:
+        return
+    
+    brand       = results.get('brand', 'Marque')
+    competitors = results.get('competitors', [])
+    az          = BrandAnalyzer(brands=[brand] + competitors)
+    all_analyses = [d['analysis'] for r in results['responses']
+                    for d in r['llm_analyses'].values()]
+    metrics = az.calculate_metrics(all_analyses)
+    ranking = az.generate_ranking(metrics)
+    current_score = metrics.get(brand, {}).get('global_score', 0)
+    current_rank = next((r['rank'] for r in ranking if r['brand'] == brand), 99)
+    
+    history = get_history(brand=brand, days=2)
+    if len(history) < 2:
+        print(f"[DAILY] Pas assez d'historique pour {brand}")
+        return
+    
+    previous_score = history[-2].get(brand, current_score)
+    
+    changes = []
+    score_drop = current_score - previous_score
+    if score_drop < -5:
+        changes.append(f"Score: {previous_score:.1f} → {current_score:.1f} ({score_drop:+.1f})")
+    
+    if changes:
+        try:
+            from alerts import send_alert
+            send_alert(
+                title=f"⚠️ Alerte Quotidienne - {brand}",
+                message=f"Évolution: {' | '.join(changes)} | Rang: #{current_rank}",
+                brand=brand
+            )
+            print(f"[DAILY] Alerte envoyée pour {brand}: {changes}")
+        except Exception as e:
+            print(f"[DAILY] Erreur envoi alerte: {e}")
+
+
 def _start_scheduler():
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         scheduler = BackgroundScheduler()
         scheduler.add_job(_scheduled_analysis, 'interval', hours=6, id='auto_analysis')
+        scheduler.add_job(_scheduled_daily_alert, 'cron',
+                          hour=8, minute=0, id='daily_alert')
         scheduler.add_job(_scheduled_weekly_summary, 'cron',
                           day_of_week='mon', hour=9, minute=0, id='weekly_summary')
         scheduler.start()
-        print("[SCHEDULER] Actif — analyse 6h + résumé hebdo lundi 09h")
+        print("[SCHEDULER] Actif — analyse 6h + alerte quotidienne 08h + résumé hebdo lundi 09h")
         return scheduler
     except ImportError:
         print("[SCHEDULER] apscheduler non installé")
@@ -309,6 +353,22 @@ def status():
 @app.route('/api/projects', methods=['GET'])
 def list_projects():
     return jsonify(get_all_projects())
+
+@app.route('/api/session', methods=['GET'])
+def get_session():
+    """Retourne la dernière session (projet + résultats) pour auto-load."""
+    projects = get_all_projects()
+    if not projects:
+        return jsonify({'has_session': False})
+    
+    project = projects[0]
+    results = _load_results()
+    
+    return jsonify({
+        'has_session': True,
+        'project': project,
+        'results': results
+    })
 
 @app.route('/api/generate-config', methods=['POST'])
 def generate_config():

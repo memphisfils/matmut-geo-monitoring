@@ -1,16 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Crosshair, Plus, X, Loader2, Sparkles, Trophy, TrendingUp, Target } from 'lucide-react';
 import { createBenchmark, runBenchmarkStream, fetchMetrics } from '../services/api';
 import './Benchmark.css';
 
-const POPULAR_BRANDS = [
-  'Apple', 'Samsung', 'Xiaomi', 'Nike', 'Adidas', 'Tesla', 'Amazon', 'Google',
-  'Microsoft', 'Sony', 'LG', 'Huawei', 'OnePlus', 'Oppo', 'Vivo', 'ASUS',
-  'Dior', 'Chanel', 'Louis Vuitton', 'Hermès', 'Zara', 'H&M', 'Uniqlo',
-  'Coca-Cola', 'Pepsi', 'Nestlé', 'Danone', 'LVMH', 'Kering'
-];
+const SECTOR_BRANDS = {
+  'Automobile': ['Tesla', 'BMW', 'Mercedes', 'Audi', 'Volkswagen', 'Porsche', 'Renault', 'Peugeot', 'Citroën', 'Toyota', 'Honda', 'Ford'],
+  'Assurance': ['AXA', 'Allianz', 'MAIF', 'MMA', 'GMF', 'Generali', 'Groupama', 'BNP Paribas', 'Covéa', 'Macif'],
+  'Banque': ['BNP Paribas', 'Société Générale', 'Crédit Agricole', 'Bourse', 'LCL', 'Natixis', 'AXA', 'Allianz'],
+  'Mode': ['Nike', 'Adidas', 'Puma', 'Under Armour', 'New Balance', 'Asics', 'Reebok', 'Fila', 'Champion'],
+  'Tech': ['Apple', 'Samsung', 'Xiaomi', 'OnePlus', 'Oppo', 'Vivo', 'ASUS', 'Sony', 'LG', 'Huawei', 'Google', 'Microsoft'],
+  'Luxury': ['Louis Vuitton', 'Hermès', 'Chanel', 'Dior', 'Gucci', 'Prada', 'Balenciaga', 'Versace', 'Burberry'],
+  'Alimentation': ['Coca-Cola', 'Pepsi', 'Nestlé', 'Danone', 'Unilever', 'Kellogg', 'Mars', 'Ferrero'],
+  'Retail': ['Amazon', 'Cdiscount', 'Fnac', 'Darty', 'Carrefour', 'Auchan', ' Leclerc', 'Intermarché'],
+};
 
-export default function Benchmark({ onComplete }) {
+export default function Benchmark({ sector, onComplete }) {
   const [brands, setBrands] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -151,8 +155,8 @@ export default function Benchmark({ onComplete }) {
             </div>
 
             <div className="popular-brands">
-              <span>Populaires:</span>
-              {POPULAR_BRANDS.slice(0, 8).map(b => (
+              <span>{sector ? `Suggestions (${sector}):` : 'Marques populaires:'}</span>
+              {(sector && SECTOR_BRANDS[sector] ? SECTOR_BRANDS[sector] : Object.values(SECTOR_BRANDS).flat().slice(0, 12)).map(b => (
                 <button
                   key={b}
                   className="popular-chip"

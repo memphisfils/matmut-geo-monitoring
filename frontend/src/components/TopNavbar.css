@@ -3,9 +3,9 @@
   top: 0;
   left: 0;
   right: 0;
-  height: var(--navbar-height);
+  height: 56px;
   background-color: var(--bg-secondary);
-  border-bottom: var(--border-thick) solid var(--border-color);
+  border-bottom: 2px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -17,6 +17,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 150px;
 }
 
 .brand-icon {
@@ -25,27 +26,59 @@
 
 .brand-name {
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: 16px;
   color: var(--text-primary);
   text-transform: uppercase;
+  font-weight: bold;
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-tab {
+  background: transparent;
+  border: none;
+  color: #888888;
+  padding: 8px 20px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-bottom: 2px solid transparent;
+}
+
+.nav-tab:hover {
+  color: #CCCCCC;
+}
+
+.nav-tab.active {
+  color: #FFD700;
+  border-bottom-color: #FFD700;
 }
 
 .nav-actions {
   display: flex;
-  gap: 4px;
+  gap: 8px;
+  min-width: 250px;
+  justify-content: flex-end;
 }
 
 .nav-btn {
   background: transparent;
-  border: 2px solid var(--border-color);
+  border: 1px solid var(--border-color);
   color: var(--text-secondary);
   padding: 6px 12px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   transition: all 0.1s ease;
 }
 
@@ -69,6 +102,8 @@
 .nav-status {
   display: flex;
   align-items: center;
+  min-width: 80px;
+  justify-content: flex-end;
 }
 
 .status-indicator {
@@ -76,8 +111,8 @@
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border: 2px solid var(--border-color);
-  font-size: 11px;
+  border: 1px solid var(--border-color);
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -90,38 +125,6 @@
 .status-indicator.offline {
   color: var(--accent-yellow);
   border-color: var(--accent-yellow);
-}
-
-.nav-tabs {
-  display: flex;
-  gap: 4px;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.nav-tab {
-  background: transparent;
-  border: none;
-  color: #888888;
-  padding: 8px 16px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  border-bottom: 2px solid transparent;
-}
-
-.nav-tab:hover {
-  color: #CCCCCC;
-}
-
-.nav-tab.active {
-  color: #FFD700;
-  border-bottom-color: #FFD700;
 }
 
 .spin {

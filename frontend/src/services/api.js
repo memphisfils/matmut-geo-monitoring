@@ -378,3 +378,12 @@ export async function checkStatus() {
     return { status: 'offline' };
   }
 }
+
+export async function fetchSession() {
+  try {
+    const r = await fetch(`${API_URL}/session`);
+    return await r.json();
+  } catch {
+    return { has_session: false };
+  }
+}

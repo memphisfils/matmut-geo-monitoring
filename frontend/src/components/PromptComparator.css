@@ -1,7 +1,12 @@
+/* PromptComparator — Arctic Professional Theme */
+
 .pc-wrapper {
-  background: var(--bg-secondary);
-  border: var(--border-thick) solid var(--border-color);
-  margin-bottom: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  margin-bottom: 24px;
+  overflow: hidden;
 }
 
 /* ── Header ── */
@@ -9,9 +14,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 20px;
-  border-bottom: var(--border-thick) solid var(--border-color);
-  background: var(--bg-tertiary);
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
   gap: 8px;
 }
@@ -23,23 +27,21 @@
 }
 
 .pc-title {
-  font-family: var(--font-display);
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
   margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 1px;
 }
 
 .pc-brand-chip {
-  font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   padding: 2px 10px;
-  background: rgba(255, 215, 0, 0.1);
-  color: var(--accent-yellow);
-  border: 1px solid var(--accent-yellow);
-  letter-spacing: 0.5px;
+  background: var(--accent-light);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.02em;
 }
 
 .pc-header-stats {
@@ -48,31 +50,29 @@
 }
 
 .pc-stat-chip {
-  font-family: var(--font-mono);
   font-size: 10px;
-  padding: 3px 10px;
   font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
 }
 
 .pc-stat-chip.mentioned {
-  background: rgba(0, 204, 68, 0.1);
-  color: var(--accent-green);
-  border: 1px solid var(--accent-green);
+  background: var(--success-light);
+  color: var(--success);
+  border: 1px solid var(--success);
 }
 
 .pc-stat-chip.absent {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--neutral-light);
   color: var(--text-muted);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
 }
 
 /* ── Best / Worst ── */
 .pc-bw-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  background: var(--border-color);
-  border-bottom: var(--border-thick) solid var(--border-color);
+  border-bottom: 1px solid var(--border);
 }
 
 .pc-bw-card {
@@ -80,23 +80,27 @@
   flex-direction: column;
   gap: 6px;
   padding: 14px 20px;
-  background: var(--bg-secondary);
+  background: var(--bg-card);
 }
 
-.pc-bw-card.best  { border-left: 3px solid var(--accent-green); }
-.pc-bw-card.worst { border-left: 3px solid var(--border-color); }
+.pc-bw-card:first-child {
+  border-right: 1px solid var(--border);
+}
+
+.pc-bw-card.best  { border-left: 3px solid var(--success); }
+.pc-bw-card.worst { border-left: 3px solid var(--border); }
 
 .pc-bw-label {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 1.5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
+  text-transform: uppercase;
 }
 
-.pc-bw-card.best .pc-bw-label  { color: var(--accent-green); }
+.pc-bw-card.best .pc-bw-label  { color: var(--success); }
 
 .pc-bw-text {
-  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.4;
@@ -107,8 +111,8 @@
   display: flex;
   gap: 24px;
   padding: 12px 20px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-main);
   flex-wrap: wrap;
   align-items: center;
 }
@@ -121,35 +125,38 @@
 }
 
 .pc-ctrl-label {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 1px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   color: var(--text-muted);
+  text-transform: uppercase;
   margin-right: 2px;
 }
 
 .pc-ctrl-btn {
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
   padding: 4px 10px;
   background: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-muted);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
-  letter-spacing: 0.3px;
+  transition: all var(--transition);
+  border-radius: var(--radius-sm);
 }
 
 .pc-ctrl-btn:hover {
-  border-color: var(--text-muted);
-  color: var(--text-secondary);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
 }
 
 .pc-ctrl-btn.active {
-  background: var(--accent-yellow);
-  border-color: var(--accent-yellow);
-  color: #000;
-  font-weight: 700;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-inverse);
+  font-weight: 600;
 }
 
 /* ── Liste ── */
@@ -162,13 +169,23 @@
   display: flex;
   align-items: stretch;
   gap: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  transition: background 0.12s;
+  border-bottom: 1px solid var(--border);
+  transition: all var(--transition);
 }
 
-.pc-row:hover { background: var(--bg-tertiary); }
+.pc-row:last-child {
+  border-bottom: none;
+}
 
-.pc-row.mentioned { border-left: 3px solid var(--accent-green); }
+.pc-row:hover {
+  background: var(--bg-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  z-index: 1;
+}
+
+.pc-row.mentioned { border-left: 3px solid var(--success); }
 .pc-row.absent    { border-left: 3px solid transparent; }
 
 /* Rang + barre */
@@ -180,11 +197,10 @@
   gap: 4px;
   padding: 12px 14px;
   min-width: 54px;
-  border-right: 1px solid rgba(255,255,255,0.04);
+  border-right: 1px solid var(--border);
 }
 
 .pc-rank-num {
-  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-muted);
   font-weight: 600;
@@ -193,12 +209,14 @@
 .pc-score-bar-track {
   width: 28px;
   height: 3px;
-  background: rgba(255,255,255,0.08);
+  background: var(--border);
+  border-radius: 2px;
 }
 
 .pc-score-bar-fill {
   height: 100%;
-  background: var(--accent-yellow);
+  background: linear-gradient(90deg, var(--accent), var(--cyan));
+  border-radius: 2px;
   transition: width 0.4s ease;
 }
 
@@ -212,9 +230,8 @@
 }
 
 .pc-prompt-text {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: 13px;
+  color: var(--text-primary);
   line-height: 1.4;
 }
 
@@ -232,21 +249,21 @@
 }
 
 .pc-meta-label {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
+  text-transform: uppercase;
 }
 
 .pc-meta-val {
-  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
   color: var(--text-muted);
 }
 
-.pc-meta-val.good  { color: var(--accent-green); }
-.pc-meta-val.mid   { color: var(--accent-yellow); }
+.pc-meta-val.good  { color: var(--success); }
+.pc-meta-val.mid   { color: var(--warning); }
 .pc-meta-val.bad   { color: var(--text-muted); }
 .pc-meta-val.score { color: var(--text-primary); }
 
@@ -257,12 +274,13 @@
 }
 
 .pc-comp-chip {
-  font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10px;
+  font-weight: 500;
   padding: 2px 6px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
+  background: var(--neutral-light);
+  border: 1px solid var(--border);
   color: var(--text-muted);
+  border-radius: var(--radius-sm);
 }
 
 /* Badge mention/absent */
@@ -272,19 +290,17 @@
   justify-content: center;
   padding: 0 16px;
   min-width: 60px;
-  border-left: 1px solid rgba(255,255,255,0.04);
+  border-left: 1px solid var(--border);
 }
 
 .pc-badge-ok {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  color: var(--accent-green);
+  color: var(--success);
 }
 
 .pc-badge-no {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
@@ -292,8 +308,7 @@
 .pc-empty {
   padding: 32px;
   text-align: center;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
@@ -301,19 +316,16 @@
 .pc-loading {
   padding: 48px;
   text-align: center;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
-  letter-spacing: 2px;
 }
 
 /* Footer */
 .pc-footer {
   padding: 10px 20px;
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border);
 }
 
 /* Responsive */

@@ -1,112 +1,139 @@
+/* Sidebar — Arctic Professional Theme */
+
 .sidebar {
     width: var(--sidebar-width);
-    height: 100vh;
-    background: var(--bg-secondary);
-    border-right: 1px solid var(--border-color);
+    background: var(--bg-card);
+    border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     padding: 0;
-    position: fixed;
-    left: 0;
-    top: 0;
-    z-index: 100;
+    position: sticky;
+    top: var(--navbar-height);
+    height: calc(100vh - var(--navbar-height));
+    overflow-y: auto;
+    flex-shrink: 0;
 }
 
-/* Logo */
+/* Project Switcher */
 .sidebar-logo {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--border-color);
+    margin: 8px 12px 0;
+    padding: 10px 12px;
+    background: var(--bg-main);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background var(--transition);
+}
+
+.sidebar-logo:hover {
+    background: var(--bg-hover);
 }
 
 .logo-icon {
-    width: 44px;
-    height: 44px;
-    background: var(--gradient-matmut);
-    border-radius: var(--radius-sm);
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--cyan));
+    border-radius: var(--radius);
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
-    box-shadow: 0 4px 12px rgba(0, 61, 122, 0.4);
+    flex-shrink: 0;
 }
 
 .logo-text {
     display: flex;
     flex-direction: column;
+    min-width: 0;
 }
 
 .logo-title {
-    font-size: 18px;
-    font-weight: 800;
+    font-size: 12px;
+    font-weight: 600;
     color: var(--text-primary);
-    letter-spacing: -0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .logo-subtitle {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--accent-blue);
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 1px;
 }
 
 /* Navigation */
 .sidebar-nav {
     flex: 1;
-    padding: 20px 12px;
+    padding: 16px 0;
     overflow-y: auto;
 }
 
 .nav-section-title {
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
-    padding: 8px 12px 12px;
+    padding: 8px 20px 4px;
 }
 
 .nav-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    border-radius: var(--radius-sm);
+    gap: 10px;
+    padding: 8px 20px;
+    border-radius: var(--radius);
     color: var(--text-secondary);
     text-decoration: none;
     font-size: 13px;
     font-weight: 500;
-    transition: all 0.2s ease;
-    margin-bottom: 2px;
+    transition: all var(--transition);
+    margin: 0 12px 2px;
+    cursor: pointer;
+    position: relative;
 }
 
 .nav-item:hover {
-    background: rgba(59, 130, 246, 0.08);
+    background: var(--bg-hover);
     color: var(--text-primary);
+    text-decoration: none;
 }
 
 .nav-item.active {
-    background: rgba(59, 130, 246, 0.12);
-    color: var(--accent-blue);
+    background: var(--accent-light);
+    color: var(--accent);
+    font-weight: 600;
 }
 
-.nav-item.active::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    width: 3px;
-    height: 24px;
-    background: var(--accent-blue);
-    border-radius: 0 3px 3px 0;
+.nav-separator {
+    height: 1px;
+    background: var(--border);
+    margin: 8px 20px;
+}
+
+/* Nav badge */
+.nav-badge {
+    margin-left: auto;
+    background: var(--danger);
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
+.nav-badge.success {
+    background: var(--success);
 }
 
 /* Footer */
 .sidebar-footer {
     padding: 16px 20px;
-    border-top: 1px solid var(--border-color);
+    border-top: 1px solid var(--border);
 }
 
 .status-badge {
@@ -114,19 +141,19 @@
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius);
     font-size: 12px;
     font-weight: 500;
 }
 
 .status-badge.online {
-    background: rgba(16, 185, 129, 0.1);
-    color: var(--accent-green);
+    background: var(--success-light);
+    color: var(--success);
 }
 
 .status-badge.offline {
-    background: rgba(245, 158, 11, 0.1);
-    color: var(--accent-orange);
+    background: var(--warning-light);
+    color: var(--warning);
 }
 
 .sidebar-version {
@@ -140,22 +167,23 @@
     width: 100%;
     margin-top: 12px;
     padding: 8px 12px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
     background: transparent;
     color: var(--text-secondary);
     font-size: 11px;
     font-weight: 500;
+    font-family: 'Outfit', sans-serif;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all var(--transition);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.04em;
 }
 
 .btn-reset-brand:hover {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.3);
-    color: #ef4444;
+    background: var(--danger-light);
+    border-color: var(--danger);
+    color: var(--danger);
 }
 
 @media (max-width: 1024px) {

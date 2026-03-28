@@ -3,95 +3,107 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 56px;
-  background-color: var(--bg-secondary);
-  border-bottom: 2px solid var(--border-color);
+  height: var(--navbar-height);
+  background-color: var(--bg-card);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  z-index: 1000;
+  padding: 0 var(--space-6);
+  z-index: 100;
 }
 
 .nav-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 150px;
+  gap: var(--space-3);
+  min-width: 180px;
 }
 
 .brand-icon {
-  color: var(--accent-yellow);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .brand-name {
-  font-family: var(--font-display);
+  font-family: 'Outfit', sans-serif;
   font-size: 16px;
+  font-weight: 700;
   color: var(--text-primary);
   text-transform: uppercase;
-  font-weight: bold;
 }
 
 .nav-tabs {
   display: flex;
-  gap: 8px;
+  gap: var(--space-1);
+  flex: 1;
+  justify-content: center;
 }
 
 .nav-tab {
   background: transparent;
   border: none;
-  color: #888888;
-  padding: 8px 20px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  color: var(--text-secondary);
+  padding: 6px 14px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
-  border-bottom: 2px solid transparent;
+  transition: all var(--transition);
+  border-radius: 6px;
 }
 
 .nav-tab:hover {
-  color: #CCCCCC;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .nav-tab.active {
-  color: #FFD700;
-  border-bottom-color: #FFD700;
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .nav-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 250px;
   justify-content: flex-end;
 }
 
 .nav-btn {
   background: transparent;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   color: var(--text-secondary);
   padding: 6px 12px;
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 12px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.1s ease;
+  transition: all var(--transition);
+  border-radius: var(--radius);
 }
 
 .nav-btn:hover {
-  border-color: var(--accent-yellow);
-  color: var(--accent-yellow);
-  background: rgba(255, 215, 0, 0.05);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
 }
 
 .nav-btn-reset:hover {
-  border-color: var(--accent-red);
-  color: var(--accent-red);
-  background: rgba(255, 68, 68, 0.05);
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-light);
 }
 
 .nav-btn:disabled {
@@ -111,20 +123,21 @@
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
+  border-radius: var(--radius-sm);
 }
 
 .status-indicator.online {
-  color: var(--accent-green);
-  border-color: var(--accent-green);
+  color: var(--success);
+  border-color: var(--success);
 }
 
 .status-indicator.offline {
-  color: var(--accent-yellow);
-  border-color: var(--accent-yellow);
+  color: var(--warning);
+  border-color: var(--warning);
 }
 
 .spin {

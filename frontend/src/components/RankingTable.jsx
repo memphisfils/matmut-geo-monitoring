@@ -46,7 +46,7 @@ export default function RankingTable({ ranking, brand }) {
                                                     className="bar-fill"
                                                     style={{
                                                         width: `${item.mention_rate}%`,
-                                                        backgroundColor: isTarget ? 'var(--accent-yellow)' : 'var(--text-secondary)'
+                                                        backgroundColor: isTarget ? 'var(--accent-secondary)' : 'var(--text-secondary)'
                                                     }}
                                                 />
                                             </div>

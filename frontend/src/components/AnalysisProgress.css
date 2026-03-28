@@ -1,6 +1,10 @@
+/* AnalysisProgress — Arctic Professional Theme */
+
 .ap-wrapper {
-  background: var(--bg-secondary);
-  border: var(--border-thick) solid var(--border-color);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
   margin-bottom: 20px;
   padding: 24px;
 }
@@ -21,34 +25,33 @@
 }
 
 .ap-title {
-  font-family: var(--font-display);
-  font-size: 16px;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
-  text-transform: uppercase;
 }
 
 .ap-icon-spin {
-  color: var(--accent-yellow);
-  animation: spin 1s linear infinite;
+  color: var(--accent);
+  animation: ap-spin 1s linear infinite;
 }
 
 .ap-icon-done {
-  color: var(--accent-green);
+  color: var(--success);
 }
 
-@keyframes spin {
+@keyframes ap-spin {
   to { transform: rotate(360deg); }
 }
 
 .ap-badge-demo {
   font-size: 10px;
-  font-family: var(--font-mono);
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   padding: 2px 8px;
-  background: rgba(255, 215, 0, 0.1);
-  color: var(--accent-yellow);
-  border: 1px solid var(--accent-yellow);
+  background: var(--warning-light);
+  color: var(--warning);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
 }
 
 .ap-models {
@@ -58,12 +61,13 @@
 }
 
 .ap-model-chip {
-  font-family: var(--font-mono);
   font-size: 10px;
+  font-weight: 600;
   padding: 3px 10px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   color: var(--text-muted);
-  background: var(--bg-tertiary);
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
 }
 
 /* Progress bar */
@@ -77,24 +81,26 @@
 .ap-bar-track {
   flex: 1;
   height: 6px;
-  background: var(--border-color);
+  background: var(--border);
+  border-radius: 3px;
   position: relative;
   overflow: hidden;
 }
 
 .ap-bar-fill {
   height: 100%;
-  background: var(--accent-yellow);
+  background: linear-gradient(90deg, var(--accent), var(--cyan));
+  border-radius: 3px;
   transition: width 0.4s ease;
 }
 
 .ap-bar-fill.complete {
-  background: var(--accent-green);
+  background: var(--success);
 }
 
 .ap-bar-label {
-  font-family: var(--font-mono);
   font-size: 11px;
+  font-weight: 600;
   color: var(--text-muted);
   white-space: nowrap;
   min-width: 80px;
@@ -107,20 +113,21 @@
   flex-direction: column;
   gap: 4px;
   padding: 12px;
-  background: rgba(255, 215, 0, 0.04);
-  border-left: 3px solid var(--accent-yellow);
+  background: var(--accent-light);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
   margin-bottom: 16px;
 }
 
 .ap-current-label {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 1.5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
+  text-transform: uppercase;
 }
 
 .ap-current-text {
-  font-family: var(--font-mono);
   font-size: 13px;
   color: var(--text-primary);
   line-height: 1.4;
@@ -140,27 +147,28 @@
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   border-left: 2px solid transparent;
-  transition: background 0.15s;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  transition: background var(--transition);
 }
 
 .ap-log-row.mentioned {
   color: var(--text-secondary);
-  border-left-color: var(--accent-green);
-  background: rgba(0, 204, 68, 0.03);
+  border-left-color: var(--success);
+  background: var(--success-light);
 }
 
 .ap-log-row:hover {
-  background: var(--bg-tertiary);
+  background: var(--bg-hover);
 }
 
 .ap-log-num {
   width: 20px;
   text-align: right;
   color: var(--text-muted);
+  font-weight: 600;
   flex-shrink: 0;
 }
 
@@ -180,7 +188,7 @@
 
 .ap-log-pos {
   font-weight: 600;
-  color: var(--accent-green);
+  color: var(--success);
   font-size: 11px;
 }
 
@@ -189,7 +197,7 @@
 }
 
 .ap-log-check {
-  color: var(--accent-green);
+  color: var(--success);
 }
 
 .ap-log-x {

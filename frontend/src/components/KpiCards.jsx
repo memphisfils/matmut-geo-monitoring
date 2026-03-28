@@ -1,78 +1,96 @@
 import React from 'react';
-import { Trophy, Target, MessageCircle, ArrowUpRight } from 'lucide-react';
+import { Target, MessageSquare, PieChart, Info, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import './KpiCards.css';
 
 export default function KpiCards({ data, brand }) {
-    const CARDS = [
-        {
-            id: 'rank',
-            label: 'RANG',
-            icon: Trophy,
-            color: 'yellow',
-            format: (v) => `#${v}`,
-            getValue: (data) => {
-                const m = data.ranking?.find(r => r.brand === brand);
-                return m?.rank ?? '—';
-            }
-        },
-        {
-            id: 'score',
-            label: 'SCORE GLOBAL',
-            icon: Target,
-            color: 'yellow',
-            format: (v) => typeof v === 'number' ? v.toFixed(1) : v,
-            suffix: '/100',
-            getValue: (data) => {
-                const m = data.ranking?.find(r => r.brand === brand);
-                return m?.global_score ?? '—';
-            }
-        },
-        {
-            id: 'mention',
-            label: 'TAUX MENTION',
-            icon: MessageCircle,
-            color: 'white',
-            format: (v) => typeof v === 'number' ? `${v}%` : v,
-            getValue: (data) => {
-                const m = data.ranking?.find(r => r.brand === brand);
-                return m?.mention_rate ?? '—';
-            }
-        },
-        {
-            id: 'position',
-            label: 'POSITION MOYENNE',
-            icon: ArrowUpRight,
-            color: 'white',
-            format: (v) => typeof v === 'number' ? v.toFixed(1) : v,
-            getValue: (data) => {
-                const m = data.ranking?.find(r => r.brand === brand);
-                return m?.avg_position ?? '—';
-            }
-        }
-    ];
+  if (!data || !data.metrics || !brand) return null;
 
-    return (
-        <div className="kpi-grid">
-            {CARDS.map((card) => {
-                const value = card.getValue(data);
-                const Icon = card.icon;
+  const kpis = data.metrics[brand] || {};
 
-                return (
-                    <div
-                        key={card.id}
-                        className={`kpi-card kpi-${card.color}`}
-                    >
-                        <div className="kpi-header">
-                            <span className="kpi-label">{card.label}</span>
-                            <Icon size={16} className="kpi-icon" />
-                        </div>
-                        <div className="kpi-value">
-                            {card.format(value)}
-                            {card.suffix && <span className="kpi-suffix">{card.suffix}</span>}
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
-    );
+  // Configuration sémantique des KPIs
+  const kpiConfig = {
+    global_score: {
+      label: 'Score Global',
+      icon: Target,
+      colorClass: 'kpi-blue',
+      suffix: '/100',
+      delta: '+4.2', // Mocked delta
+      deltaType: 'positive'
+    },
+    mention_count: {
+      label: 'Mentions',
+      icon: MessageSquare,
+      colorClass: 'kpi-green',
+      suffix: '',
+      delta: '+12%',
+      deltaType: 'positive'
+    },
+    share_of_voice: {
+      label: 'Share of Voice',
+      icon: PieChart,
+      colorClass: 'kpi-cyan',
+      suffix: '%',
+      delta: '-1.5%',
+      deltaType: 'negative'
+    },
+    avg_position: {
+      label: 'Position Moy.',
+      icon: Info,
+      colorClass: 'kpi-amber',
+      suffix: '',
+      delta: '=',
+      deltaType: 'neutral'
+    }
+  };
+
+  const getDeltaIcon = (type) => {
+    if (type === 'positive') return <TrendingUp size={12} />;
+    if (type === 'negative') return <TrendingDown size={12} />;
+    return <Minus size={12} />;
+  };
+
+  return (
+    <div className="kpi-grid">
+      {Object.entries(kpiConfig).map(([key, config]) => {
+        const value = kpis[key] !== undefined ? kpis[key] : '-';
+        return (
+          <div key={key} className={`kpi-card premium-card ${config.colorClass}`}>
+            <div className="kpi-header">
+              <div className="kpi-title">
+                <div className="kpi-icon-wrapper">
+                  <config.icon size={16} />
+                </div>
+                <span>{config.label}</span>
+              </div>
+              <div className={`kpi-delta ${config.deltaType}`}>
+                {getDeltaIcon(config.deltaType)}
+                <span>{config.delta}</span>
+              </div>
+            </div>
+            
+            <div className="kpi-body">
+              <div className="kpi-value-block">
+                <span className="kpi-val">{typeof value === 'number' ? value.toFixed(1) : value}</span>
+                <span className="kpi-suffix">{config.suffix}</span>
+              </div>
+              <div className="kpi-sparkline">
+                {/* Simulated sparkline with simple CSS blocks */}
+                <div className="spark-bar" style={{height: '40%'}}></div>
+                <div className="spark-bar" style={{height: '60%'}}></div>
+                <div className="spark-bar" style={{height: '30%'}}></div>
+                <div className="spark-bar" style={{height: '70%'}}></div>
+                <div className="spark-bar" style={{height: '50%'}}></div>
+                <div className="spark-bar" style={{height: '90%'}}></div>
+                <div className="spark-bar" style={{height: '100%', background: 'var(--kpi-main)'}}></div>
+              </div>
+            </div>
+            
+            <div className="kpi-footer">
+              vs 30 derniers jours
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }

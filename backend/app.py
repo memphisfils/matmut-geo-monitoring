@@ -22,6 +22,8 @@ app = Flask(__name__)
 
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
     "http://localhost:3000",
     "https://geo-monitoring.vercel.app",
     "https://geo-monitoring-frontend.onrender.com",
@@ -481,7 +483,7 @@ def create_benchmark():
                 'think': False,
                 'stream': False
             },
-            timeout=60
+            timeout=120
         )
         resp.raise_for_status()
         text = resp.json().get('message', {}).get('content', '')

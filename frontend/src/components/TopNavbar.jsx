@@ -2,13 +2,8 @@ import React from 'react';
 import { RefreshCw, Download, Wifi, WifiOff, Target } from 'lucide-react';
 import './TopNavbar.css';
 
-export default function TopNavbar({ brand, onRefresh, onExport, isLoading, isBackendOnline, onReset, activeTab, onTabChange }) {
-  const tabs = [
-    { key: 'dashboard', label: 'Dashboard' },
-    { key: 'benchmark', label: 'Benchmark' },
-    { key: 'prompts', label: 'Prompts' },
-    { key: 'alerts', label: 'Alertes' },
-  ];
+export default function TopNavbar({ brand, onRefresh, onExport, isLoading, isBackendOnline, onReset, activeTab, onTabChange, exportSlot }) {
+  // Les onglets ont été déplacés exclusivement dans la Sidebar pour un design plus épuré
 
   return (
     <nav className="top-navbar">
@@ -18,15 +13,7 @@ export default function TopNavbar({ brand, onRefresh, onExport, isLoading, isBac
       </div>
 
       <div className="nav-tabs">
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            className={`nav-tab ${activeTab === tab.key ? 'active' : ''}`}
-            onClick={() => onTabChange && onTabChange(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {/* Navigation is now handled by Sidebar component */}
       </div>
 
       <div className="nav-actions">
@@ -36,12 +23,15 @@ export default function TopNavbar({ brand, onRefresh, onExport, isLoading, isBac
             <span>Refresh</span>
           </button>
         )}
-        {onExport && (
+        
+        {/* Render exportSlot if passed, else fallback to standard Export */}
+        {exportSlot ? exportSlot : onExport && (
           <button onClick={onExport} className="nav-btn">
             <Download size={16} />
             <span>Export</span>
           </button>
         )}
+        
         {onReset && (
           <button onClick={onReset} className="nav-btn nav-btn-reset">
             <span>Reset</span>

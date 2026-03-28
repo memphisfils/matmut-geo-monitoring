@@ -5,10 +5,10 @@ import {
 import './Charts.css';
 
 const CHART_THEME = {
-    gridColor: '#333333',
-    textColor: '#666666',
-    brandColor: '#FFD700',
-    competitorColors: ['#666666', '#888888', '#999999', '#aaaaaa', '#bbbbbb']
+    gridColor: '#E1E8F0',
+    textColor: '#94A3B8',
+    brandColor: '#00CED1',
+    competitorColors: ['rgba(0,119,204,0.4)', 'rgba(239,68,68,0.3)', '#64748B', '#CBD5E1']
 };
 
 // Custom tooltip

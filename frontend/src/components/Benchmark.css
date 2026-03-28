@@ -10,7 +10,7 @@
   gap: 12px;
   margin-bottom: 24px;
   padding-bottom: 12px;
-  border-bottom: 2px solid var(--accent-yellow);
+  border-bottom: 2px solid var(--accent-primary);
 }
 
 .benchmark-header h1 {
@@ -24,11 +24,12 @@
   gap: 24px;
 }
 
-/* Panel gauche */
 .benchmark-panel {
-  background: var(--bg-secondary);
-  border: 2px solid var(--border-color);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   padding: 24px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .panel-section {
@@ -39,26 +40,27 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 12px;
-  letter-spacing: 1px;
-  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  font-weight: 600;
+  font-family: var(--font-heading);
 }
 
 .panel-desc {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
-  margin-bottom: 16px;
-  font-family: var(--font-mono);
+  margin-bottom: 20px;
+  font-family: var(--font-primary);
+  line-height: 1.5;
 }
 
 .brand-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-  min-height: 40px;
+  gap: 10px;
+  margin-bottom: 16px;
+  min-height: 48px;
 }
 
 .brand-chip {
@@ -67,10 +69,11 @@
   gap: 6px;
   padding: 8px 12px;
   background: var(--bg-primary);
-  border: 2px solid var(--accent-yellow);
+  border: 1px solid var(--accent-primary);
   font-size: 12px;
   font-family: var(--font-mono);
-  color: var(--accent-yellow);
+  color: var(--accent-primary);
+  border-radius: var(--radius-sm);
 }
 
 .brand-chip svg {
@@ -84,13 +87,15 @@
 
 .brand-input-row {
   display: flex;
-  border: 2px solid var(--border-color);
+  border: 1px solid var(--border-color);
   margin-bottom: 12px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
 
 .brand-input-row input {
   flex: 1;
-  background: var(--bg-primary);
+  background: var(--card-bg);
   border: none;
   padding: 10px 12px;
   color: var(--text-primary);
@@ -99,17 +104,17 @@
 }
 
 .brand-input-row button {
-  background: var(--bg-tertiary);
+  background: var(--bg-primary);
   border: none;
-  border-left: 2px solid var(--border-color);
+  border-left: 1px solid var(--border-color);
   padding: 0 14px;
   cursor: pointer;
   color: var(--text-primary);
 }
 
 .brand-input-row button:hover {
-  background: var(--accent-yellow);
-  color: var(--bg-primary);
+  background: var(--accent-primary);
+  color: white;
 }
 
 .popular-brands {
@@ -133,11 +138,13 @@
   font-size: 10px;
   font-family: var(--font-mono);
   cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
 }
 
 .popular-chip:hover:not(:disabled) {
-  border-color: var(--accent-yellow);
-  color: var(--accent-yellow);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
 .popular-chip:disabled {
@@ -147,33 +154,39 @@
 
 .btn-generate {
   width: 100%;
-  background: var(--accent-yellow);
-  color: var(--bg-primary);
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  color: var(--text-inverse);
   border: none;
-  padding: 14px;
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 700;
+  padding: 16px;
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  text-transform: uppercase;
-  transition: opacity 0.2s;
+  transition: all var(--transition);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 119, 204, 0.2);
 }
 
 .btn-generate:hover:not(:disabled) {
-  opacity: 0.9;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 119, 204, 0.3);
 }
 
 .btn-generate:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  background: var(--bg-hover);
+  color: var(--text-muted);
 }
 
 .generated-config {
-  border-top: 2px solid var(--border-color);
+  border-top: 1px solid var(--border-color);
   padding-top: 24px;
 }
 
@@ -184,22 +197,24 @@
 }
 
 .config-sector {
-  background: var(--accent-yellow);
-  color: var(--bg-primary);
+  background: var(--accent-primary);
+  color: white;
   padding: 4px 10px;
   font-size: 11px;
   font-family: var(--font-mono);
   font-weight: 600;
+  border-radius: var(--radius-sm);
 }
 
 .config-products,
 .config-prompts {
-  background: var(--bg-tertiary);
+  background: var(--bg-primary);
   border: 1px solid var(--border-color);
   padding: 4px 10px;
   font-size: 11px;
   font-family: var(--font-mono);
   color: var(--text-secondary);
+  border-radius: var(--radius-sm);
 }
 
 .products-list {
@@ -213,6 +228,7 @@
   padding: 10px;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
 }
 
 .product-name {
@@ -261,29 +277,33 @@
 
 .btn-launch {
   width: 100%;
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  border: none;
-  padding: 14px;
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 700;
+  background: var(--bg-hover);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 16px;
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  text-transform: uppercase;
-  transition: opacity 0.2s;
+  transition: all var(--transition);
+  border-radius: var(--radius);
 }
 
 .btn-launch:hover:not(:disabled) {
-  opacity: 0.9;
+  background: var(--accent);
+  color: var(--text-inverse);
+  box-shadow: 0 4px 12px rgba(0, 119, 204, 0.2);
 }
 
 .btn-launch:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  border-color: var(--border);
+  color: var(--text-muted);
 }
 
 .benchmark-error {
@@ -294,14 +314,16 @@
   font-size: 12px;
   font-family: var(--font-mono);
   margin-bottom: 16px;
+  border-radius: var(--radius-sm);
 }
 
-/* Panel droit - Résultats */
 .benchmark-results {
-  background: var(--bg-secondary);
-  border: 2px solid var(--border-color);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   padding: 24px;
   min-height: 400px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .benchmark-empty {
@@ -356,7 +378,7 @@
 
 .stat-value.prompt-text {
   font-size: 12px;
-  color: var(--accent-yellow);
+  color: var(--accent-secondary);
 }
 
 .progress-bar-container {
@@ -364,16 +386,18 @@
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   margin-top: 12px;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: var(--accent-yellow);
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
   transition: width 0.3s;
 }
 
 .completed-list {
-  border-top: 2px solid var(--border-color);
+  border-top: 1px solid var(--border-color);
   padding-top: 16px;
 }
 
@@ -393,18 +417,20 @@
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   margin-bottom: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .cp-num {
   width: 24px;
   height: 24px;
-  background: var(--bg-tertiary);
+  background: var(--accent-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
   font-family: var(--font-mono);
-  color: var(--text-muted);
+  color: white;
+  border-radius: var(--radius-sm);
 }
 
 .cp-prompt {
@@ -416,11 +442,10 @@
 
 .cp-brands {
   font-size: 10px;
-  color: var(--accent-yellow);
+  color: var(--accent-secondary);
   font-family: var(--font-mono);
 }
 
-/* Résultats */
 .results-panel {
   height: 100%;
 }
@@ -431,7 +456,7 @@
   gap: 10px;
   margin-bottom: 20px;
   padding-bottom: 12px;
-  border-bottom: 2px solid var(--accent-yellow);
+  border-bottom: 2px solid var(--accent-primary);
 }
 
 .results-header h2 {
@@ -448,23 +473,32 @@
 .rank-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
-  background: var(--bg-primary);
-  border: 2px solid var(--border-color);
+  gap: 20px;
+  padding: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition);
+}
+
+.rank-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .rank-item.rank-1 {
-  border-color: #ffd700;
-  background: rgba(255, 215, 0, 0.05);
+  border-top: 3px solid var(--accent);
+  border-left: 3px solid var(--accent);
+  background: linear-gradient(135deg, rgba(0, 119, 204, 0.05) 0%, transparent 100%);
+  box-shadow: 0 4px 20px rgba(0, 119, 204, 0.08);
 }
 
 .rank-item.rank-2 {
-  border-color: #c0c0c0;
+  border-left: 3px solid var(--success);
 }
 
 .rank-item.rank-3 {
-  border-color: #cd7f32;
+  border-left: 3px solid var(--warning);
 }
 
 .rank-badge {
@@ -474,6 +508,7 @@
   align-items: center;
   justify-content: center;
   font-size: 20px;
+  color: var(--accent-primary);
 }
 
 .rank-brand {
@@ -488,7 +523,7 @@
   font-size: 24px;
   font-weight: 700;
   font-family: var(--font-display);
-  color: var(--accent-yellow);
+  color: var(--accent-primary);
 }
 
 .rank-metrics {

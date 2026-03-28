@@ -1,7 +1,66 @@
+/* Charts — Arctic Professional Theme */
+
 .chart-container {
-    border: var(--border-thick) solid var(--border-color);
-    background: var(--bg-secondary);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
     margin-bottom: 20px;
+}
+
+.chart-full {
+    grid-column: 1 / -1;
+}
+
+/* Chart Header */
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.chart-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.chart-badge {
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--accent-light);
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.chart-body {
+    padding: 20px;
+}
+
+/* Recharts Tooltip */
+.chart-tooltip {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    box-shadow: var(--shadow-md);
+}
+
+.tooltip-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.tooltip-value {
+    font-size: 11px;
+    margin: 2px 0;
+    color: var(--text-secondary);
 }
 
 /* Sentiment Specific */
@@ -22,68 +81,72 @@
 }
 
 .score-value {
-    font-family: var(--font-display);
     font-size: 32px;
+    font-weight: 700;
     color: var(--text-primary);
 }
 
 .score-label {
-    font-family: var(--font-mono);
     font-size: 12px;
     text-transform: uppercase;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
 }
 
-.score-label.positive { color: var(--accent-green); }
-.score-label.negative { color: var(--accent-red); }
+.score-label.positive { color: var(--success); }
+.score-label.negative { color: var(--danger); }
 
 .sentiment-bar {
     width: 80%;
-    height: 8px;
-    background: var(--border-color);
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
     position: relative;
 }
 
 .sentiment-fill {
     height: 100%;
+    border-radius: 3px;
     transition: width 0.3s ease;
 }
 
-/* Duel Card Specific */
+/* Duel Table */
 .duel-select {
-    background: var(--bg-primary);
+    background: var(--bg-card);
     color: var(--text-primary);
-    border: 2px solid var(--border-color);
-    padding: 4px 8px;
-    font-family: var(--font-mono);
-    font-size: 12px;
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    font-size: 13px;
+    border-radius: var(--radius);
+    font-family: 'Outfit', sans-serif;
 }
 
 .duel-table {
     width: 100%;
     border-collapse: collapse;
-    font-family: var(--font-mono);
     font-size: 13px;
 }
 
 .duel-table th {
     padding: 10px;
-    border-bottom: 2px solid var(--border-color);
+    border-bottom: 2px solid var(--border);
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: 11px;
+    font-weight: 600;
     text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
 .duel-table td {
     padding: 12px 10px;
     text-align: center;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border);
 }
 
 .duel-table td:first-child {
     text-align: left;
     font-weight: 600;
-    color: var(--accent-yellow);
+    color: var(--accent);
 }
 
 .duel-table td:last-child {
@@ -94,15 +157,14 @@
 
 .duel-table .winner {
     color: var(--text-primary) !important;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--accent-light);
 }
 
 .text-left { text-align: left; }
 .text-right { text-align: right; }
 .text-center { text-align: center; }
-.text-muted { color: var(--text-muted); font-weight: normal !important; }
 
-/* Insights Panel Specific */
+/* Insights Panel */
 .insights-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -111,10 +173,11 @@
 
 .insight-col h4 {
     font-size: 10px;
+    font-weight: 600;
     color: var(--text-muted);
     margin-bottom: 12px;
-    letter-spacing: 1px;
-    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
 }
 
 .insight-col ul {
@@ -124,66 +187,13 @@
 .insight-col li {
     font-size: 12px;
     margin-bottom: 8px;
-    font-family: var(--font-mono);
     line-height: 1.4;
-}
-
-.text-green { color: var(--accent-green); }
-.text-red { color: var(--accent-red); }
-.text-yellow { color: var(--accent-yellow); }
-
-@media (max-width: 1024px) {
-    .insights-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.chart-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 20px;
-    border-bottom: var(--border-thick) solid var(--border-color);
-    background: var(--bg-tertiary);
-}
-
-.chart-header h3 {
-    font-size: 12px;
-    margin: 0;
-}
-
-.chart-badge {
-    font-size: 10px;
-    background: var(--text-primary);
-    color: var(--bg-primary);
-    padding: 2px 6px;
-    font-family: var(--font-mono);
-}
-
-.chart-body {
-    padding: 20px;
-}
-
-/* Recharts tooltip */
-.chart-tooltip {
-    background: var(--bg-primary);
-    border: 2px solid var(--border-color);
-    padding: 10px;
-    font-family: var(--font-mono);
-}
-
-.tooltip-label {
-    font-size: 12px;
-    font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 6px;
 }
 
-.tooltip-value {
-    font-size: 11px;
-    margin: 2px 0;
-    color: var(--text-secondary);
-}
+.text-green { color: var(--success); }
+.text-red { color: var(--danger); }
+.text-yellow { color: var(--warning); }
 
 /* Heatmap */
 .heatmap-body {
@@ -193,7 +203,6 @@
 .heatmap-table {
     width: 100%;
     border-collapse: collapse;
-    font-family: var(--font-mono);
     font-size: 11px;
 }
 
@@ -201,14 +210,16 @@
     padding: 10px;
     text-transform: uppercase;
     color: var(--text-muted);
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border);
     text-align: center;
+    font-weight: 600;
+    letter-spacing: 0.04em;
 }
 
 .heatmap-table td {
     padding: 8px;
     text-align: center;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border);
 }
 
 .heatmap-brand {
@@ -223,14 +234,18 @@
     padding: 6px 10px;
     min-width: 40px;
     font-weight: 600;
+    border-radius: var(--radius-sm);
 }
 
 .row-target .heatmap-brand {
-    color: var(--accent-yellow);
+    color: var(--accent);
 }
 
 @media (max-width: 1024px) {
+    .insights-grid {
+        grid-template-columns: 1fr;
+    }
     .chart-container {
-        margin-bottom: 20px;
+        margin-bottom: 16px;
     }
 }

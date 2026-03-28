@@ -1,6 +1,10 @@
+/* DuelCard — Arctic Professional Theme */
+
 .duel-card {
-    background: linear-gradient(145deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.8));
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
     padding: 0;
     overflow: hidden;
 }
@@ -9,49 +13,62 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1.5rem;
-    background: rgba(0, 0, 0, 0.2);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
 }
 
 .duel-title {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    color: #e2e8f0;
+    gap: 10px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .duel-icon {
-    color: #f59e0b;
+    color: var(--accent);
 }
 
 .duel-controls {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 10px;
 }
 
 .opponent-select {
-    background: rgba(15, 23, 42, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #e2e8f0;
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 6px 12px;
+    border-radius: var(--radius);
     cursor: pointer;
-    font-family: inherit;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    transition: border-color var(--transition);
+}
+
+.opponent-select:hover {
+    border-color: var(--border-strong);
+}
+
+.opponent-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0, 119, 204, 0.12);
+    outline: none;
 }
 
 .duel-body {
     display: grid;
     grid-template-columns: 1fr 1.2fr 1fr;
-    padding: 1.5rem;
-    gap: 1rem;
+    padding: 20px;
+    gap: 16px;
 }
 
 .duel-col {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 16px;
 }
 
 .brand-header {
@@ -59,53 +76,59 @@
 }
 
 .brand-header h2 {
-    font-size: 1.5rem;
-    margin-bottom: 0.5rem;
-    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    color: var(--text-primary);
 }
 
 .matmut-col h2 {
-    color: var(--matmut-blue);
+    color: var(--accent);
 }
 
 .opponent-col h2 {
-    color: #ef4444;
+    color: var(--danger);
 }
 
 .rank-badge {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.875rem;
+    background: var(--neutral-light);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
     font-weight: 600;
+    color: var(--text-secondary);
 }
 
 .metrics-list {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 8px;
 }
 
 .metric-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.75rem;
-    background: rgba(255, 255, 255, 0.02);
-    border-radius: 8px;
-    font-size: 0.9rem;
-    transition: all 0.2s;
+    padding: 10px 12px;
+    background: var(--bg-hover);
+    border-radius: var(--radius);
+    font-size: 13px;
+    transition: all var(--transition);
+    border: 1px solid transparent;
+}
+
+.metric-row:hover {
+    border-color: var(--border);
 }
 
 .metric-row.win {
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.2);
-    box-shadow: 0 0 10px rgba(16, 185, 129, 0.05);
+    background: var(--success-light);
+    border: 1px solid var(--success);
 }
 
 .trophy-icon {
-    color: #10b981;
-    margin-left: 0.5rem;
+    color: var(--success);
+    margin-left: 6px;
 }
 
 .duel-chart {

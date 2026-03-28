@@ -1,14 +1,16 @@
 .ap2-wrapper {
-  background: var(--bg-secondary);
-  border: var(--border-thick) solid var(--border-color);
-  margin-bottom: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  margin-bottom: 24px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
 }
 
-/* ── Header ── */
 .ap2-header {
-  padding: 14px 20px;
-  border-bottom: var(--border-thick) solid var(--border-color);
-  background: var(--bg-tertiary);
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-hover) 100%);
 }
 
 .ap2-title-row {
@@ -19,12 +21,11 @@
 }
 
 .ap2-title {
-  font-family: var(--font-display);
-  font-size: 12px;
+  font-family: var(--font-heading);
+  font-size: 14px;
   color: var(--text-primary);
   margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  font-weight: 600;
 }
 
 .ap2-config-badge {
@@ -32,10 +33,11 @@
   font-size: 10px;
   font-weight: 700;
   padding: 2px 8px;
+  border-radius: var(--radius-sm);
 }
 
-.ap2-config-badge.ok   { background: rgba(0,204,68,0.1); color: var(--accent-green); border: 1px solid var(--accent-green); }
-.ap2-config-badge.none { background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border-color); }
+.ap2-config-badge.ok   { background: rgba(0, 204, 68, 0.1); color: var(--accent-green); border: 1px solid var(--accent-green); }
+.ap2-config-badge.none { background: var(--bg-primary); color: var(--text-muted); border: 1px solid var(--border-color); }
 
 .ap2-scheduler-note {
   font-family: var(--font-mono);
@@ -44,25 +46,29 @@
   letter-spacing: 0.3px;
 }
 
-/* ── Canaux ── */
 .ap2-channels {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1px;
-  background: var(--border-color);
-  border-bottom: var(--border-thick) solid var(--border-color);
+  background: var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
 .ap2-channel {
-  background: var(--bg-secondary);
-  padding: 18px 20px;
+  background: var(--bg-card);
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  transition: background var(--transition);
 }
 
-.ap2-channel.configured   { border-top: 2px solid var(--accent-green); }
-.ap2-channel.unconfigured { border-top: 2px solid var(--border-color); }
+.ap2-channel:hover {
+  background: var(--bg-hover);
+}
+
+.ap2-channel.configured   { border-top: 3px solid var(--accent-green); }
+.ap2-channel.unconfigured { border-top: 3px solid var(--border-color); }
 
 .ap2-channel-header {
   display: flex;
@@ -72,31 +78,32 @@
 
 .ap2-channel-icon {
   font-size: 14px;
+  color: var(--accent-primary);
 }
 
 .ap2-channel-label {
-  font-family: var(--font-display);
-  font-size: 13px;
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
   flex: 1;
 }
 
 .ap2-status-dot {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
+  font-family: var(--font-primary);
+  font-size: 11px;
+  font-weight: 600;
 }
 
-.ap2-status-dot.on  { color: var(--accent-green); }
+.ap2-status-dot.on  { color: var(--success); }
 .ap2-status-dot.off { color: var(--text-muted); }
 
 .ap2-channel-detail {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.4;
-  min-height: 32px;
+  font-family: var(--font-primary);
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  min-height: 40px;
 }
 
 .ap2-envs {
@@ -110,9 +117,10 @@
   font-family: var(--font-mono);
   font-size: 9px;
   padding: 2px 6px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  color: var(--accent-yellow);
+  background: var(--bg-primary);
+  border: 1px solid var(--accent-primary);
+  color: var(--accent-primary);
+  border-radius: var(--radius-sm);
 }
 
 .ap2-doc-link {
@@ -134,27 +142,29 @@
 }
 
 .ap2-test-btn {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 6px 14px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
+  font-family: var(--font-primary);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
   cursor: pointer;
-  transition: all 0.15s;
-  letter-spacing: 0.3px;
+  transition: all var(--transition);
+  border-radius: var(--radius-sm);
 }
 
 .ap2-test-btn:hover:not(.disabled) {
-  background: var(--accent-yellow);
-  border-color: var(--accent-yellow);
-  color: #000;
-  font-weight: 700;
+  background: var(--accent);
+  color: var(--text-inverse);
+  box-shadow: 0 4px 12px rgba(0, 119, 204, 0.2);
 }
 
 .ap2-test-btn.disabled {
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: not-allowed;
+  border-color: var(--border);
+  color: var(--text-muted);
 }
 
 .ap2-result {
@@ -167,14 +177,13 @@
 .ap2-result.failed,
 .ap2-result.error   { color: #ff4444; }
 
-/* ── Résumé hebdo ── */
 .ap2-weekly-section {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-color);
-  background: var(--bg-tertiary);
+  background: var(--bg-primary);
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -205,35 +214,39 @@
 }
 
 .ap2-weekly-btn {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 8px 20px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--accent-yellow);
-  color: var(--accent-yellow);
+  font-family: var(--font-primary);
+  font-size: 13px;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  border: none;
+  color: var(--text-inverse);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--transition);
   font-weight: 600;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 119, 204, 0.2);
 }
 
 .ap2-weekly-btn:hover:not(.disabled) {
-  background: var(--accent-yellow);
-  color: #000;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 119, 204, 0.3);
 }
 
 .ap2-weekly-btn.disabled {
-  opacity: 0.35;
+  opacity: 0.5;
   cursor: not-allowed;
-  border-color: var(--border-color);
+  background: var(--bg-hover);
   color: var(--text-muted);
+  box-shadow: none;
 }
 
-/* ── Footer ── */
 .ap2-footer {
   padding: 12px 20px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  background: var(--bg-primary);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 
 .ap2-trigger {
@@ -247,6 +260,7 @@
   width: 18px;
   text-align: center;
   flex-shrink: 0;
+  color: var(--accent-secondary);
 }
 
 .ap2-trigger-text {
@@ -255,7 +269,6 @@
   color: var(--text-muted);
 }
 
-/* ── Loading ── */
 .ap2-loading {
   padding: 48px;
   text-align: center;
@@ -265,7 +278,6 @@
   letter-spacing: 2px;
 }
 
-/* ── Responsive ── */
 @media (max-width: 768px) {
   .ap2-channels { grid-template-columns: 1fr; }
   .ap2-weekly-section { flex-direction: column; align-items: flex-start; }

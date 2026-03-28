@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import LandingPage from './components/LandingPage';
 import Onboarding from './components/Onboarding';
+import Sidebar from './components/Sidebar';
 import TopNavbar from './components/TopNavbar';
 import KpiCards from './components/KpiCards';
 import RankingTable from './components/RankingTable';
@@ -14,13 +16,17 @@ import PromptComparator from './components/PromptComparator';
 import AlertsPanel from './components/AlertsPanel';
 import ExportButton from './components/ExportButton';
 import Benchmark from './components/Benchmark';
+import ProjectsPanel from './components/ProjectsPanel';
 import {
   fetchMetrics, fetchExport, checkStatus, fetchHistory,
   runAnalysisStream, generateTrendHistory, DEMO_DATA_FACTORY, fetchSession
 } from './services/api';
 import './App.css';
 
-export default function App() {
+export default function App() { // Navigation inter-pages globale
+  const [page, setPage] = useState('landing'); // 'landing' ou 'app'
+
+  // État Dashboard / Config
   const [config, setConfig]           = useState(null);
   const [data, setData]               = useState(null);
   const [trendHistory, setTrendHistory] = useState([]);
@@ -160,20 +166,32 @@ export default function App() {
     
     // Auto-load session au démarrage
     fetchSession().then(session => {
-      if (session.has_session && session.project) {
+      // Ne restaurer que si on a déjà des résultats complets (évite les dashboards vides sur des sessions fantômes)
+      // On s'assure que results contient un "ranking" valide
+      if (session.has_session && session.project && session.results && session.results.ranking && session.results.ranking.length > 0) {
         const project = session.project;
+        
+        const safeParse = (str) => {
+          if (!str) return [];
+          if (Array.isArray(str)) return str;
+          try {
+            return JSON.parse(str);
+          } catch (e) {
+            if (typeof str === 'string') {
+              return str.split(',').map(s => s.trim());
+            }
+            return [];
+          }
+        };
+
         const config = {
           brand: project.brand,
           sector: project.sector,
-          competitors: project.competitors ? JSON.parse(project.competitors) : [],
-          prompts: project.prompts ? JSON.parse(project.prompts) : []
+          competitors: safeParse(project.competitors),
+          prompts: safeParse(project.prompts)
         };
         setConfig(config);
-        
-        // Charger les données si results.json existe
-        if (session.results) {
-          setData(session.results);
-        }
+        setData(session.results);
       }
     });
   }, []);
@@ -183,8 +201,14 @@ export default function App() {
     setActiveTab(tabKey);
   };
 
-  // SI PAS DE CONFIG = Onboarding SEULEMENT (pas de TopNavbar)
-  if (!config) {
+  // ── RENDER ROOT ──
+  
+  if (page === 'landing') {
+    return <LandingPage onStart={() => setPage('app')} />;
+  }
+
+  // SANS CONFIG = Onboarding
+  if (!config) { // (pas de TopNavbar)
     return (
       <div className="app-layout">
         <div className="main-content" style={{marginTop: 0}}>
@@ -196,7 +220,7 @@ export default function App() {
     );
   }
 
-  // AVEC CONFIG = TopNavbar + Dashboard
+  // AVEC CONFIG = TopNavbar + Sidebar + Dashboard
   return (
     <div className="app-layout">
       <TopNavbar
@@ -205,82 +229,217 @@ export default function App() {
         onExport={handleExport}
         isLoading={isAnalyzing}
         isBackendOnline={isBackendOnline}
-        onReset={() => { setConfig(null); setData(null); setCompletedPrompts([]); setActiveTab('dashboard'); }}
+        onReset={() => { setConfig(null); setData(null); setCompletedPrompts([]); setActiveTab('dashboard'); setPage('landing'); }}
         activeTab={activeTab}
         onTabChange={handleTabChange}
         exportSlot={<ExportButton brand={config.brand} />}
       />
 
-      <div className="main-content">
-        <div className="page-content">
+      <div className="app-body">
+        <Sidebar
+          brand={config.brand}
+          sector={config.sector}
+          isBackendOnline={isBackendOnline}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          onReset={() => { setConfig(null); setData(null); setCompletedPrompts([]); setActiveTab('dashboard'); setPage('landing'); }}
+        />
 
-          {/* Progression temps réel (Sprint 2) */}
-          {(isAnalyzing || (completedPrompts.length > 0 && !data)) && (
-            <AnalysisProgress
-              brand={config.brand}
-              progress={analysisProgress}
-              models={analysisModels}
-              isComplete={isAnalysisComplete}
-              isDemo={isDemo}
-              completedPrompts={completedPrompts}
-            />
-          )}
+        <div className="main-content">
+          <div className="page-content">
 
-          {isAnalyzing && !analysisProgress && (
-            <div className="loading-state">
-              <div className="loader" />
-              <p>Connexion à {analysisModels[0] || 'qwen3.5'}…</p>
-            </div>
-          )}
+            {/* Progression temps réel (Sprint 2) */}
+            {(isAnalyzing || (completedPrompts.length > 0 && !data)) && (
+              <AnalysisProgress
+                brand={config.brand}
+                progress={analysisProgress}
+                models={analysisModels}
+                isComplete={isAnalysisComplete}
+                isDemo={isDemo}
+                completedPrompts={completedPrompts}
+              />
+            )}
 
-          {error && !data && (
-            <div className="error-state"><p>❌ {error}</p></div>
-          )}
+            {isAnalyzing && !analysisProgress && (
+              <div className="loading-state">
+                <div className="loader" />
+                <p>Connexion à {analysisModels[0] || 'qwen3.5'}…</p>
+              </div>
+            )}
 
-          {/* Dashboard Tab */}
-          {activeTab === 'dashboard' && data && data.ranking && (
-            <>
+            {error && !data && (
+              <div className="error-state"><p>❌ {error}</p></div>
+            )}
+
+            {/* Dashboard Tab */}
+            {activeTab === 'dashboard' && data && data.ranking && (
+              <>
+                <header className="page-header">
+                  <div className="ph-titles">
+                    <h1 className="ph-title">Dashboard <span className="text-gradient">Vue Globale</span></h1>
+                    <p className="ph-subtitle">Performances d'acquisition IA pour {config.brand} dans le secteur {config.sector}</p>
+                  </div>
+                </header>
+
+                <div className="llm-status-bar premium-card">
+                  <div className="lsb-title">Statut des Moteurs</div>
+                  <div className="lsb-models">
+                    <div className="lsb-model online"><span className="lsb-dot"></span> ChatGPT (GPT-4o)</div>
+                    <div className="lsb-model online"><span className="lsb-dot"></span> Claude (3.5 Sonnet)</div>
+                    <div className="lsb-model online"><span className="lsb-dot"></span> Gemini (1.5 Pro)</div>
+                    <div className="lsb-model online"><span className="lsb-dot"></span> Qwen (Max)</div>
+                  </div>
+                  <div className="lsb-time">Dernière MaJ: Il y a 2 minutes</div>
+                </div>
+
+                <div className="dashboard-section">
+                  <KpiCards data={data} brand={config.brand} />
+                </div>
+
+                <div className="dashboard-grid">
+                  <div className="grid-left">
+                    <RankingTable ranking={data.ranking} brand={config.brand} />
+                    <LLMBreakdown brand={config.brand} />
+                    <DuelCard ranking={data.ranking} brand={config.brand} />
+                    <div className="charts-row small">
+                      <SentimentChart ranking={data.ranking} brand={config.brand} />
+                      <MentionChart ranking={data.ranking} brand={config.brand} />
+                    </div>
+                    <RadarCompare ranking={data.ranking} brand={config.brand} />
+                    <CategoryHeatmap categoryData={data.category_data} brand={config.brand} ranking={data.ranking} />
+                    <InsightsPanel insights={data.insights} brand={config.brand} />
+                  </div>
+
+                  <div className="grid-right">
+                    <PromptComparator brand={config.brand} />
+                    <section className="chart-section premium-card">
+                      <div className="section-header">
+                        <h2 className="section-title">Évolution du Score et Share of Voice</h2>
+                      </div>
+                      <TrendChart data={trendHistory} brand={config.brand} />
+                    </section>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Prompts Tab (Sprint 3) */}
+            {activeTab === 'prompts' && (
+              <PromptComparator brand={config.brand} />
+            )}
+
+            {/* Benchmark Tab */}
+            {activeTab === 'benchmark' && (
+              <Benchmark sector={config.sector} />
+            )}
+
+            {/* Missing Nav Tabs for Analysis Sections */}
+            {activeTab === 'history' && (
               <div className="dashboard-section">
-                <KpiCards data={data} brand={config.brand} />
-                <TrendChart data={trendHistory} brand={config.brand} />
-                <DuelCard ranking={data.ranking} brand={config.brand} />
+                <header className="page-header" style={{marginBottom: '24px'}}>
+                  <h1 className="ph-title"><span className="text-gradient">Historique & Tendances</span></h1>
+                  <p className="ph-subtitle">Suivez l'évolution de la visibilité de {config.brand} dans le temps.</p>
+                </header>
+                <div className="dashboard-grid">
+                  <section className="chart-section premium-card" style={{ width: '100%' }}>
+                    <div className="section-header">
+                      <h2 className="section-title">Share of Voice & Score ({config.brand})</h2>
+                    </div>
+                    <TrendChart data={trendHistory} brand={config.brand} />
+                  </section>
+                </div>
               </div>
+            )}
 
-              <div id="ranking">
-                <RankingTable ranking={data.ranking} brand={config.brand} />
+            {activeTab === 'keywords' && (
+              <div className="dashboard-section">
+                <header className="page-header" style={{marginBottom: '24px'}}>
+                  <h1 className="ph-title"><span className="text-gradient">Mots-clés & Pénétration Multi-critères</span></h1>
+                  <p className="ph-subtitle">Répartition par catégorie et mots-clés de l'occurrence de la marque.</p>
+                </header>
+                <div className="dashboard-grid">
+                  <div className="grid-left">
+                    <MentionChart ranking={data?.ranking} brand={config.brand} />
+                    <RadarCompare ranking={data?.ranking} brand={config.brand} />
+                  </div>
+                  <div className="grid-right">
+                    <CategoryHeatmap categoryData={data?.category_data} brand={config.brand} ranking={data?.ranking} />
+                  </div>
+                </div>
               </div>
+            )}
 
-              <LLMBreakdown brand={config.brand} />
-
-              <div className="charts-row">
-                <SentimentChart ranking={data.ranking} brand={config.brand} />
-                <MentionChart ranking={data.ranking} brand={config.brand} />
-                <SovChart ranking={data.ranking} brand={config.brand} />
+            {activeTab === 'sentiment' && (
+              <div className="dashboard-section">
+                <header className="page-header" style={{marginBottom: '24px'}}>
+                  <h1 className="ph-title"><span className="text-gradient">Sentiment IA & Insights Qualitatifs</span></h1>
+                  <p className="ph-subtitle">Perception par les LLM et recommandations de posture.</p>
+                </header>
+                <div className="dashboard-grid">
+                  <div className="grid-left">
+                    <SentimentChart ranking={data?.ranking} brand={config.brand} />
+                    <InsightsPanel insights={data?.insights} brand={config.brand} />
+                  </div>
+                </div>
               </div>
+            )}
 
-              <div id="insights">
-                <RadarCompare ranking={data.ranking} brand={config.brand} />
-                <CategoryHeatmap categoryData={data.category_data} brand={config.brand} ranking={data.ranking} />
-                <InsightsPanel insights={data.insights} brand={config.brand} />
+            {activeTab === 'llm-status' && (
+              <div className="dashboard-section">
+                <header className="page-header" style={{marginBottom: '24px'}}>
+                  <h1 className="ph-title"><span className="text-gradient">Status des Moteurs & Performance Brute</span></h1>
+                  <p className="ph-subtitle">Analyse segmentée par LLM et connectivité.</p>
+                </header>
+                <div className="dashboard-grid">
+                  <div className="grid-left">
+                    <LLMBreakdown brand={config.brand} />
+                  </div>
+                </div>
               </div>
-            </>
-          )}
+            )}
 
-          {/* Prompts Tab (Sprint 3) */}
-          {activeTab === 'prompts' && (
-            <PromptComparator brand={config.brand} />
-          )}
+            {activeTab === 'exports' && (
+              <div className="premium-card" style={{ padding: '24px' }}>
+                <h2 className="section-title" style={{ marginBottom: '16px' }}>Exports et Rapports</h2>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Générez des rapports synthétiques PDF ou exportez les données brutes JSON.</p>
+                <ExportButton brand={config.brand} />
+              </div>
+            )}
 
-          {/* Benchmark Tab */}
-          {activeTab === 'benchmark' && (
-            <Benchmark sector={config.sector} />
-          )}
+            {activeTab === 'projects' && (
+              <ProjectsPanel onProjectSelect={(proj) => {
+                const safeParse = (str) => {
+                  if (!str) return [];
+                  if (Array.isArray(str)) return str;
+                  try {
+                    return JSON.parse(str);
+                  } catch (e) {
+                    if (typeof str === 'string') {
+                      return str.split(',').map(s => s.trim());
+                    }
+                    return [];
+                  }
+                };
 
-          {/* Alerts Tab (Sprint 3) */}
-          {activeTab === 'alerts' && (
-            <AlertsPanel brand={config.brand} />
-          )}
+                const cfg = {
+                  brand: proj.brand,
+                  sector: proj.sector,
+                  competitors: safeParse(proj.competitors),
+                  prompts: safeParse(proj.prompts)
+                };
+                setConfig(cfg);
+                setActiveTab('dashboard');
+                // Use a small timeout to allow UI update before heavy fetch
+                setTimeout(() => loadDashboardData(cfg), 100);
+              }} />
+            )}
 
+            {/* Alerts Tab (Sprint 3) */}
+            {activeTab === 'alerts' && (
+              <AlertsPanel brand={config.brand} />
+            )}
+
+          </div>
         </div>
       </div>
     </div>

@@ -7,7 +7,7 @@ import {
 import './Charts.css';
 
 const BRAND_COLORS = {
-    Matmut: '#FFD700', // Yellow for target
+    Matmut: '#00CED1', // Cyan for target
     MAIF: '#a0a0a0',
     AXA: '#a0a0a0',
     MACIF: '#a0a0a0',
@@ -24,7 +24,7 @@ const BRAND_COLORS = {
 const CHART_THEME = {
     background: 'transparent',
     textColor: '#666666',
-    gridColor: '#333333',
+    gridColor: '#e0e0e0',
 };
 
 // Custom tooltip
@@ -49,7 +49,7 @@ export function MentionChart({ ranking, brand }) {
     const top8 = ranking.slice(0, 8).map(r => ({
         name: r.brand,
         value: r.mention_rate,
-        fill: r.brand === brand ? '#FFD700' : '#333333'
+        fill: r.brand === brand ? '#00CED1' : '#dddddd'
     }));
 
     return (
@@ -94,7 +94,7 @@ export function SovChart({ ranking, brand }) {
     const top6 = ranking.slice(0, 6).map(r => ({
         name: r.brand,
         value: parseFloat(r.share_of_voice),
-        fill: r.brand === brand ? '#FFD700' : '#444444'
+        fill: r.brand === brand ? '#00CED1' : '#dddddd'
     }));
 
     return (
@@ -173,8 +173,8 @@ export function RadarCompare({ ranking, brand }) {
                                 key={b.brand}
                                 name={b.brand}
                                 dataKey={b.brand}
-                                stroke={b.brand === brand ? '#FFD700' : '#666666'}
-                                fill={b.brand === brand ? '#FFD700' : '#666666'}
+                                stroke={b.brand === brand ? '#00CED1' : '#666666'}
+                                fill={b.brand === brand ? '#00CED1' : '#666666'}
                                 fillOpacity={b.brand === brand ? 0.3 : 0.1}
                                 strokeWidth={b.brand === brand ? 2 : 1}
                             />
@@ -215,10 +215,10 @@ export function CategoryHeatmap({ categoryData, brand, ranking }) {
     };
 
     const getColor = (val) => {
-        if (val >= 80) return 'var(--accent-yellow)';
-        if (val >= 60) return '#666666';
-        if (val >= 40) return '#444444';
-        return '#222222';
+        if (val >= 80) return 'var(--accent-secondary)';
+        if (val >= 60) return 'var(--accent-primary)';
+        if (val >= 40) return '#94c5e8';
+        return '#d4e9f7';
     };
 
     return (

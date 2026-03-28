@@ -99,7 +99,7 @@ export default function LLMBreakdown({ brand }) {
                         <div className="llm-cell">
                           <div
                             className="llm-cell-bar"
-                            style={{ width: `${rate}%`, background: b === brand ? 'var(--accent-yellow)' : '#444' }}
+                            style={{ width: `${rate}%`, background: b === brand ? 'var(--accent-secondary)' : '#dddddd' }}
                           />
                           <span className="llm-cell-num">{rate}%</span>
                         </div>

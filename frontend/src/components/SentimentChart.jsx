@@ -29,7 +29,7 @@ export default function SentimentChart({ ranking, brand }) {
                         className="sentiment-fill" 
                         style={{ 
                             width: `${Math.min(Math.max(score + 50, 0), 100)}%`,
-                            backgroundColor: score > 0 ? 'var(--accent-yellow)' : 'var(--accent-red)'
+                            backgroundColor: score > 0 ? 'var(--accent-secondary)' : 'var(--accent-red)'
                         }}
                     ></div>
                 </div>

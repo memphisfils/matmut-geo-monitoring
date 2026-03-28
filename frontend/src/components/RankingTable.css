@@ -1,26 +1,31 @@
+/* RankingTable — Arctic Professional Theme */
+
 .ranking-container {
-    border: var(--border-thick) solid var(--border-color);
-    background: var(--bg-secondary);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
 }
 
 .ranking-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 20px;
-    border-bottom: var(--border-thick) solid var(--border-color);
-    background: var(--bg-tertiary);
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
 }
 
 .ranking-header h2 {
     font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
     margin: 0;
 }
 
 .ranking-count {
     font-size: 12px;
-    color: var(--text-secondary);
-    font-family: var(--font-mono);
+    color: var(--text-muted);
 }
 
 .table-wrapper {
@@ -37,34 +42,43 @@
     text-align: left;
     padding: 10px 20px;
     font-weight: 600;
-    color: var(--text-secondary);
-    border-bottom: 1px solid var(--border-color);
-    font-family: var(--font-mono);
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border);
     font-size: 11px;
-    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
 .ranking-table td {
     padding: 12px 20px;
-    border-bottom: 1px solid var(--border-color);
-    font-family: var(--font-mono);
+    border-bottom: 1px solid var(--border);
 }
 
 .ranking-table tbody tr:last-child td {
     border-bottom: none;
 }
 
-.ranking-table tbody tr:hover {
-    background: var(--bg-tertiary);
+.ranking-table tbody tr {
+    transition: background var(--transition);
 }
 
+.ranking-table tbody tr:hover {
+    background: var(--bg-hover);
+}
+
+/* My brand row — Arctic blue highlight */
 .row-target {
-    background: rgba(255, 215, 0, 0.05) !important;
-    border-left: 4px solid var(--accent-yellow);
+    background: var(--accent-light) !important;
+    border-left: 3px solid var(--accent);
+}
+
+.row-target:hover {
+    background: #DBEAFE !important;
 }
 
 .row-target .brand-highlight {
-    color: var(--accent-yellow) !important;
+    color: var(--accent) !important;
+    font-weight: 700;
 }
 
 .rank-cell {
@@ -78,7 +92,7 @@
 }
 
 .brand-name {
-    letter-spacing: 0.5px;
+    letter-spacing: 0.02em;
 }
 
 .brand-highlight {
@@ -88,32 +102,36 @@
 .score-cell {
     font-weight: 700;
     font-size: 14px;
+    color: var(--text-primary);
 }
 
-/* Bar Chart Style */
+/* Score Bar */
 .bar-container {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     min-width: 150px;
 }
 
 .bar-track {
     flex: 1;
-    height: 6px;
-    background: var(--border-color);
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
     position: relative;
 }
 
 .bar-fill {
     height: 100%;
+    border-radius: 2px;
     transition: width 0.3s ease;
 }
 
 .bar-value {
-    width: 40px;
+    width: 36px;
     text-align: right;
     font-size: 11px;
+    font-weight: 600;
     color: var(--text-muted);
 }
 

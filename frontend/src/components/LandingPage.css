@@ -1,0 +1,720 @@
+/* LandingPage — Arctic Professional Premium SaaS Theme */
+
+.landing-wrapper {
+  min-height: 100vh;
+  background: #FFFFFF;
+  color: var(--text-primary);
+  font-family: 'Outfit', sans-serif;
+  overflow-x: hidden;
+}
+
+.lp-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 40px;
+}
+
+/* ── Typography & Utils ── */
+.text-gradient {
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.lp-section-title {
+  font-size: 36px;
+  font-weight: 800;
+  text-align: center;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+}
+
+.text-center { text-align: center; }
+
+/* ── Buttons ── */
+.lp-btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: var(--radius-full);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 14px rgba(0, 119, 204, 0.25);
+}
+
+.lp-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 119, 204, 0.35);
+}
+
+.lp-btn-secondary {
+  background: white;
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  padding: 10px 24px;
+  border-radius: var(--radius-full);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lp-btn-secondary:hover {
+  border-color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.lp-btn-large {
+  padding: 14px 32px;
+  font-size: 16px;
+}
+
+.lp-btn-login {
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  font-weight: 600;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.lp-btn-login:hover { color: var(--accent); }
+
+/* ── Navbar ── */
+.lp-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 10;
+}
+
+.lp-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.lp-logo-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.lp-nav-links {
+  display: flex;
+  gap: 32px;
+}
+
+.lp-nav-links a {
+  text-decoration: none;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 14px;
+  transition: color 0.2s;
+}
+
+.lp-nav-links a:hover {
+  color: var(--accent);
+}
+
+.lp-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── 1. Hero ── */
+.lp-hero {
+  position: relative;
+  padding: 80px 40px 100px;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: center;
+}
+
+.lp-hero-content {
+  position: relative;
+  z-index: 2;
+}
+
+.lp-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 24px;
+}
+
+.lp-hero h1 {
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 24px;
+  letter-spacing: -0.04em;
+}
+
+.lp-hero-subtitle {
+  font-size: 18px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 36px;
+  max-width: 90%;
+}
+
+.lp-hero-cta {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.lp-hero-trust {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* Hero Graphics - Abstract Dashboards */
+.lp-hero-mockup {
+  position: relative;
+  height: 400px;
+  z-index: 2;
+}
+
+.lp-mockup-card {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.8);
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.06);
+  padding: 24px;
+}
+
+.m-main {
+  width: 90%;
+  height: 280px;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+}
+
+.m-side {
+  width: 200px;
+  top: 20px;
+  right: -20px;
+  z-index: 3;
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-15px); }
+  100% { transform: translateY(0px); }
+}
+
+.m-header {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 30px;
+}
+
+.m-header div {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--border-strong);
+}
+
+.m-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  height: 150px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.m-chart span {
+  flex: 1;
+  background: var(--bg-hover);
+  border-radius: 4px 4px 0 0;
+  transition: all 0.3s;
+}
+
+.m-chart span.active {
+  background: linear-gradient(180deg, var(--accent), var(--cyan));
+}
+
+.m-score {
+  font-size: 42px; font-weight: 800; color: var(--text-primary); line-height: 1;
+}
+.m-score span { font-size: 18px; color: var(--text-muted); }
+.m-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 8px 0; text-transform: uppercase; }
+.m-delta { display: inline-block; padding: 4px 10px; background: var(--success-light); color: var(--success); border-radius: 12px; font-size: 12px; font-weight: 700; }
+
+/* Glow Effects */
+.lp-glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  z-index: 1;
+  opacity: 0.6;
+}
+
+.orb-1 {
+  width: 400px; height: 400px;
+  background: rgba(0, 119, 204, 0.15);
+  top: 10%; right: 10%;
+}
+
+.orb-2 {
+  width: 300px; height: 300px;
+  background: rgba(0, 206, 209, 0.15);
+  bottom: 10%; right: 30%;
+}
+
+
+/* ── 2. Problem ── */
+.lp-problem {
+  padding: 100px 0;
+  background: var(--bg-main); /* #F4F7FA */
+  text-align: center;
+}
+
+.lp-section-desc {
+  font-size: 18px;
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin: 0 auto 60px;
+  line-height: 1.6;
+}
+
+.lp-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 30px;
+}
+
+.lp-stat-card {
+  background: white;
+  border: 1px solid var(--border);
+  padding: 40px 30px;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+  text-align: left;
+}
+
+.lp-stat-num {
+  font-size: 48px;
+  font-weight: 800;
+  color: var(--accent);
+  margin-bottom: 16px;
+  letter-spacing: -0.05em;
+}
+
+.lp-stat-text {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ── 3. How It Works ── */
+.lp-how {
+  padding: 120px 0;
+}
+
+.lp-steps-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+  margin-top: 60px;
+  position: relative;
+}
+
+.lp-step {
+  text-align: center;
+  position: relative;
+  z-index: 2;
+  background: white;
+}
+
+.lp-step-icon {
+  width: 80px;
+  height: 80px;
+  background: white;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+  color: var(--accent);
+  position: relative;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+}
+
+.lp-step-num {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 24px;
+  height: 24px;
+  background: var(--text-primary);
+  color: white;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lp-step h3 {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.lp-step p {
+  color: var(--text-secondary);
+  line-height: 1.5;
+  font-size: 15px;
+}
+
+.lp-step-line {
+  position: absolute;
+  top: 40px;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: var(--border-strong);
+  z-index: 1;
+}
+
+/* ── 4. Features ── */
+.lp-features {
+  padding: 100px 0;
+  background: var(--bg-main);
+}
+
+.lp-section-header {
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.lp-section-header p {
+  color: var(--text-secondary);
+  font-size: 18px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.lp-features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 30px;
+}
+
+.lp-feature-card {
+  background: white;
+  padding: 40px 30px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  transition: all 0.3s;
+}
+
+.lp-feature-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--accent);
+  box-shadow: 0 20px 40px rgba(0, 119, 204, 0.08);
+}
+
+.lp-feat-icon {
+  width: 50px;
+  height: 50px;
+  background: var(--bg-main);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+  transition: all 0.3s;
+}
+
+.lp-feature-card:hover .lp-feat-icon {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.lp-feature-card h4 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.lp-feature-card p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ── 5. Pricing ── */
+.lp-pricing {
+  padding: 120px 0;
+}
+
+.lp-billing-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 40px 0 60px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.lp-billing-toggle span { color: var(--text-muted); transition: color 0.3s; }
+.lp-billing-toggle span.active { color: var(--text-primary); }
+
+.lp-toggle-btn {
+  width: 56px; height: 32px;
+  background: var(--border-strong);
+  border-radius: 16px;
+  border: none;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+.lp-toggle-btn.on { background: var(--accent); }
+
+.lp-toggle-knob {
+  width: 24px; height: 24px;
+  background: white; border-radius: 50%;
+  position: absolute; top: 4px; left: 4px;
+  transition: transform 0.3s;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+.lp-toggle-btn.on .lp-toggle-knob { transform: translateX(24px); }
+
+.lp-discount {
+  background: var(--success-light);
+  color: var(--success);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+}
+
+.lp-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 30px;
+  align-items: center;
+}
+
+.lp-price-card {
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 40px 30px;
+  background: white;
+  position: relative;
+  transition: all 0.3s;
+}
+
+.lp-price-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.05);
+}
+
+.lp-price-card.popular {
+  border: 2px solid var(--accent);
+  box-shadow: 0 20px 40px rgba(0, 119, 204, 0.1);
+  padding: 50px 30px;
+  z-index: 2;
+}
+
+.lp-popular-badge {
+  position: absolute;
+  top: -14px; left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  color: white;
+  font-size: 12px; font-weight: 700;
+  padding: 6px 16px; border-radius: 20px;
+}
+
+.lp-price-header {
+  text-align: center;
+  margin-bottom: 30px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 30px;
+}
+
+.lp-price-header h3 { font-size: 22px; font-weight: 700; margin-bottom: 16px; }
+.lp-price-header p { font-size: 14px; color: var(--text-muted); }
+
+.lp-price {
+  display: flex; justify-content: center; align-items: flex-start;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.lp-currency { font-size: 20px; font-weight: 700; margin-top: 6px; }
+.lp-amount { font-size: 56px; font-weight: 800; line-height: 1; letter-spacing: -0.05em; }
+.lp-period { font-size: 16px; color: var(--text-muted); margin-top: auto; margin-bottom: 6px; }
+
+.lp-price-features {
+  list-style: none; padding: 0; margin: 0 0 40px;
+}
+
+.lp-price-features li {
+  display: flex; align-items: flex-start; gap: 12px;
+  margin-bottom: 16px; font-size: 14px; color: var(--text-secondary);
+}
+
+.lp-price-features svg { color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+
+.lp-price-btn { width: 100%; justify-content: center; }
+
+
+/* ── 6. FAQ ── */
+.lp-faq {
+  padding: 100px 0;
+  background: var(--bg-main);
+}
+
+.lp-faq-container {
+  display: flex;
+  gap: 60px;
+}
+
+.lp-faq-left { flex: 1; }
+.lp-faq-left h2 { font-size: 36px; font-weight: 800; margin-bottom: 20px; }
+.lp-faq-left p { color: var(--text-secondary); font-size: 18px; line-height: 1.6; }
+
+.lp-faq-right { flex: 2; }
+
+.lp-faq-item {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  margin-bottom: 16px;
+  padding: 24px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.lp-faq-item:hover { border-color: var(--border-strong); }
+
+.lp-faq-item.open {
+  border-color: var(--accent);
+  box-shadow: 0 10px 20px rgba(0, 119, 204, 0.05);
+}
+
+.lp-faq-q {
+  font-size: 16px; font-weight: 600; color: var(--text-primary);
+  display: flex; justify-content: space-between; align-items: center;
+}
+
+.lp-faq-icon {
+  color: var(--text-muted); transition: transform 0.3s;
+}
+.lp-faq-item.open .lp-faq-icon { transform: rotate(90deg); color: var(--accent); }
+
+.lp-faq-a {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 15px; line-height: 1.6;
+}
+
+/* ── 7. Footer ── */
+.lp-footer {
+  background: #0B1120;
+  color: white;
+  padding: 100px 0 40px;
+}
+
+.lp-footer-top {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: 60px;
+  margin-bottom: 80px;
+}
+
+.lp-footer-brand p {
+  color: #94A3B8; margin-top: 20px; font-size: 15px; line-height: 1.6; max-width: 300px;
+}
+.lp-footer-logo { font-size: 20px; font-weight: 800; margin-left: 10px; }
+.lp-logo-icon.small { width: 28px; height: 28px; display: inline-flex; vertical-align: middle; }
+
+.lp-footer-links {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px;
+}
+
+.lp-link-col h5 {
+  color: white; font-size: 15px; font-weight: 700; margin-bottom: 24px;
+}
+
+.lp-link-col a {
+  display: block; color: #94A3B8; text-decoration: none; margin-bottom: 16px; font-size: 14px; transition: color 0.2s;
+}
+.lp-link-col a:hover { color: white; }
+
+.lp-footer-bottom {
+  display: flex; justify-content: space-between; align-items: center;
+  border-top: 1px solid rgba(255,255,255,0.1); padding-top: 30px; color: #94A3B8; font-size: 13px;
+}
+
+.lp-legal-links { display: flex; gap: 24px; }
+.lp-legal-links a { color: #94A3B8; text-decoration: none; }
+.lp-legal-links a:hover { color: white; }
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .lp-hero { grid-template-columns: 1fr; text-align: center; }
+  .lp-hero-cta { justify-content: center; }
+  .lp-hero-mockup { max-width: 600px; margin: 0 auto; }
+  .lp-stats-grid, .lp-steps-container, .lp-features-grid, .lp-pricing-grid { grid-template-columns: 1fr; }
+  .lp-step-line { display: none; }
+  .lp-faq-container { flex-direction: column; }
+  .lp-footer-top { grid-template-columns: 1fr; }
+  .lp-price-card.popular { padding: 40px 30px; }
+}

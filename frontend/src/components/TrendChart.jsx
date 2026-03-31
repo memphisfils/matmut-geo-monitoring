@@ -32,8 +32,6 @@ export default function TrendChart({ data, brand }) {
     // Get dynamic competitors from data
     const dataKeys = Object.keys(data[0]).filter(k => k !== 'date' && k !== 'timestamp');
     const competitors = dataKeys.filter(k => k !== brand).slice(0, 4);
-    const allKeys = [brand, ...competitors];
-
     return (
         <div className="chart-container chart-full">
             <div className="chart-header">

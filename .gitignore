@@ -17,6 +17,10 @@ ENV/
 # Data
 data/*.json
 !data/.gitkeep
+data/results_by_brand/*.json
+!data/results_by_brand/.gitkeep
+backend/data/*.db
+backend/data/*.json
 
 # IDE
 .vscode/

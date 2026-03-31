@@ -41,6 +41,15 @@ class TestHealthRoute:
         
         assert 'version' in data
 
+    def test_health_exposes_scheduler_state(self, client):
+        """Test que health expose l'etat du scheduler"""
+        response = client.get('/api/health')
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert 'scheduler' in data
+        assert set(['role', 'running', 'configured']).issubset(data['scheduler'].keys())
+
 
 class TestIndexRoute:
     """Tests pour /"""
@@ -90,7 +99,10 @@ class TestAlertsStatusRoute:
     """Tests pour /api/alerts/status"""
 
     def test_alerts_status_exists(self, client):
-        """Test que la route existe"""
+        """Test que la route retourne un contrat stable"""
         response = client.get('/api/alerts/status')
-        
-        assert response.status_code in [200, 500]
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert set(['slack', 'email', 'telegram']).issubset(data.keys())
+        assert all('configured' in data[channel] for channel in ['slack', 'email', 'telegram'])

@@ -1,233 +1,516 @@
-import React, { useState } from 'react';
-import { Search, ChevronRight, ChevronLeft, Plus, X, Check, Sparkles, Loader2, Target, Globe, Server, User } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useMemo, useState } from 'react';
+import {
+  ArrowRight,
+  Check,
+  ChevronLeft,
+  Loader2,
+  Plus,
+  Shield,
+  Sparkles,
+  Target,
+  Wand2,
+  X
+} from 'lucide-react';
 import './Onboarding.css';
 
 const SECTORS = [
-  'Assurance', 'Banque', 'Santé', 'Tech / SaaS', 'Automobile',
-  'Énergie', 'Télécoms', 'Distribution', 'Immobilier',
-  'Alimentaire', 'Mode', 'Sport', 'Voyage', 'Éducation'
+  'Assurance', 'Banque', 'Sante', 'Tech / SaaS', 'Automobile',
+  'Energie', 'Telecoms', 'Distribution', 'Immobilier',
+  'Alimentaire', 'Mode', 'Sport', 'Voyage', 'Education'
 ];
 
+const MODELS = ['ChatGPT', 'Claude', 'Gemini', 'Qwen'];
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+function fallbackConfig(brand, sector) {
+  return {
+    products: [
+      {
+        id: 'core',
+        name: `${brand} coeur de gamme`,
+        description: `Offre prioritaire pour ${sector.toLowerCase()}.`,
+        prompts: [
+          `Meilleur ${sector.toLowerCase()} : ${brand} vs concurrents`,
+          `Comparatif ${sector.toLowerCase()} : ${brand} ou alternative`,
+          `${brand} est-il fiable pour ${sector.toLowerCase()} ?`
+        ]
+      },
+      {
+        id: 'premium',
+        name: `${brand} premium`,
+        description: 'Offre differenciante ou premium.',
+        prompts: [
+          `Top acteurs premium ${sector.toLowerCase()} : ${brand} a-t-il sa place ?`,
+          `Avis ${brand} premium vs autres marques ${sector.toLowerCase()}`
+        ]
+      }
+    ],
+    suggested_competitors: [],
+    sector_fr: sector
+  };
+}
+
+function uniquePrompts(products, selectedProducts) {
+  const seen = new Set();
+  const prompts = [];
+
+  products
+    .filter((product) => selectedProducts.includes(product.id))
+    .forEach((product) => {
+      (product.prompts || []).forEach((prompt) => {
+        const normalized = prompt.trim();
+        if (!normalized || seen.has(normalized)) return;
+        seen.add(normalized);
+        prompts.push(normalized);
+      });
+    });
+
+  return prompts;
+}
 
 export default function Onboarding({ onComplete }) {
   const [step, setStep] = useState(1);
   const [brand, setBrand] = useState('');
   const [sector, setSector] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
   const [generated, setGenerated] = useState(null);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [competitors, setCompetitors] = useState([]);
   const [newCompetitor, setNewCompetitor] = useState('');
+  const [promptDraft, setPromptDraft] = useState('');
+  const [selectedModels, setSelectedModels] = useState(MODELS);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const selectedPromptCount = useMemo(() => {
+    if (!generated?.products) return 0;
+    return uniquePrompts(generated.products, selectedProducts).length;
+  }, [generated, selectedProducts]);
+
+  const promptList = useMemo(() => {
+    const manualPrompts = promptDraft
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    return manualPrompts.length > 0
+      ? manualPrompts
+      : uniquePrompts(generated?.products || [], selectedProducts);
+  }, [generated, promptDraft, selectedProducts]);
+
+  const selectedProductRecords = useMemo(() => {
+    return (generated?.products || []).filter((product) => selectedProducts.includes(product.id));
+  }, [generated, selectedProducts]);
+
+  const applyGeneratedConfig = (config) => {
+    const nextProducts = config.products || [];
+    const defaultProducts = nextProducts.map((product) => product.id);
+    const defaultPrompts = uniquePrompts(nextProducts, defaultProducts);
+
+    setGenerated(config);
+    setSelectedProducts(defaultProducts);
+    setCompetitors((config.suggested_competitors || []).slice(0, 5));
+    setPromptDraft(defaultPrompts.join('\n'));
+    setStep(2);
+  };
+
   const generateWithAI = async () => {
-    setIsGenerating(true); setErrorMessage('');
+    setIsGenerating(true);
+    setErrorMessage('');
+
     try {
       const response = await fetch(`${API_URL}/generate-config`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brand, sector })
       });
-      const data = await response.json();
-      if (!response.ok || data.status === 'error') {
-        setErrorMessage(data.error || 'Génération IA impossible. Continuez manuellement.');
-        return;
+      const payload = await response.json();
+
+      if (!response.ok || payload.status === 'error') {
+        throw new Error(payload.error || 'Generation IA impossible.');
       }
-      setGenerated(data.config);
-      setSelectedProducts(data.config.products.map(p => p.id));
-      setCompetitors(data.config.suggested_competitors.slice(0, 4));
-      setStep(2);
-    } catch (err) {
-      setErrorMessage('Connexion au backend impossible. Serveur actif ?');
+
+      applyGeneratedConfig(payload.config);
+    } catch (error) {
+      setErrorMessage(error.message || 'Generation IA impossible.');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const manualFallback = () => {
-    setGenerated({
-      products: [
-        { id: 'p1', name: `${brand} Standard`, description: 'Offre principale', prompts: [`Meilleur ${sector}`, `Comparatif ${sector}`] },
-        { id: 'p2', name: `${brand} Premium`, description: 'Offre haut de gamme', prompts: [`Top ${sector}`, `Meilleur ${sector}`] },
-      ],
-      suggested_competitors: [], sector_fr: sector
-    });
-    setSelectedProducts(['p1', 'p2']);
-    setCompetitors([]); setErrorMessage(''); setStep(2);
+  const continueManually = () => {
+    setErrorMessage('');
+    applyGeneratedConfig(fallbackConfig(brand, sector));
   };
 
-  const toggleProduct = (id) => setSelectedProducts(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+  const toggleProduct = (productId) => {
+    setSelectedProducts((current) => (
+      current.includes(productId)
+        ? current.filter((id) => id !== productId)
+        : [...current, productId]
+    ));
+  };
+
   const addCompetitor = () => {
-    if (newCompetitor.trim() && !competitors.includes(newCompetitor.trim())) {
-      setCompetitors(p => [...p, newCompetitor.trim()]); setNewCompetitor('');
-    }
+    const value = newCompetitor.trim();
+    if (!value || competitors.includes(value) || competitors.length >= 5) return;
+    setCompetitors((current) => [...current, value]);
+    setNewCompetitor('');
   };
-  const removeCompetitor = (name) => setCompetitors(p => p.filter(c => c !== name));
-  const handleLaunch = () => onComplete({ brand, sector, products: generated.products.filter(p => selectedProducts.includes(p.id)), competitors, prompts: generated.products.filter(p => selectedProducts.includes(p.id)).flatMap(p => p.prompts) });
 
-  const pageVariants = { initial: { opacity: 0, x: 20 }, in: { opacity: 1, x: 0 }, out: { opacity: 0, x: -20 } };
+  const removeCompetitor = (value) => {
+    setCompetitors((current) => current.filter((item) => item !== value));
+  };
+
+  const toggleModel = (value) => {
+    setSelectedModels((current) => (
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value]
+    ));
+  };
+
+  const handleLaunch = () => {
+    onComplete({
+      brand,
+      sector,
+      products: selectedProductRecords,
+      competitors,
+      prompts: promptList,
+      models: selectedModels,
+      setup_mode: generated?.suggested_competitors?.length ? 'assisted' : 'manual'
+    });
+  };
+
+  const progressWidth = `${((step - 1) / 2) * 100}%`;
 
   return (
-    <div className="onboarding-wrapper">
-      {/* LEFT PANEL: Branding & Graphic */}
-      <div className="onboarding-left">
-        <div className="obl-content">
-          <div className="obl-logo">
-            <div className="obl-icon"><Target size={24} strokeWidth={2.5}/></div>
-            <span>GEO Monitor</span>
+    <div className="onboarding-shell">
+      <section className="onboarding-aside">
+        <div className="onboarding-brand">
+          <div className="onboarding-brand-mark">
+            <Target size={18} strokeWidth={2.5} />
           </div>
-          <div className="obl-text">
-            <h1>Prenez le contrôle de votre <span>image IA</span></h1>
-            <p>Analysez exactement comment ChatGPT, Claude, Gemini et Qwen perçoivent et recommandent votre marque.</p>
-          </div>
-          
-          <div className="obl-graphic">
-            {/* Animated decorative nodes */}
-            <div className={`node node-1 ${step >= 1 ? 'active' : ''}`}><User size={20}/></div>
-            <div className={`node node-2 ${step >= 2 ? 'active' : ''}`}><Server size={20}/></div>
-            <div className={`node node-3 ${step >= 3 ? 'active' : ''}`}><Globe size={20}/></div>
-            <svg className="obl-lines" viewBox="0 0 200 200">
-              <path d="M 50 150 Q 100 50 150 150" fill="none" className={`path ${step >= 2 ? 'active' : ''}`} />
-            </svg>
+          <div>
+            <span className="onboarding-brand-name">GEO Arctic</span>
+            <span className="onboarding-brand-meta">Project setup</span>
           </div>
         </div>
-      </div>
 
-      {/* RIGHT PANEL: Wizard Form */}
-      <div className="onboarding-right">
-        <div className="wizard-container">
-          
-          {/* Progress Tracker */}
-          <div className="wizard-progress">
-            {[1,2,3].map(num => (
-              <div key={num} className={`w-step ${step === num ? 'current' : step > num ? 'done' : ''}`}>
-                <div className="w-dot">{step > num ? <Check size={12}/> : num}</div>
-                <div className="w-label">{num === 1 ? 'Marque' : num === 2 ? 'Configuration' : 'Lancement'}</div>
-              </div>
-            ))}
-            <div className="w-line"><div className="w-line-fill" style={{width: `${(step-1)*50}%`}}/></div>
+        <div className="onboarding-hero-copy">
+          <span className="onboarding-kicker">Nouvelle analyse</span>
+          <h1>Cadrez la marque, relisez les prompts, puis lancez.</h1>
+          <p>
+            Le parcours ne masque plus la logique moteur. Vous voyez ce qui est genere,
+            ce qui sera compare, et ce qui part reellement dans l analyse.
+          </p>
+        </div>
+
+        <div className="onboarding-signal-stack">
+          <article className={`onboarding-signal ${step >= 1 ? 'active' : ''}`}>
+            <span className="signal-index">01</span>
+            <div>
+              <strong>Marque et secteur</strong>
+              <p>Poser le bon contexte avant toute suggestion IA.</p>
+            </div>
+          </article>
+          <article className={`onboarding-signal ${step >= 2 ? 'active' : ''}`}>
+            <span className="signal-index">02</span>
+            <div>
+              <strong>Marche et benchmark</strong>
+              <p>Choisir les offres et les concurrents qui comptent vraiment.</p>
+            </div>
+          </article>
+          <article className={`onboarding-signal ${step >= 3 ? 'active' : ''}`}>
+            <span className="signal-index">03</span>
+            <div>
+              <strong>Prompts et lancement</strong>
+              <p>Relire, corriger, puis lancer le run avec une configuration claire.</p>
+            </div>
+          </article>
+        </div>
+
+        <div className="onboarding-aside-footer">
+          <div className="aside-footer-item">
+            <Shield size={16} />
+            <span>Projet relie au compte et restaure automatiquement.</span>
           </div>
+          <div className="aside-footer-item">
+            <Sparkles size={16} />
+            <span>Prompts generes visibles et editables avant execution.</span>
+          </div>
+        </div>
+      </section>
 
-          <div className="wizard-body">
-            <AnimatePresence mode="wait">
-              {/* STEP 1 */}
-              {step === 1 && (
-                <motion.div key="s1" initial="initial" animate="in" exit="out" variants={pageVariants} transition={{duration: 0.3}} className="step-pane">
-                  <h2>Votre projet</h2>
-                  <p className="step-subtitle">Définissez la marque et le secteur pour initialiser l'IA.</p>
+      <section className="onboarding-main">
+        <div className="onboarding-progress">
+          <div className="onboarding-progress-track">
+            <div className="onboarding-progress-fill" style={{ width: progressWidth }} />
+          </div>
+          <div className="onboarding-progress-steps">
+            {['Contexte', 'Marche', 'Prompts'].map((label, index) => {
+              const value = index + 1;
+              const state = step === value ? 'current' : step > value ? 'done' : 'idle';
+              return (
+                <div key={label} className={`progress-step ${state}`}>
+                  <div className="progress-step-dot">{step > value ? <Check size={12} /> : value}</div>
+                  <span>{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-                  <div className="form-group p-top">
-                    <label>Nom de la Marque</label>
-                    <div className="input-modern">
-                      <Search size={18} />
-                      <input type="text" value={brand} onChange={e => setBrand(e.target.value)} placeholder="EX: ORANGE, ALAN..." onKeyDown={e => e.key === 'Enter' && brand && sector && generateWithAI()}/>
-                    </div>
-                  </div>
+        <div className="onboarding-panel">
+          {step === 1 && (
+            <div className="step-panel">
+                <div className="step-header">
+                  <span className="step-tag">Etape 1</span>
+                  <h2>Posez le contexte du projet.</h2>
+                  <p>La qualite du benchmark depend d abord du bon perimetre marque et secteur.</p>
+                </div>
 
-                  <div className="form-group p-top">
-                    <label>Secteur d'activité</label>
-                    <div className="sector-chips">
-                      {SECTORS.map(s => (
-                        <button key={s} className={`chip ${sector === s ? 'active' : ''}`} onClick={() => setSector(s)}>
-                          {s}
+                <div className="step-grid single">
+                  <label className="field-group">
+                    <span>Marque suivie</span>
+                    <input
+                      type="text"
+                      value={brand}
+                      onChange={(event) => setBrand(event.target.value)}
+                      placeholder="Ex: Matmut, Orange, Alan"
+                    />
+                  </label>
+
+                  <div className="field-group">
+                    <span>Secteur principal</span>
+                    <div className="sector-grid">
+                      {SECTORS.map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          className={`sector-pill ${sector === item ? 'active' : ''}`}
+                          onClick={() => setSector(item)}
+                        >
+                          {item}
                         </button>
                       ))}
                     </div>
                   </div>
+                </div>
 
-                  {errorMessage && (
-                    <div className="error-banner">
-                      <div className="err-text">{errorMessage}</div>
-                      <button className="btn-text" onClick={manualFallback}>Mode manuel</button>
-                    </div>
-                  )}
-
-                  <div className="wizard-actions right">
-                    <button className="btn-primary large" onClick={generateWithAI} disabled={!brand.trim() || !sector || isGenerating}>
-                      {isGenerating ? <><Loader2 size={18} className="spin" /> Analyse...</> : <><Sparkles size={18} /> Générer via IA</>}
+                {errorMessage && (
+                  <div className="step-alert">
+                    <span>{errorMessage}</span>
+                    <button type="button" className="inline-link" onClick={continueManually}>
+                      Continuer en manuel
                     </button>
                   </div>
-                </motion.div>
-              )}
+                )}
 
-              {/* STEP 2 */}
-              {step === 2 && generated && (
-                <motion.div key="s2" initial="initial" animate="in" exit="out" variants={pageVariants} transition={{duration: 0.3}} className="step-pane">
-                  <h2>Affinage IA</h2>
-                  <p className="step-subtitle">Nous avons pré-configuré ces éléments. Ajustez si nécessaire.</p>
+                <div className="step-actions">
+                  <button
+                    type="button"
+                    className="onboarding-btn-primary"
+                    onClick={generateWithAI}
+                    disabled={!brand.trim() || !sector || isGenerating}
+                  >
+                    {isGenerating ? <Loader2 size={18} className="spin" /> : <Wand2 size={18} />}
+                    {isGenerating ? 'Generation...' : 'Generer la configuration'}
+                  </button>
+                  <button
+                    type="button"
+                    className="onboarding-btn-secondary"
+                    onClick={continueManually}
+                    disabled={!brand.trim() || !sector || isGenerating}
+                  >
+                    Continuer en manuel
+                  </button>
+                </div>
+            </div>
+          )}
 
-                  <div className="split-form">
-                    <div className="form-section">
-                      <h3>Produits cibles ({selectedProducts.length})</h3>
-                      <div className="item-list">
-                        {generated.products.map(p => (
-                          <div key={p.id} className={`sel-item ${selectedProducts.includes(p.id) ? 'checked' : ''}`} onClick={() => toggleProduct(p.id)}>
-                            <div className="checkbox">{selectedProducts.includes(p.id) && <Check size={12}/>}</div>
-                            <div className="text">
-                              <h4>{p.name}</h4><span>{p.description}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+          {step === 2 && generated && (
+            <div className="step-panel">
+                <div className="step-header">
+                  <span className="step-tag">Etape 2</span>
+                  <h2>Selectionnez les offres et le benchmark.</h2>
+                  <p>Gardez uniquement les produits et concurrents utiles pour le premier run.</p>
+                </div>
+
+                <div className="step-grid dual">
+                  <div className="selection-panel">
+                    <div className="panel-head">
+                      <strong>Produits suivis</strong>
+                      <span>{selectedProducts.length} selectionnes</span>
                     </div>
 
-                    <div className="form-section">
-                      <h3>Concurrents ({competitors.length}/5)</h3>
-                      <div className="comp-list">
-                        {competitors.map(c => (
-                          <div key={c} className="comp-tag"><span>{c}</span><X size={14} onClick={() => removeCompetitor(c)}/></div>
-                        ))}
-                      </div>
-                      {competitors.length < 5 && (
-                        <div className="comp-adder">
-                          <input type="text" value={newCompetitor} onChange={e => setNewCompetitor(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCompetitor()} placeholder="Ajouter un concurrent..."/>
-                          <button onClick={addCompetitor}><Plus size={16}/></button>
+                    <div className="product-list">
+                      {generated.products?.map((product) => {
+                        const active = selectedProducts.includes(product.id);
+                        return (
+                          <button
+                            key={product.id}
+                            type="button"
+                            className={`product-choice ${active ? 'active' : ''}`}
+                            onClick={() => toggleProduct(product.id)}
+                          >
+                            <div className="product-choice-mark">
+                              {active ? <Check size={14} /> : null}
+                            </div>
+                            <div className="product-choice-copy">
+                              <strong>{product.name}</strong>
+                              <span>{product.description}</span>
+                            </div>
+                            <small>{product.prompts?.length || 0} prompts</small>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="selection-panel">
+                    <div className="panel-head">
+                      <strong>Concurrents</strong>
+                      <span>{competitors.length}/5</span>
+                    </div>
+
+                    <div className="competitor-list">
+                      {competitors.length === 0 && (
+                        <div className="empty-inline">
+                          Aucun concurrent pour l instant. Vous pouvez lancer un run solo, mais le benchmark sera limite.
                         </div>
                       )}
+
+                      {competitors.map((competitor) => (
+                        <div key={competitor} className="competitor-chip">
+                          <span>{competitor}</span>
+                          <button type="button" onClick={() => removeCompetitor(competitor)}>
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="competitor-adder">
+                      <input
+                        type="text"
+                        value={newCompetitor}
+                        onChange={(event) => setNewCompetitor(event.target.value)}
+                        onKeyDown={(event) => event.key === 'Enter' && addCompetitor()}
+                        placeholder="Ajouter un concurrent"
+                      />
+                      <button type="button" onClick={addCompetitor} disabled={competitors.length >= 5}>
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="step-summary-strip">
+                  <span>{selectedProductRecords.length} offres actives</span>
+                  <span>{selectedPromptCount} prompts prepares</span>
+                  <span>{competitors.length || 0} concurrents compares</span>
+                </div>
+
+                <div className="step-actions split">
+                  <button type="button" className="onboarding-btn-secondary" onClick={() => setStep(1)}>
+                    <ChevronLeft size={18} />
+                    Retour
+                  </button>
+                  <button
+                    type="button"
+                    className="onboarding-btn-primary"
+                    onClick={() => setStep(3)}
+                    disabled={selectedProducts.length === 0}
+                  >
+                    Continuer
+                    <ArrowRight size={18} />
+                  </button>
+                </div>
+            </div>
+          )}
+
+          {step === 3 && generated && (
+            <div className="step-panel">
+                <div className="step-header">
+                  <span className="step-tag">Etape 3</span>
+                  <h2>Relisez les prompts avant lancement.</h2>
+                  <p>Vous validez maintenant le coeur du moteur: ce qui sera reellement envoye aux modeles.</p>
+                </div>
+
+                <div className="step-grid prompts">
+                  <div className="selection-panel">
+                    <div className="panel-head">
+                      <strong>Prompts generes</strong>
+                      <span>{promptList.length} actifs</span>
+                    </div>
+
+                    <textarea
+                      className="prompt-editor"
+                      value={promptDraft}
+                      onChange={(event) => setPromptDraft(event.target.value)}
+                      placeholder="Un prompt par ligne"
+                    />
+
+                    <div className="prompt-helper">
+                      Un prompt par ligne. Les doublons vides sont ignores au lancement.
                     </div>
                   </div>
 
-                  <div className="wizard-actions space">
-                    <button className="btn-secondary" onClick={() => setStep(1)}><ChevronLeft size={18}/> Retour</button>
-                    <button className="btn-primary" onClick={() => setStep(3)} disabled={selectedProducts.length === 0 || competitors.length === 0}>Continuer <ChevronRight size={18}/></button>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* STEP 3 */}
-              {step === 3 && generated && (
-                <motion.div key="s3" initial="initial" animate="in" exit="out" variants={pageVariants} transition={{duration: 0.3}} className="step-pane">
-                  <h2>Prêt au lancement</h2>
-                  <p className="step-subtitle">L'IA va maintenant interroger les LLMs avec cette configuration.</p>
-
-                  <div className="summary-cards">
-                    <div className="sum-card">
-                      <div className="s-label">Marque</div>
-                      <div className="s-val text-gradient">{brand}</div>
+                  <div className="selection-panel">
+                    <div className="panel-head">
+                      <strong>Modeles visibles</strong>
+                      <span>{selectedModels.length} selectionnes</span>
                     </div>
-                    <div className="sum-card">
-                      <div className="s-label">Prompts générés</div>
-                      <div className="s-val text-gradient">{generated.products.filter(p => selectedProducts.includes(p.id)).flatMap(p => p.prompts).length}</div>
+
+                    <div className="model-grid">
+                      {MODELS.map((model) => (
+                        <button
+                          key={model}
+                          type="button"
+                          className={`model-pill ${selectedModels.includes(model) ? 'active' : ''}`}
+                          onClick={() => toggleModel(model)}
+                        >
+                          {model}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="launch-summary">
+                      <div>
+                        <span>Marque</span>
+                        <strong>{brand}</strong>
+                      </div>
+                      <div>
+                        <span>Secteur</span>
+                        <strong>{sector}</strong>
+                      </div>
+                      <div>
+                        <span>Benchmark</span>
+                        <strong>{competitors.length > 0 ? `${competitors.length} concurrents` : 'Run solo'}</strong>
+                      </div>
                     </div>
                   </div>
+                </div>
 
-                  <div className="env-details">
-                    <div className="ed-row"><Globe size={16}/> <span>Modèles ciblés : GPT-4, Claude 3.5, Gemini 1.5, Qwen</span></div>
-                    <div className="ed-row"><Server size={16}/> <span>Environnement : Production API</span></div>
-                  </div>
-
-                  <div className="wizard-actions space extra-mt">
-                    <button className="btn-secondary" onClick={() => setStep(2)}><ChevronLeft size={18}/> Retour</button>
-                    <button className="btn-primary glow" onClick={handleLaunch}><Sparkles size={18}/> Lancer l'Analyse GEO</button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
+                <div className="step-actions split">
+                  <button type="button" className="onboarding-btn-secondary" onClick={() => setStep(2)}>
+                    <ChevronLeft size={18} />
+                    Retour
+                  </button>
+                  <button
+                    type="button"
+                    className="onboarding-btn-primary"
+                    onClick={handleLaunch}
+                    disabled={promptList.length === 0 || selectedModels.length === 0}
+                  >
+                    <Sparkles size={18} />
+                    Lancer l analyse GEO
+                  </button>
+                </div>
+            </div>
+          )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

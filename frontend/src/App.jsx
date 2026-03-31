@@ -1,111 +1,175 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import LandingPage from './components/LandingPage';
-import Onboarding from './components/Onboarding';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import TopNavbar from './components/TopNavbar';
-import KpiCards from './components/KpiCards';
-import RankingTable from './components/RankingTable';
-import { MentionChart, SovChart, RadarCompare, CategoryHeatmap } from './components/Charts';
-import TrendChart from './components/TrendChart';
-import SentimentChart from './components/SentimentChart';
-import DuelCard from './components/DuelCard';
-import InsightsPanel from './components/InsightsPanel';
 import AnalysisProgress from './components/AnalysisProgress';
-import LLMBreakdown from './components/LLMBreakdown';
-import PromptComparator from './components/PromptComparator';
-import AlertsPanel from './components/AlertsPanel';
 import ExportButton from './components/ExportButton';
-import Benchmark from './components/Benchmark';
-import ProjectsPanel from './components/ProjectsPanel';
 import {
   fetchMetrics, fetchExport, checkStatus, fetchHistory,
-  runAnalysisStream, generateTrendHistory, DEMO_DATA_FACTORY, fetchSession
+  runAnalysisStream, generateTrendHistory, DEMO_DATA_FACTORY, fetchSession,
+  fetchCurrentUser, loginUser, signupUser, loginWithGoogle, getGoogleClientId, activateProject, fetchProjects, logoutUser
 } from './services/api';
 import './App.css';
 
-export default function App() { // Navigation inter-pages globale
-  const [page, setPage] = useState('landing'); // 'landing' ou 'app'
+const LandingPage = lazy(() => import('./components/LandingPage'));
+const AuthPage = lazy(() => import('./components/AuthPage'));
+const Onboarding = lazy(() => import('./components/Onboarding'));
+const WorkspaceHome = lazy(() => import('./components/WorkspaceHome'));
+const ProjectsPanel = lazy(() => import('./components/ProjectsPanel'));
+const Benchmark = lazy(() => import('./components/Benchmark'));
+const AlertsPanel = lazy(() => import('./components/AlertsPanel'));
+const AccountPanel = lazy(() => import('./components/AccountPanel'));
+const PromptComparator = lazy(() => import('./components/PromptComparator'));
+const DashboardOverviewTab = lazy(() => import('./components/tabs/DashboardOverviewTab'));
+const HistoryTab = lazy(() => import('./components/tabs/HistoryTab'));
+const KeywordsTab = lazy(() => import('./components/tabs/KeywordsTab'));
+const SentimentTab = lazy(() => import('./components/tabs/SentimentTab'));
+const LLMStatusTab = lazy(() => import('./components/tabs/LLMStatusTab'));
+const ExportsTab = lazy(() => import('./components/tabs/ExportsTab'));
 
-  // État Dashboard / Config
-  const [config, setConfig]           = useState(null);
-  const [data, setData]               = useState(null);
+const DEFAULT_PREFERENCES = {
+  autoOpenLatestProject: false,
+  reduceMotion: false,
+  showHints: true
+};
+const DEBUG_APP = import.meta.env.DEV && import.meta.env.VITE_DEBUG_UI === 'true';
+
+function parseProjectList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return typeof value === 'string' ? value.split(',').map((item) => item.trim()) : [];
+  }
+}
+
+function projectToConfig(project) {
+  return {
+    projectId: project.id || null,
+    brand: project.brand,
+    sector: project.sector,
+    competitors: parseProjectList(project.competitors),
+    prompts: parseProjectList(project.prompts),
+    models: parseProjectList(project.models),
+    products: [],
+    setup_mode: 'assisted'
+  };
+}
+
+function LazySectionFallback({ label = 'Chargement de la vue...' }) {
+  return (
+    <div className="loading-state app-lazy-state">
+      <div className="loader" />
+      <p>{label}</p>
+    </div>
+  );
+}
+
+function debugApp(...args) {
+  if (DEBUG_APP) {
+    console.log(...args);
+  }
+}
+
+export default function App() {
+  const [page, setPage] = useState('landing');
+
+  const [config, setConfig] = useState(null);
+  const [data, setData] = useState(null);
   const [trendHistory, setTrendHistory] = useState([]);
   const [isBackendOnline, setIsBackendOnline] = useState(false);
-  const [error, setError]             = useState(null);
+  const [error, setError] = useState(null);
 
-  // Sprint 2 — Analyse en temps réel
-  const [isAnalyzing, setIsAnalyzing]         = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(null);
   const [completedPrompts, setCompletedPrompts] = useState([]);
-  const [analysisModels, setAnalysisModels]    = useState([]);
+  const [analysisModels, setAnalysisModels] = useState([]);
   const [isAnalysisComplete, setIsAnalysisComplete] = useState(false);
-  const [isDemo, setIsDemo]                   = useState(false);
+  const [isDemo, setIsDemo] = useState(false);
 
-  // Sprint 3 — Onglets
   const [activeTab, setActiveTab] = useState('dashboard');
-
-  const handleOnboardingComplete = useCallback(async (cfg) => {
-    setConfig(cfg);
-    setIsAnalyzing(true);
-    setIsAnalysisComplete(false);
-    setCompletedPrompts([]);
-    setAnalysisProgress(null);
-    setError(null);
-
+  const [authUser, setAuthUser] = useState(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [preferences, setPreferences] = useState(() => {
     try {
-      for await (const event of runAnalysisStream({
-        brand: cfg.brand, competitors: cfg.competitors, prompts: cfg.prompts,
-        products: cfg.products, sector: cfg.sector, demo: false
-      })) {
-        if (event.type === 'start') {
-          setAnalysisModels(event.models || []);
-          setIsDemo(event.is_demo || false);
-          console.log('[APP] Streaming start — models:', event.models, 'is_demo:', event.is_demo);
-        }
-        if (event.type === 'progress') {
-          setAnalysisProgress(event);
-          setCompletedPrompts(prev => [...prev, event]);
-          console.log(`[APP] Progress ${event.current}/${event.total} — brand_position:`, event.brand_position);
-        }
-        if (event.type === 'complete') {
-          console.log('[APP] Streaming COMPLETE — is_demo:', event.is_demo, 'timestamp:', event.timestamp);
-          setIsAnalysisComplete(true);
-          setIsAnalyzing(false);
-          await loadDashboardData(cfg);
-        }
-        if (event.type === 'error') {
-          throw new Error(event.message || 'Erreur analyse');
-        }
-      }
-    } catch (err) {
-      console.warn('[APP] Streaming fallback —', err.message);
-      setIsAnalyzing(false);
-      setIsAnalysisComplete(true);
-      await loadDashboardData(cfg);
+      return {
+        ...DEFAULT_PREFERENCES,
+        ...(JSON.parse(window.localStorage.getItem('geo_preferences') || '{}'))
+      };
+    } catch {
+      return DEFAULT_PREFERENCES;
     }
-  }, []);
+  });
+  const googleClientId = getGoogleClientId();
 
-  const loadDashboardData = useCallback(async (cfg) => {
-    console.log('[APP] loadDashboardData avec config:', cfg);
-    try {
-      // Délai pour laisser le temps à la sauvegarde results.json (fix race condition)
-      // Le backend doit avoir fini l'écriture AVANT d'appeler /api/metrics
-      // Timeout typique : 40s par prompt × 6 prompts = 240s max
-      await new Promise(resolve => setTimeout(resolve, 5000));
+  const applySessionState = useCallback(async (sessionData) => {
+    if (sessionData?.user) {
+      setAuthUser(sessionData.user);
+    }
 
-      console.log('[APP] fetchMetrics...');
-      const [result, historyData] = await Promise.all([
-        fetchMetrics({ brand: cfg.brand, competitors: cfg.competitors }),
-        fetchHistory({ brand: cfg.brand })
-      ]);
-      console.log('[APP] fetchMetrics result:', result?.metadata);
-      setData(result);
-      // Utiliser l'historique réel si disponible, sinon générer du fake
+    if (sessionData?.has_session && sessionData.project && sessionData.results?.ranking?.length > 0) {
+      const restoredConfig = projectToConfig(sessionData.project);
+
+      setPage('app');
+      setShowOnboarding(false);
+      setConfig(restoredConfig);
+      setData(sessionData.results);
+
+      const historyData = await fetchHistory({
+        brand: sessionData.project.brand,
+        projectId: sessionData.active_project_id || sessionData.project.id
+      });
       if (historyData && historyData.length > 0) {
-        console.log('[APP] Historique réel:', historyData.length, 'points');
         setTrendHistory(historyData);
       } else {
-        console.log('[APP] Pas dhistorique, génération de données fake');
+        setTrendHistory(generateTrendHistory(sessionData.results.ranking, sessionData.project.brand));
+      }
+      return true;
+    }
+
+    return false;
+  }, []);
+
+  const refreshProjects = useCallback(async () => {
+    if (!authUser) {
+      setProjects([]);
+      setProjectsLoading(false);
+      return [];
+    }
+
+    setProjectsLoading(true);
+    try {
+      const nextProjects = await fetchProjects({ force: true });
+      setProjects(nextProjects);
+      return nextProjects;
+    } catch (err) {
+      console.error('[APP] refreshProjects error:', err);
+      setProjects([]);
+      return [];
+    } finally {
+      setProjectsLoading(false);
+    }
+  }, [authUser]);
+
+  const loadDashboardData = useCallback(async (cfg) => {
+    debugApp('[APP] loadDashboardData', cfg);
+    try {
+      const [result, historyData] = await Promise.all([
+        fetchMetrics({ brand: cfg.brand, competitors: cfg.competitors, projectId: cfg.projectId }),
+        fetchHistory({ brand: cfg.brand, projectId: cfg.projectId })
+      ]);
+      debugApp('[APP] fetchMetrics result', result?.metadata);
+      setData(result);
+
+      if (historyData && historyData.length > 0) {
+        debugApp('[APP] Historique reel', historyData.length);
+        setTrendHistory(historyData);
+      } else {
+        debugApp('[APP] Pas d historique, generation de donnees fake');
         setTrendHistory(generateTrendHistory(result?.ranking, cfg.brand));
       }
     } catch (err) {
@@ -116,6 +180,67 @@ export default function App() { // Navigation inter-pages globale
     }
   }, []);
 
+  const handleOnboardingComplete = async (cfg) => {
+    setConfig(cfg);
+    setIsAnalyzing(true);
+    setIsAnalysisComplete(false);
+    setCompletedPrompts([]);
+    setAnalysisProgress(null);
+    setError(null);
+
+    try {
+      for await (const event of runAnalysisStream({
+        brand: cfg.brand,
+        competitors: cfg.competitors,
+        prompts: cfg.prompts,
+        products: cfg.products,
+        sector: cfg.sector,
+        demo: false
+      })) {
+        if (event.type === 'start') {
+          setAnalysisModels(event.models || []);
+          setIsDemo(event.is_demo || false);
+          debugApp('[APP] Streaming start', event.models, event.is_demo);
+        }
+        if (event.type === 'progress') {
+          setAnalysisProgress(event);
+          setCompletedPrompts((prev) => [...prev, event]);
+          debugApp('[APP] Progress', event.current, event.total, event.brand_position);
+        }
+        if (event.type === 'complete') {
+          debugApp('[APP] Streaming complete', event.is_demo, event.timestamp);
+          setIsAnalysisComplete(true);
+          setIsAnalyzing(false);
+          await loadDashboardData(cfg);
+          const nextProjects = await refreshProjects();
+          const persistedProject = nextProjects.find((item) => item.brand === cfg.brand);
+          if (persistedProject) {
+            setConfig((current) => ({
+              ...(current || cfg),
+              projectId: persistedProject.id
+            }));
+          }
+        }
+        if (event.type === 'error') {
+          throw new Error(event.message || 'Erreur analyse');
+        }
+      }
+    } catch (err) {
+      debugApp('[APP] Streaming fallback', err.message);
+      setIsAnalyzing(false);
+      setIsAnalysisComplete(true);
+      await loadDashboardData(cfg);
+      const nextProjects = await refreshProjects();
+      const persistedProject = nextProjects.find((item) => item.brand === cfg.brand);
+      if (persistedProject) {
+        setConfig((current) => ({
+          ...(current || cfg),
+          projectId: persistedProject.id
+        }));
+      }
+    }
+  };
+
   const handleRefresh = useCallback(async () => {
     if (!config) return;
     setIsAnalyzing(true);
@@ -125,30 +250,35 @@ export default function App() { // Navigation inter-pages globale
 
     try {
       for await (const event of runAnalysisStream({
-        brand: config.brand, competitors: config.competitors,
-        prompts: config.prompts, sector: config.sector, demo: false
+        brand: config.brand,
+        competitors: config.competitors,
+        prompts: config.prompts,
+        sector: config.sector,
+        demo: false
       })) {
-        if (event.type === 'start')    setAnalysisModels(event.models || []);
+        if (event.type === 'start') setAnalysisModels(event.models || []);
         if (event.type === 'progress') {
           setAnalysisProgress(event);
-          setCompletedPrompts(prev => [...prev, event]);
+          setCompletedPrompts((prev) => [...prev, event]);
         }
         if (event.type === 'complete') {
           setIsAnalysisComplete(true);
           setIsAnalyzing(false);
           await loadDashboardData(config);
+          await refreshProjects();
         }
       }
-    } catch (err) {
+    } catch {
       setIsAnalyzing(false);
       setIsAnalysisComplete(true);
       await loadDashboardData(config);
+      await refreshProjects();
     }
-  }, [config, loadDashboardData]);
+  }, [config, loadDashboardData, refreshProjects]);
 
   const handleExport = useCallback(async () => {
     try {
-      const report = await fetchExport();
+      const report = await fetchExport({ brand: config?.brand, projectId: config?.projectId });
       const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -162,65 +292,237 @@ export default function App() { // Navigation inter-pages globale
   }, [config]);
 
   useEffect(() => {
-    checkStatus().then(res => setIsBackendOnline(res?.status === 'ok'));
-    
-    // Auto-load session au démarrage
-    fetchSession().then(session => {
-      // Ne restaurer que si on a déjà des résultats complets (évite les dashboards vides sur des sessions fantômes)
-      // On s'assure que results contient un "ranking" valide
-      if (session.has_session && session.project && session.results && session.results.ranking && session.results.ranking.length > 0) {
-        const project = session.project;
-        
-        const safeParse = (str) => {
-          if (!str) return [];
-          if (Array.isArray(str)) return str;
-          try {
-            return JSON.parse(str);
-          } catch (e) {
-            if (typeof str === 'string') {
-              return str.split(',').map(s => s.trim());
-            }
-            return [];
-          }
-        };
+    checkStatus().then((res) => setIsBackendOnline(res?.status === 'ok'));
 
-        const config = {
-          brand: project.brand,
-          sector: project.sector,
-          competitors: safeParse(project.competitors),
-          prompts: safeParse(project.prompts)
-        };
-        setConfig(config);
-        setData(session.results);
+    Promise.all([fetchCurrentUser({ force: true }), fetchSession({ force: true })]).then(async ([currentUser, currentSession]) => {
+      if (currentUser?.authenticated) {
+        setAuthUser(currentUser.user);
+      }
+
+      const restored = await applySessionState(currentSession);
+      if (!restored && currentUser?.authenticated) {
+        setShowOnboarding(false);
+        setPage('app');
       }
     });
-  }, []);
+  }, [applySessionState]);
 
-  // Gestion du changement d'onglet
+  useEffect(() => {
+    refreshProjects();
+  }, [refreshProjects]);
+
+  useEffect(() => {
+    window.localStorage.setItem('geo_preferences', JSON.stringify(preferences));
+    document.documentElement.classList.toggle('reduced-motion', preferences.reduceMotion);
+  }, [preferences]);
+
+  const handleAuthContinue = async ({ mode, fullName, email, password }) => {
+    setAuthBusy(true);
+    setAuthError('');
+
+    try {
+      const authResult = mode === 'signup'
+        ? await signupUser({ name: fullName, email, password })
+        : await loginUser({ email, password });
+
+      setAuthUser(authResult.user || null);
+      const currentSession = await fetchSession({ force: true });
+      const restored = await applySessionState(currentSession);
+
+      if (!restored) {
+        setShowOnboarding(false);
+        setPage('app');
+      }
+    } catch (err) {
+      setAuthError(err.message || 'Connexion impossible');
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleGoogleAuth = async (credential) => {
+    if (!credential) {
+      setAuthError('Credential Google manquante');
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthError('');
+
+    try {
+      const authResult = await loginWithGoogle(credential);
+      setAuthUser(authResult.user || null);
+      const currentSession = await fetchSession({ force: true });
+      const restored = await applySessionState(currentSession);
+
+      if (!restored) {
+        setShowOnboarding(false);
+        setPage('app');
+      }
+    } catch (err) {
+      setAuthError(err.message || 'Connexion Google impossible');
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
   const handleTabChange = (tabKey) => {
     setActiveTab(tabKey);
   };
 
-  // ── RENDER ROOT ──
-  
+  const resetWorkspace = useCallback(() => {
+    setConfig(null);
+    setData(null);
+    setTrendHistory([]);
+    setCompletedPrompts([]);
+    setAnalysisProgress(null);
+    setIsAnalysisComplete(false);
+    setIsAnalyzing(false);
+    setError(null);
+    setActiveTab('dashboard');
+    setShowOnboarding(false);
+    setPage(authUser ? 'app' : 'landing');
+  }, [authUser]);
+
+  const handleCreateAnalysis = useCallback(() => {
+    setConfig(null);
+    setData(null);
+    setTrendHistory([]);
+    setActiveTab('dashboard');
+    setShowOnboarding(true);
+    setError(null);
+    setCompletedPrompts([]);
+    setAnalysisProgress(null);
+    setIsAnalysisComplete(false);
+  }, []);
+
+  const handleProjectSelect = useCallback(async (project) => {
+    const nextConfig = projectToConfig(project);
+    setShowOnboarding(false);
+    setConfig(nextConfig);
+    setActiveTab('dashboard');
+    setError(null);
+
+    try {
+      await activateProject(project.id);
+      await loadDashboardData(nextConfig);
+    } catch (err) {
+      console.error('[APP] project activation error:', err);
+      setError(err.message || 'Impossible de charger ce projet');
+    }
+  }, [loadDashboardData]);
+
+  const handlePreferenceChange = useCallback((key) => {
+    setPreferences((current) => ({
+      ...current,
+      [key]: !current[key]
+    }));
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await logoutUser();
+    } catch (err) {
+      console.error('[APP] logout error:', err);
+    } finally {
+      setAuthUser(null);
+      setConfig(null);
+      setData(null);
+      setProjects([]);
+      setTrendHistory([]);
+      setCompletedPrompts([]);
+      setAnalysisProgress(null);
+      setIsAnalysisComplete(false);
+      setIsAnalyzing(false);
+      setShowOnboarding(false);
+      setActiveTab('dashboard');
+      setError(null);
+      setPage('landing');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!authUser || config || showOnboarding || projectsLoading || !preferences.autoOpenLatestProject) {
+      return;
+    }
+
+    if (projects.length > 0) {
+      handleProjectSelect(projects[0]);
+    }
+  }, [authUser, config, showOnboarding, projectsLoading, preferences.autoOpenLatestProject, projects, handleProjectSelect]);
+
   if (page === 'landing') {
-    return <LandingPage onStart={() => setPage('app')} />;
+    return (
+      <Suspense fallback={<LazySectionFallback label="Chargement de l accueil..." />}>
+        <LandingPage
+          onStart={() => setPage('auth')}
+          onLogin={() => setPage('auth')}
+          onDemo={() => setPage('app')}
+        />
+      </Suspense>
+    );
   }
 
-  // SANS CONFIG = Onboarding
-  if (!config) { // (pas de TopNavbar)
+  if (page === 'auth') {
+    return (
+      <Suspense fallback={<LazySectionFallback label="Chargement de la connexion..." />}>
+        <AuthPage
+          onBack={() => setPage('landing')}
+          onContinue={handleAuthContinue}
+          onGoogle={handleGoogleAuth}
+          googleClientId={googleClientId}
+          isSubmitting={authBusy}
+          errorMessage={authError}
+        />
+      </Suspense>
+    );
+  }
+
+  if (!config) {
+    if (authUser && !showOnboarding) {
+      return (
+        <div className="app-layout">
+          <div className="main-content" style={{ marginTop: 0 }}>
+            <div className="page-content">
+              <Suspense fallback={<LazySectionFallback label="Chargement de votre espace..." />}>
+                <WorkspaceHome
+                  user={authUser}
+                  projects={projects}
+                  loading={projectsLoading}
+                  showHints={preferences.showHints}
+                  onCreateAnalysis={handleCreateAnalysis}
+                  onProjectSelect={handleProjectSelect}
+                />
+              </Suspense>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="app-layout">
-        <div className="main-content" style={{marginTop: 0}}>
-          <div className="page-content">
-            <Onboarding onComplete={handleOnboardingComplete} />
+        <div className="main-content onboarding-main-content" style={{ marginTop: 0 }}>
+          <div className="page-content onboarding-page">
+            {authUser && showOnboarding && (
+              <div className="workspace-onboarding-head">
+                <button className="workspace-back-link" onClick={() => setShowOnboarding(false)}>
+                  Retour aux projets
+                </button>
+                <p>Nouvelle analyse pour {authUser.name || authUser.email}</p>
+              </div>
+            )}
+            <div className="onboarding-stage">
+              <Suspense fallback={<LazySectionFallback label="Chargement de l onboarding..." />}>
+                <Onboarding onComplete={handleOnboardingComplete} />
+              </Suspense>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // AVEC CONFIG = TopNavbar + Sidebar + Dashboard
   return (
     <div className="app-layout">
       <TopNavbar
@@ -229,10 +531,10 @@ export default function App() { // Navigation inter-pages globale
         onExport={handleExport}
         isLoading={isAnalyzing}
         isBackendOnline={isBackendOnline}
-        onReset={() => { setConfig(null); setData(null); setCompletedPrompts([]); setActiveTab('dashboard'); setPage('landing'); }}
+        onReset={resetWorkspace}
         activeTab={activeTab}
         onTabChange={handleTabChange}
-        exportSlot={<ExportButton brand={config.brand} />}
+        exportSlot={<ExportButton brand={config.brand} projectId={config.projectId} />}
       />
 
       <div className="app-body">
@@ -242,13 +544,11 @@ export default function App() { // Navigation inter-pages globale
           isBackendOnline={isBackendOnline}
           activeTab={activeTab}
           onTabChange={handleTabChange}
-          onReset={() => { setConfig(null); setData(null); setCompletedPrompts([]); setActiveTab('dashboard'); setPage('landing'); }}
+          onReset={resetWorkspace}
         />
 
         <div className="main-content">
           <div className="page-content">
-
-            {/* Progression temps réel (Sprint 2) */}
             {(isAnalyzing || (completedPrompts.length > 0 && !data)) && (
               <AnalysisProgress
                 brand={config.brand}
@@ -263,7 +563,7 @@ export default function App() { // Navigation inter-pages globale
             {isAnalyzing && !analysisProgress && (
               <div className="loading-state">
                 <div className="loader" />
-                <p>Connexion à {analysisModels[0] || 'qwen3.5'}…</p>
+                <p>Connexion a {analysisModels[0] || 'qwen3.5'}...</p>
               </div>
             )}
 
@@ -271,174 +571,85 @@ export default function App() { // Navigation inter-pages globale
               <div className="error-state"><p>❌ {error}</p></div>
             )}
 
-            {/* Dashboard Tab */}
             {activeTab === 'dashboard' && data && data.ranking && (
-              <>
-                <header className="page-header">
-                  <div className="ph-titles">
-                    <h1 className="ph-title">Dashboard <span className="text-gradient">Vue Globale</span></h1>
-                    <p className="ph-subtitle">Performances d'acquisition IA pour {config.brand} dans le secteur {config.sector}</p>
-                  </div>
-                </header>
-
-                <div className="llm-status-bar premium-card">
-                  <div className="lsb-title">Statut des Moteurs</div>
-                  <div className="lsb-models">
-                    <div className="lsb-model online"><span className="lsb-dot"></span> ChatGPT (GPT-4o)</div>
-                    <div className="lsb-model online"><span className="lsb-dot"></span> Claude (3.5 Sonnet)</div>
-                    <div className="lsb-model online"><span className="lsb-dot"></span> Gemini (1.5 Pro)</div>
-                    <div className="lsb-model online"><span className="lsb-dot"></span> Qwen (Max)</div>
-                  </div>
-                  <div className="lsb-time">Dernière MaJ: Il y a 2 minutes</div>
-                </div>
-
-                <div className="dashboard-section">
-                  <KpiCards data={data} brand={config.brand} />
-                </div>
-
-                <div className="dashboard-grid">
-                  <div className="grid-left">
-                    <RankingTable ranking={data.ranking} brand={config.brand} />
-                    <LLMBreakdown brand={config.brand} />
-                    <DuelCard ranking={data.ranking} brand={config.brand} />
-                    <div className="charts-row small">
-                      <SentimentChart ranking={data.ranking} brand={config.brand} />
-                      <MentionChart ranking={data.ranking} brand={config.brand} />
-                    </div>
-                    <RadarCompare ranking={data.ranking} brand={config.brand} />
-                    <CategoryHeatmap categoryData={data.category_data} brand={config.brand} ranking={data.ranking} />
-                    <InsightsPanel insights={data.insights} brand={config.brand} />
-                  </div>
-
-                  <div className="grid-right">
-                    <PromptComparator brand={config.brand} />
-                    <section className="chart-section premium-card">
-                      <div className="section-header">
-                        <h2 className="section-title">Évolution du Score et Share of Voice</h2>
-                      </div>
-                      <TrendChart data={trendHistory} brand={config.brand} />
-                    </section>
-                  </div>
-                </div>
-              </>
+              <Suspense fallback={<LazySectionFallback label="Chargement du dashboard..." />}>
+                <DashboardOverviewTab config={config} data={data} trendHistory={trendHistory} />
+              </Suspense>
             )}
 
-            {/* Prompts Tab (Sprint 3) */}
             {activeTab === 'prompts' && (
-              <PromptComparator brand={config.brand} />
+              <Suspense fallback={<LazySectionFallback label="Chargement des requetes..." />}>
+                <PromptComparator brand={config.brand} projectId={config.projectId} />
+              </Suspense>
             )}
 
-            {/* Benchmark Tab */}
             {activeTab === 'benchmark' && (
-              <Benchmark sector={config.sector} />
+              <Suspense fallback={<LazySectionFallback label="Chargement des benchmarks..." />}>
+                <Benchmark sector={config.sector} />
+              </Suspense>
             )}
 
-            {/* Missing Nav Tabs for Analysis Sections */}
             {activeTab === 'history' && (
-              <div className="dashboard-section">
-                <header className="page-header" style={{marginBottom: '24px'}}>
-                  <h1 className="ph-title"><span className="text-gradient">Historique & Tendances</span></h1>
-                  <p className="ph-subtitle">Suivez l'évolution de la visibilité de {config.brand} dans le temps.</p>
-                </header>
-                <div className="dashboard-grid">
-                  <section className="chart-section premium-card" style={{ width: '100%' }}>
-                    <div className="section-header">
-                      <h2 className="section-title">Share of Voice & Score ({config.brand})</h2>
-                    </div>
-                    <TrendChart data={trendHistory} brand={config.brand} />
-                  </section>
-                </div>
-              </div>
+              <Suspense fallback={<LazySectionFallback label="Chargement des tendances..." />}>
+                <HistoryTab config={config} trendHistory={trendHistory} />
+              </Suspense>
             )}
 
             {activeTab === 'keywords' && (
-              <div className="dashboard-section">
-                <header className="page-header" style={{marginBottom: '24px'}}>
-                  <h1 className="ph-title"><span className="text-gradient">Mots-clés & Pénétration Multi-critères</span></h1>
-                  <p className="ph-subtitle">Répartition par catégorie et mots-clés de l'occurrence de la marque.</p>
-                </header>
-                <div className="dashboard-grid">
-                  <div className="grid-left">
-                    <MentionChart ranking={data?.ranking} brand={config.brand} />
-                    <RadarCompare ranking={data?.ranking} brand={config.brand} />
-                  </div>
-                  <div className="grid-right">
-                    <CategoryHeatmap categoryData={data?.category_data} brand={config.brand} ranking={data?.ranking} />
-                  </div>
-                </div>
-              </div>
+              <Suspense fallback={<LazySectionFallback label="Chargement des intentions..." />}>
+                <KeywordsTab config={config} data={data} />
+              </Suspense>
             )}
 
             {activeTab === 'sentiment' && (
-              <div className="dashboard-section">
-                <header className="page-header" style={{marginBottom: '24px'}}>
-                  <h1 className="ph-title"><span className="text-gradient">Sentiment IA & Insights Qualitatifs</span></h1>
-                  <p className="ph-subtitle">Perception par les LLM et recommandations de posture.</p>
-                </header>
-                <div className="dashboard-grid">
-                  <div className="grid-left">
-                    <SentimentChart ranking={data?.ranking} brand={config.brand} />
-                    <InsightsPanel insights={data?.insights} brand={config.brand} />
-                  </div>
-                </div>
-              </div>
+              <Suspense fallback={<LazySectionFallback label="Chargement du sentiment..." />}>
+                <SentimentTab config={config} data={data} />
+              </Suspense>
             )}
 
             {activeTab === 'llm-status' && (
-              <div className="dashboard-section">
-                <header className="page-header" style={{marginBottom: '24px'}}>
-                  <h1 className="ph-title"><span className="text-gradient">Status des Moteurs & Performance Brute</span></h1>
-                  <p className="ph-subtitle">Analyse segmentée par LLM et connectivité.</p>
-                </header>
-                <div className="dashboard-grid">
-                  <div className="grid-left">
-                    <LLMBreakdown brand={config.brand} />
-                  </div>
-                </div>
-              </div>
+              <Suspense fallback={<LazySectionFallback label="Chargement des modeles..." />}>
+                <LLMStatusTab config={config} />
+              </Suspense>
             )}
 
             {activeTab === 'exports' && (
-              <div className="premium-card" style={{ padding: '24px' }}>
-                <h2 className="section-title" style={{ marginBottom: '16px' }}>Exports et Rapports</h2>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Générez des rapports synthétiques PDF ou exportez les données brutes JSON.</p>
-                <ExportButton brand={config.brand} />
-              </div>
+              <Suspense fallback={<LazySectionFallback label="Chargement des rapports..." />}>
+                <ExportsTab config={config} />
+              </Suspense>
             )}
 
             {activeTab === 'projects' && (
-              <ProjectsPanel onProjectSelect={(proj) => {
-                const safeParse = (str) => {
-                  if (!str) return [];
-                  if (Array.isArray(str)) return str;
-                  try {
-                    return JSON.parse(str);
-                  } catch (e) {
-                    if (typeof str === 'string') {
-                      return str.split(',').map(s => s.trim());
-                    }
-                    return [];
-                  }
-                };
-
-                const cfg = {
-                  brand: proj.brand,
-                  sector: proj.sector,
-                  competitors: safeParse(proj.competitors),
-                  prompts: safeParse(proj.prompts)
-                };
-                setConfig(cfg);
-                setActiveTab('dashboard');
-                // Use a small timeout to allow UI update before heavy fetch
-                setTimeout(() => loadDashboardData(cfg), 100);
-              }} />
+              <Suspense fallback={<LazySectionFallback label="Chargement des projets..." />}>
+                <ProjectsPanel
+                  projects={projects}
+                  loading={projectsLoading}
+                  onProjectSelect={handleProjectSelect}
+                  onCreateAnalysis={handleCreateAnalysis}
+                />
+              </Suspense>
             )}
 
-            {/* Alerts Tab (Sprint 3) */}
             {activeTab === 'alerts' && (
-              <AlertsPanel brand={config.brand} />
+              <Suspense fallback={<LazySectionFallback label="Chargement des alertes..." />}>
+                <AlertsPanel brand={config.brand} />
+              </Suspense>
             )}
 
+            {activeTab === 'account' && (
+              <Suspense fallback={<LazySectionFallback label="Chargement du compte..." />}>
+                <AccountPanel
+                  user={authUser}
+                  projects={projects}
+                  isBackendOnline={isBackendOnline}
+                  preferences={preferences}
+                  onPreferenceChange={handlePreferenceChange}
+                  onOpenProjects={() => setActiveTab('projects')}
+                  onCreateAnalysis={handleCreateAnalysis}
+                  onLogout={handleLogout}
+                />
+              </Suspense>
+            )}
           </div>
         </div>
       </div>

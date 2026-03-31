@@ -7,6 +7,7 @@ import re
 import unicodedata
 import json
 from typing import List, Dict, Tuple, Optional
+from utils.prompts import BRANDS
 
 
 class BrandAnalyzer:
@@ -16,7 +17,6 @@ class BrandAnalyzer:
         if brands:
             self.brands = brands
         else:
-            from prompts import BRANDS
             self.brands = BRANDS
 
     # ── Extraction ──────────────────────────────────────────────────────────

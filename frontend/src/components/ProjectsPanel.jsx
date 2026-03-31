@@ -1,107 +1,173 @@
-import React, { useState, useEffect } from 'react';
-import { FolderOpen, Settings, Play, Trash2, Clock, Globe } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ArrowUpRight,
+  Clock3,
+  FolderOpen,
+  Plus,
+  Radar,
+  Sparkles
+} from 'lucide-react';
+import { fetchProjects } from '../services/api';
+import PanelState from './PanelState';
 import './ProjectsPanel.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+function parseList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return typeof value === 'string' ? value.split(',').map((item) => item.trim()) : [];
+  }
+}
 
-export default function ProjectsPanel({ onProjectSelect }) {
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
+function freshnessLabel(dateValue) {
+  if (!dateValue) return { label: 'Jamais lance', tone: 'stale' };
+
+  const now = Date.now();
+  const timestamp = new Date(dateValue).getTime();
+  const diffHours = Math.max(0, (now - timestamp) / (1000 * 60 * 60));
+
+  if (diffHours < 24) return { label: 'Fraiche', tone: 'fresh' };
+  if (diffHours < 24 * 7) return { label: 'Recente', tone: 'recent' };
+  return { label: 'A relancer', tone: 'stale' };
+}
+
+export default function ProjectsPanel({
+  onProjectSelect,
+  projects: providedProjects,
+  loading: providedLoading,
+  title = 'Mes marques',
+  subtitle = 'Reprenez un projet, relancez un benchmark, ou ouvrez une marque en un clic.',
+  emptyTitle = 'Aucun projet trouve.',
+  emptyHint = 'Lancez une analyse pour creer un projet automatiquement.',
+  onCreateAnalysis
+}) {
+  const [internalProjects, setInternalProjects] = useState([]);
+  const [internalLoading, setInternalLoading] = useState(providedProjects ? false : true);
+  const useProvidedProjects = Array.isArray(providedProjects);
 
   useEffect(() => {
-    fetch(`${API_URL}/projects`)
-      .then(r => r.ok ? r.json() : [])
-      .then(data => {
-        setProjects(data);
-        setLoading(false);
+    if (useProvidedProjects) return;
+
+    fetchProjects()
+      .then((data) => {
+        setInternalProjects(data);
+        setInternalLoading(false);
       })
-      .catch((err) => {
-        console.error('Error fetching projects:', err);
-        setLoading(false);
+      .catch(() => {
+        setInternalLoading(false);
       });
-  }, []);
+  }, [useProvidedProjects]);
+
+  const projects = useProvidedProjects ? providedProjects : internalProjects;
+  const loading = useProvidedProjects ? Boolean(providedLoading) : internalLoading;
+
+  const normalizedProjects = useMemo(() => (
+    (projects || []).map((project) => {
+      const competitors = parseList(project.competitors);
+      const models = parseList(project.models);
+      const prompts = parseList(project.prompts);
+      return {
+        ...project,
+        competitors,
+        models,
+        prompts,
+        freshness: freshnessLabel(project.last_run)
+      };
+    })
+  ), [projects]);
 
   if (loading) {
     return (
-      <div className="pp-wrapper loading">
+      <div className="portfolio-shell loading">
         <div className="loader" />
-        <p>Chargement des projets...</p>
+        <p>Chargement des marques...</p>
+      </div>
+    );
+  }
+
+  if (normalizedProjects.length === 0) {
+    return (
+      <div className="portfolio-shell">
+        <PanelState
+          icon={FolderOpen}
+          title={emptyTitle}
+          description={emptyHint}
+          actions={onCreateAnalysis ? (
+            <button onClick={onCreateAnalysis}>
+              <Plus size={14} />
+              <span>Nouvelle analyse</span>
+            </button>
+          ) : null}
+        />
       </div>
     );
   }
 
   return (
-    <div className="pp-wrapper premium-card">
-      <div className="pp-header">
-        <div className="pp-title-block">
-          <FolderOpen size={24} className="pp-icon" />
-          <h2 className="pp-title">Mes Projets (Analyses)</h2>
+    <div className="portfolio-shell">
+      <header className="portfolio-header">
+        <div>
+          <span className="portfolio-kicker">Portfolio</span>
+          <h2>{title}</h2>
+          <p>{subtitle}</p>
         </div>
-        <p className="pp-subtitle">Gérez vos analyses précédentes et reprenez vos configurations.</p>
-      </div>
 
-      {projects.length === 0 ? (
-        <div className="pp-empty">
-          <div className="pp-empty-icon"><FolderOpen size={48} /></div>
-          <p>Aucun projet trouvé.</p>
-          <span>Lancez une analyse pour créer un projet automatiquement.</span>
-        </div>
-      ) : (
-        <div className="pp-grid">
-          {projects.map((p, idx) => {
-            const compList = (() => {
-              if (!p.competitors) return [];
-              if (Array.isArray(p.competitors)) return p.competitors;
-              try { return JSON.parse(p.competitors); } 
-              catch(e) { return typeof p.competitors === 'string' ? p.competitors.split(',') : []; }
-            })();
-            const llmList = (() => {
-              if (!p.llms_used) return [];
-              if (Array.isArray(p.llms_used)) return p.llms_used;
-              try { return JSON.parse(p.llms_used); } 
-              catch(e) { return typeof p.llms_used === 'string' ? p.llms_used.split(',') : []; }
-            })();
+        {onCreateAnalysis ? (
+          <button className="portfolio-create" onClick={onCreateAnalysis}>
+            <Plus size={16} />
+            Nouvelle analyse
+          </button>
+        ) : null}
+      </header>
 
-            return (
-            <div key={idx} className="pp-card">
-              <div className="pp-card-header">
-                <span className="pp-brand">{p.brand}</span>
-                <span className="pp-sector">{p.sector || 'Général'}</span>
+      <div className="portfolio-list">
+        {normalizedProjects.map((project, index) => (
+          <article key={project.id || index} className="portfolio-row">
+            <div className="portfolio-row-main">
+              <div className={`portfolio-freshness ${project.freshness.tone}`}>
+                <span className="pulse" />
+                {project.freshness.label}
               </div>
-              
-              <div className="pp-card-body">
-                <div className="pp-info-row">
-                  <Clock size={14} />
-                  <span>Dernière analyse : {new Date(p.last_updated).toLocaleDateString('fr-FR')}</span>
-                </div>
-                <div className="pp-info-row">
-                  <Globe size={14} />
-                  <span>{compList.length} concurrents</span>
-                </div>
-                {llmList.length > 0 && (
-                  <div className="pp-models">
-                    {llmList.map(m => (
-                      <span key={m} className="pp-model-badge">{m}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              
-              <div className="pp-card-footer">
-                <button className="pp-btn outline">
-                  <Settings size={14} />
-                  <span>Modifier</span>
-                </button>
-                <button className="pp-btn primary" onClick={() => onProjectSelect && onProjectSelect(p)}>
-                  <Play size={14} />
-                  <span>Ouvrir</span>
-                </button>
+
+              <div className="portfolio-brand-block">
+                <strong>{project.brand}</strong>
+                <span>{project.sector || 'General'} · {project.competitors.length} concurrent{project.competitors.length > 1 ? 's' : ''}</span>
               </div>
             </div>
-            );
-          })}
-        </div>
-      )}
+
+            <div className="portfolio-metrics">
+              <div className="portfolio-metric">
+                <Clock3 size={15} />
+                <span>{project.last_run ? new Date(project.last_run).toLocaleDateString('fr-FR') : 'Jamais'}</span>
+              </div>
+              <div className="portfolio-metric">
+                <Sparkles size={15} />
+                <span>{project.prompts.length} prompts</span>
+              </div>
+              <div className="portfolio-metric">
+                <Radar size={15} />
+                <span>{project.models.length || 1} modele{(project.models.length || 1) > 1 ? 's' : ''}</span>
+              </div>
+            </div>
+
+            <div className="portfolio-tags">
+              {project.models.slice(0, 3).map((model) => (
+                <span key={model} className="portfolio-tag">{model}</span>
+              ))}
+              {project.models.length > 3 ? (
+                <span className="portfolio-tag muted">+{project.models.length - 3}</span>
+              ) : null}
+            </div>
+
+            <button className="portfolio-open" onClick={() => onProjectSelect && onProjectSelect(project)}>
+              <span>Ouvrir</span>
+              <ArrowUpRight size={16} />
+            </button>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }

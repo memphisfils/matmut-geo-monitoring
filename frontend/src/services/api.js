@@ -4,6 +4,55 @@
  */
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+const DEBUG_API = import.meta.env.DEV && import.meta.env.VITE_DEBUG_API === 'true';
+
+const apiCache = {
+  session: null,
+  currentUser: null,
+  projects: null
+};
+
+function debugApi(...args) {
+  if (DEBUG_API) {
+    console.warn(...args);
+  }
+}
+
+function invalidateAuthCache() {
+  apiCache.session = null;
+  apiCache.currentUser = null;
+  apiCache.projects = null;
+}
+
+function invalidateSessionCache() {
+  apiCache.session = null;
+}
+
+function invalidateProjectsCache() {
+  apiCache.projects = null;
+}
+
+function apiFetch(url, options = {}) {
+  return fetch(url, {
+    credentials: 'include',
+    ...options,
+    headers: {
+      ...(options.headers || {})
+    }
+  });
+}
+
+function withQuery(path, params = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      query.set(key, value);
+    }
+  });
+  const suffix = query.toString();
+  return suffix ? `${path}?${suffix}` : path;
+}
 
 // ── seededRand (fix biais Sprint 1) ─────────────────────────────────────────
 
@@ -124,7 +173,7 @@ export async function* runAnalysisStream(options = {}) {
 
   // ── Mode démo simulé (backend absent) ────────────────────────────────────
   const tryReal = async function* () {
-    const response = await fetch(`${API_URL}/run-analysis/stream`, {
+    const response = await apiFetch(`${API_URL}/run-analysis/stream`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(options),
@@ -162,7 +211,7 @@ export async function* runAnalysisStream(options = {}) {
       yield* tryReal();
       return;
     } catch (err) {
-      console.warn('[STREAM] Fallback démo —', err.message);
+      debugApi('[STREAM] Fallback demo', err.message);
     }
   }
 
@@ -216,7 +265,10 @@ export async function* runAnalysisStream(options = {}) {
 
 export async function fetchMetrics(options = {}) {
   try {
-    const r = await fetch(`${API_URL}/metrics`);
+    const r = await apiFetch(withQuery(`${API_URL}/metrics`, {
+      brand: options.brand,
+      project_id: options.projectId
+    }));
     if (!r.ok) throw new Error('Backend not available');
     return await r.json();
   } catch {
@@ -226,7 +278,7 @@ export async function fetchMetrics(options = {}) {
 
 export async function runAnalysis(options = {}) {
   try {
-    const r = await fetch(`${API_URL}/run-analysis`, {
+    const r = await apiFetch(`${API_URL}/run-analysis`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(options)
@@ -237,9 +289,12 @@ export async function runAnalysis(options = {}) {
   }
 }
 
-export async function fetchExport() {
+export async function fetchExport(options = {}) {
   try {
-    const r = await fetch(`${API_URL}/export`);
+    const r = await apiFetch(withQuery(`${API_URL}/export`, {
+      brand: options.brand,
+      project_id: options.projectId
+    }));
     if (!r.ok) throw new Error();
     return await r.json();
   } catch {
@@ -251,14 +306,22 @@ export async function fetchExport() {
 
 export async function createBenchmark(brands = []) {
   try {
-    const r = await fetch(`${API_URL}/benchmark`, {
+    const r = await apiFetch(`${API_URL}/benchmark`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brands })
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Benchmark creation failed');
-    return data;
+    const benchmark = data.benchmark || data;
+    return {
+      status: data.status || 'success',
+      sector: benchmark.sector,
+      brands: benchmark.brands || brands,
+      products: benchmark.products || [],
+      prompts: benchmark.prompts || benchmark.seo_prompts || [],
+      all_brands: benchmark.all_brands || benchmark.brands || brands
+    };
   } catch (err) {
     return { status: 'error', error: err.message };
   }
@@ -269,7 +332,7 @@ export async function* runBenchmarkStream(options = {}) {
   const limit = Math.min(prompts.length || 6, 6);
 
   const tryReal = async function* () {
-    const response = await fetch(`${API_URL}/run-benchmark/stream`, {
+    const response = await apiFetch(`${API_URL}/run-benchmark/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, brands, prompts, limit }),
@@ -306,7 +369,7 @@ export async function* runBenchmarkStream(options = {}) {
       yield* tryReal();
       return;
     } catch (err) {
-      console.warn('[BENCHMARK] Fallback démo —', err.message);
+      debugApi('[BENCHMARK] Fallback demo', err.message);
     }
   }
 
@@ -334,10 +397,13 @@ export async function* runBenchmarkStream(options = {}) {
   };
 }
 
-export async function fetchHistory({ brand } = {}) {
+export async function fetchHistory({ brand, projectId } = {}) {
   try {
-    const url = brand ? `${API_URL}/history?brand=${encodeURIComponent(brand)}` : `${API_URL}/history`;
-    const r = await fetch(url);
+    const url = withQuery(`${API_URL}/history`, {
+      brand,
+      project_id: projectId
+    });
+    const r = await apiFetch(url);
     if (!r.ok) throw new Error();
     const data = await r.json();
     // Si la réponse est un array vide ou n'a pas de données réelles, retourner []
@@ -372,18 +438,122 @@ export function generateTrendHistory(ranking, brand, days = 30) {
 
 export async function checkStatus() {
   try {
-    const r = await fetch(`${API_URL}/status`);
+    const r = await apiFetch(`${API_URL}/status`);
     return await r.json();
   } catch {
     return { status: 'offline' };
   }
 }
 
-export async function fetchSession() {
-  try {
-    const r = await fetch(`${API_URL}/session`);
-    return await r.json();
-  } catch {
-    return { has_session: false };
+export async function fetchSession(options = {}) {
+  if (!options.force && apiCache.session) {
+    return apiCache.session;
   }
+  try {
+    const r = await apiFetch(`${API_URL}/session`);
+    const data = await r.json();
+    apiCache.session = data;
+    return data;
+  } catch {
+    const fallback = { has_session: false };
+    apiCache.session = fallback;
+    return fallback;
+  }
+}
+
+export async function fetchCurrentUser(options = {}) {
+  if (!options.force && apiCache.currentUser) {
+    return apiCache.currentUser;
+  }
+  try {
+    const r = await apiFetch(`${API_URL}/auth/me`);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    apiCache.currentUser = data;
+    return data;
+  } catch {
+    const fallback = { authenticated: false, user: null };
+    apiCache.currentUser = fallback;
+    return fallback;
+  }
+}
+
+export async function signupUser({ name, email, password }) {
+  const r = await apiFetch(`${API_URL}/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, email, password })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Signup failed');
+  invalidateAuthCache();
+  return data;
+}
+
+export async function loginUser({ email, password }) {
+  const r = await apiFetch(`${API_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Login failed');
+  invalidateAuthCache();
+  return data;
+}
+
+export async function loginWithGoogle(credential) {
+  const r = await apiFetch(`${API_URL}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credential })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Google login failed');
+  invalidateAuthCache();
+  return data;
+}
+
+export async function logoutUser() {
+  const r = await apiFetch(`${API_URL}/auth/logout`, {
+    method: 'POST'
+  });
+  invalidateAuthCache();
+  return r.ok ? r.json() : { authenticated: false };
+}
+
+export async function fetchProjects(options = {}) {
+  if (!options.force && apiCache.projects) {
+    return apiCache.projects;
+  }
+  try {
+    const r = await apiFetch(`${API_URL}/projects`);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    apiCache.projects = data;
+    return data;
+  } catch {
+    const fallback = [];
+    apiCache.projects = fallback;
+    return fallback;
+  }
+}
+
+export async function activateProject(projectId) {
+  const r = await apiFetch(`${API_URL}/projects/${projectId}/activate`, {
+    method: 'POST'
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Project activation failed');
+  invalidateSessionCache();
+  invalidateProjectsCache();
+  return data;
+}
+
+export function getGoogleClientId() {
+  return GOOGLE_CLIENT_ID;
+}
+
+export function clearApiCache() {
+  invalidateAuthCache();
 }

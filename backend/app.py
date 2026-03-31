@@ -6,19 +6,25 @@ Nouveautés :
   - GET  /api/health         → health check enrichi (version, uptime)
   - POST /api/run-analysis/stream → streaming SSE
 """
-from flask import Flask, jsonify, request, Response, stream_with_context
+from flask import Flask, jsonify, request, Response, stream_with_context, session
 from flask_cors import CORS
 from dotenv import load_dotenv
 import json
 import os
 import random
 import time
-from datetime import datetime
-from services import BrandAnalyzer
+from datetime import datetime, timedelta
+from werkzeug.security import generate_password_hash, check_password_hash
+from services import BrandAnalyzer, LLMClient
 
 load_dotenv()
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY') or os.getenv('SECRET_KEY') or 'geo-monitor-dev-secret'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = bool(os.getenv('RENDER') or os.getenv('FLASK_ENV') == 'production')
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
@@ -28,17 +34,113 @@ ALLOWED_ORIGINS = [
     "https://geo-monitoring.vercel.app",
     "https://geo-monitoring-frontend.onrender.com",
 ]
-CORS(app, resources={r"/*": {"origins": ALLOWED_ORIGINS}}, supports_credentials=False)
+CORS(app, resources={r"/*": {"origins": ALLOWED_ORIGINS}}, supports_credentials=True)
 
 from models import (init_db, save_analysis, get_history,
-                   generate_demo_history, upsert_project, get_all_projects)
+                   generate_demo_history, upsert_project, get_all_projects, get_project_by_id,
+                   create_user, get_user_by_id, get_user_by_email, get_user_by_google_sub,
+                   update_user_login, attach_google_identity)
 from alerts import send_alert, alert_rank_lost, alert_weekly_summary, send_slack_alert
 from utils import build_geo_prompt, GEO_SYSTEM_PROMPT, generate_benchmark_prompt
 init_db()
 
 DATA_DIR     = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
 RESULTS_FILE = os.path.join(DATA_DIR, 'results.json')
+RESULTS_SNAPSHOTS_DIR = os.path.join(DATA_DIR, 'results_by_brand')
 START_TIME   = datetime.now()
+scheduler = None
+
+
+def _normalize_email(value: str) -> str:
+    return (value or '').strip().lower()
+
+
+def _public_user(user: dict = None):
+    if not user:
+        return None
+    return {
+        'id': user.get('id'),
+        'name': user.get('name'),
+        'email': user.get('email'),
+        'auth_provider': user.get('auth_provider'),
+        'avatar_url': user.get('avatar_url'),
+        'created_at': user.get('created_at'),
+        'last_login_at': user.get('last_login_at')
+    }
+
+
+def _set_user_session(user: dict):
+    session.clear()
+    session.permanent = True
+    session['user_id'] = user.get('id')
+    session['email'] = user.get('email')
+    session['auth_provider'] = user.get('auth_provider')
+
+
+def _current_user():
+    user_id = session.get('user_id')
+    if not user_id:
+        return None
+    return get_user_by_id(user_id)
+
+
+def _require_auth():
+    user = _current_user()
+    if not user:
+        return None, (jsonify({'authenticated': False, 'error': 'Authentication required'}), 401)
+    return user, None
+
+
+def _latest_project_for_user(user_id: int):
+    projects = get_all_projects(user_id=user_id)
+    return projects[0] if projects else None
+
+
+def _resolve_results_for_request(requested_brand: str = None, user_id: int = None):
+    if requested_brand:
+        return _load_results(requested_brand, user_id=user_id)
+
+    if user_id is not None:
+        project = _project_from_request(user_id)
+        if project:
+            return _load_results(project.get('brand'), user_id=user_id)
+        return None
+
+    return _load_results()
+
+
+def _active_or_latest_project(user_id: int):
+    active_project_id = session.get('active_project_id')
+    if active_project_id:
+        project = get_project_by_id(active_project_id, user_id=user_id)
+        if project:
+            return project
+    return _latest_project_for_user(user_id)
+
+
+def _project_from_request(user_id: int):
+    project_id = request.args.get('project_id')
+    if project_id is None and request.view_args:
+        project_id = request.view_args.get('project_id')
+    if project_id:
+        try:
+            project = get_project_by_id(int(project_id), user_id=user_id)
+        except (TypeError, ValueError):
+            project = None
+        if project:
+            return project
+        return None
+    return _active_or_latest_project(user_id)
+
+
+def _scheduler_state():
+    role = os.getenv('SCHEDULER_ROLE', 'disabled')
+    running = bool(scheduler and getattr(scheduler, 'running', False))
+    return {
+        'role': role,
+        'running': running,
+        'configured': role != 'disabled'
+    }
 
 
 # ── Scheduler ─────────────────────────────────────────────────────────────────
@@ -122,22 +224,29 @@ def _scheduled_daily_alert():
 
 
 def _start_scheduler():
+    global scheduler
+
+    if scheduler and getattr(scheduler, 'running', False):
+        return scheduler
+
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         scheduler = BackgroundScheduler()
-        scheduler.add_job(_scheduled_analysis, 'interval', hours=6, id='auto_analysis')
+        scheduler.add_job(_scheduled_analysis, 'interval', hours=6, id='auto_analysis', replace_existing=True)
         scheduler.add_job(_scheduled_daily_alert, 'cron',
-                          hour=8, minute=0, id='daily_alert')
+                          hour=8, minute=0, id='daily_alert', replace_existing=True)
         scheduler.add_job(_scheduled_weekly_summary, 'cron',
-                          day_of_week='mon', hour=9, minute=0, id='weekly_summary')
+                          day_of_week='mon', hour=9, minute=0, id='weekly_summary', replace_existing=True)
         scheduler.start()
         print("[SCHEDULER] Actif — analyse 6h + alerte quotidienne 08h + résumé hebdo lundi 09h")
         return scheduler
     except ImportError:
         print("[SCHEDULER] apscheduler non installé")
+        scheduler = None
         return None
     except Exception as e:
         print(f"[SCHEDULER] Erreur : {e}")
+        scheduler = None
         return None
 
 
@@ -146,20 +255,58 @@ def _start_scheduler():
 def _ensure_data_dir():
     os.makedirs(DATA_DIR, exist_ok=True)
 
-def _load_results():
+def _ensure_results_snapshots_dir():
+    os.makedirs(RESULTS_SNAPSHOTS_DIR, exist_ok=True)
+
+def _slugify(value: str) -> str:
+    safe = ''.join(ch.lower() if ch.isalnum() else '-' for ch in (value or '').strip())
+    while '--' in safe:
+        safe = safe.replace('--', '-')
+    return safe.strip('-') or 'unknown'
+
+def _project_results_file(brand: str, user_id: int = None) -> str:
+    prefix = f"user-{user_id}--" if user_id is not None else ""
+    return os.path.join(RESULTS_SNAPSHOTS_DIR, f"{prefix}{_slugify(brand)}.json")
+
+def _load_json_file(path: str):
+    if not os.path.exists(path):
+        return None
+    with open(path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+def _load_results(brand: str = None, user_id: int = None):
     _ensure_data_dir()
-    if os.path.exists(RESULTS_FILE):
-        with open(RESULTS_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+    if brand:
+        _ensure_results_snapshots_dir()
+        snapshot_file = _project_results_file(brand, user_id=user_id)
+        data = _load_json_file(snapshot_file)
+        if data:
+            owner = f" user={user_id}" if user_id is not None else ""
+            print(f"[LOAD] snapshot {brand}{owner} lu : {data.get('total_prompts')} prompts, is_demo={data.get('is_demo')}")
+            return data
+        owner = f" user={user_id}" if user_id is not None else ""
+        print(f"[LOAD] snapshot {brand}{owner} introuvable")
+        return None
+
+    data = _load_json_file(RESULTS_FILE)
+    if data:
         print(f"[LOAD] results.json lu : {data.get('total_prompts')} prompts, is_demo={data.get('is_demo')}, brand={data.get('brand')}")
         return data
+
     print(f"[LOAD] results.json inexistant")
     return None
 
-def _save_results(data):
+def _save_results(data, user_id: int = None):
     _ensure_data_dir()
     with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+    if data.get('brand') and data.get('mode') != 'benchmark':
+        _ensure_results_snapshots_dir()
+        snapshot_file = _project_results_file(data['brand'], user_id=user_id)
+        with open(snapshot_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
     print(f"[SAVE] results.json écrit : {data.get('total_prompts')} prompts, is_demo={data.get('is_demo')}")
 
 def _brand_seed(b):
@@ -229,8 +376,54 @@ def _build_full_report_data(results, brand):
 
     return metrics, ranking, insights, prompt_stats, confidence_data, metadata
 
+def _build_metrics_payload(results):
+    brand = results.get('brand') or results.get('main_brand', 'Marque')
 
-# ── Demo data ─────────────────────────────────────────────────────────────────
+    if results.get('brands') and len(results.get('brands', [])) > 0:
+        all_brands = results.get('brands')
+        competitors = results.get('brands', [])[1:] if len(results.get('brands', [])) > 1 else []
+    elif results.get('mode') == 'benchmark':
+        competitors = results.get('competitors', [])
+        all_brands = [brand] + competitors
+    else:
+        competitors = results.get('competitors', [])
+        all_brands = [brand] + competitors if competitors else None
+
+    az = BrandAnalyzer(brands=all_brands)
+    all_analyses = [d['analysis'] for r in results['responses']
+                    for d in r['llm_analyses'].values()]
+    metrics = az.calculate_metrics(all_analyses)
+    ranking = az.generate_ranking(metrics)
+    insights = az.generate_insights(metrics, ranking, main_brand=brand)
+
+    cat_data = {}
+    for response in results['responses']:
+        cat = response.get('category', 'general')
+        cat_data.setdefault(cat, [])
+        for data in response['llm_analyses'].values():
+            cat_data[cat].append(data['analysis'])
+
+    category_data = {}
+    for cat, analyses in cat_data.items():
+        cm = az.calculate_metrics(analyses)
+        category_data[cat] = {b: cm[b]['mention_rate'] for b in cm}
+
+    return {
+        'metrics': metrics,
+        'ranking': ranking,
+        'insights': insights,
+        'category_data': category_data,
+        'metadata': {
+            'brand': brand,
+            'competitors': competitors,
+            'total_prompts': results['total_prompts'],
+            'total_analyses': len(all_analyses),
+            'timestamp': results['timestamp'],
+            'is_demo': results.get('is_demo', False),
+            'models_used': results.get('llms_used', ['qwen3.5'])
+        }
+    }
+
 
 def generate_demo_data(brand='Marque', competitors=None, prompts=None):
     if not competitors:
@@ -272,7 +465,6 @@ def generate_demo_data(brand='Marque', competitors=None, prompts=None):
 
 def _run_real_or_demo(brand, competitors, prompts, limit=6, use_parallel=True):
     try:
-        from llm_client import LLMClient
         llm_client = LLMClient()
         if not llm_client.clients:
             raise Exception("Pas de modèle disponible")
@@ -300,9 +492,9 @@ def _run_real_or_demo(brand, competitors, prompts, limit=6, use_parallel=True):
         return generate_demo_data(brand, competitors, prompts[:limit])
 
 
-def _save_and_alert(results, brand):
-    _save_results(results)
-    save_analysis(results)
+def _save_and_alert(results, brand, user_id: int = None, project_id: int = None):
+    _save_results(results, user_id=user_id)
+    save_analysis(results, user_id=user_id, project_id=project_id)
     try:
         all_analyses = [d['analysis'] for r in results['responses']
                         for d in r['llm_analyses'].values()]
@@ -338,13 +530,13 @@ def health():
     return jsonify({'status': 'ok', 'version': '2.4', 'sprint': 4,
                     'uptime': uptime_str, 'timestamp': datetime.now().isoformat(),
                     'features': {'pdf_export': weasyprint_ok, 'streaming': True,
-                                 'alerts': True, 'prompt_compare': True}})
+                                 'alerts': True, 'prompt_compare': True},
+                    'scheduler': _scheduler_state()})
 
 @app.route('/api/status', methods=['GET'])
 def status():
     llm_status = {}
     try:
-        from llm_client import LLMClient
         llm_status = LLMClient().get_active_models()
     except Exception as e:
         llm_status = {'error': str(e)}
@@ -352,24 +544,162 @@ def status():
                     'llm_status': llm_status,
                     'system_ready': bool(llm_status) and 'error' not in llm_status})
 
+
+@app.route('/api/auth/signup', methods=['POST'])
+def auth_signup():
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    email = _normalize_email(data.get('email'))
+    password = data.get('password') or ''
+
+    if not email or '@' not in email:
+        return jsonify({'error': 'Adresse email invalide'}), 400
+    if len(password) < 8:
+        return jsonify({'error': 'Le mot de passe doit contenir au moins 8 caracteres'}), 400
+    if get_user_by_email(email):
+        return jsonify({'error': 'Un compte existe deja pour cette adresse'}), 409
+
+    user = create_user(
+        name=name or email.split('@')[0],
+        email=email,
+        password_hash=generate_password_hash(password),
+        auth_provider='password'
+    )
+    _set_user_session(user)
+    return jsonify({'authenticated': True, 'user': _public_user(user)}), 201
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def auth_login():
+    data = request.get_json() or {}
+    email = _normalize_email(data.get('email'))
+    password = data.get('password') or ''
+
+    user = get_user_by_email(email)
+    if not user or not user.get('password_hash') or not check_password_hash(user['password_hash'], password):
+        return jsonify({'error': 'Identifiants invalides'}), 401
+
+    update_user_login(user['id'])
+    user = get_user_by_id(user['id'])
+    _set_user_session(user)
+    return jsonify({'authenticated': True, 'user': _public_user(user)})
+
+
+@app.route('/api/auth/google', methods=['POST'])
+def auth_google():
+    data = request.get_json() or {}
+    credential = data.get('credential') or data.get('id_token')
+    google_client_id = os.getenv('GOOGLE_CLIENT_ID') or os.getenv('VITE_GOOGLE_CLIENT_ID')
+
+    if not credential:
+        return jsonify({'error': 'Google credential manquante'}), 400
+    if not google_client_id:
+        return jsonify({'error': 'GOOGLE_CLIENT_ID non configure'}), 503
+
+    try:
+        from google.auth.transport import requests as google_requests
+        from google.oauth2 import id_token as google_id_token
+    except ImportError:
+        return jsonify({'error': 'google-auth non installe'}), 503
+
+    try:
+        id_info = google_id_token.verify_oauth2_token(
+            credential,
+            google_requests.Request(),
+            google_client_id
+        )
+    except Exception as exc:
+        return jsonify({'error': f'Token Google invalide: {exc}'}), 401
+
+    email = _normalize_email(id_info.get('email'))
+    if not email:
+        return jsonify({'error': 'Compte Google sans email exploitable'}), 400
+
+    google_sub = id_info.get('sub')
+    name = id_info.get('name') or email.split('@')[0]
+    avatar_url = id_info.get('picture')
+
+    user = get_user_by_google_sub(google_sub) or get_user_by_email(email)
+    if not user:
+        user = create_user(
+            name=name,
+            email=email,
+            google_sub=google_sub,
+            auth_provider='google',
+            avatar_url=avatar_url
+        )
+    elif user.get('google_sub') not in (None, google_sub):
+        return jsonify({'error': 'Ce compte est deja lie a une autre identite Google'}), 409
+    else:
+        user = attach_google_identity(user['id'], google_sub, avatar_url=avatar_url)
+
+    update_user_login(user['id'])
+    user = get_user_by_id(user['id'])
+    _set_user_session(user)
+    return jsonify({'authenticated': True, 'user': _public_user(user)})
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def auth_logout():
+    session.clear()
+    return jsonify({'authenticated': False})
+
+
+@app.route('/api/auth/me', methods=['GET'])
+def auth_me():
+    user = _current_user()
+    if not user:
+        return jsonify({'authenticated': False, 'user': None})
+    return jsonify({'authenticated': True, 'user': _public_user(user)})
+
 @app.route('/api/projects', methods=['GET'])
 def list_projects():
-    return jsonify(get_all_projects())
+    user = _current_user()
+    if not user:
+        return jsonify([])
+    return jsonify(get_all_projects(user_id=user['id']))
+
+
+@app.route('/api/projects/<int:project_id>/activate', methods=['POST'])
+def activate_project(project_id: int):
+    user, error_response = _require_auth()
+    if error_response:
+        return error_response
+
+    project = get_project_by_id(project_id, user_id=user['id'])
+    if not project:
+        return jsonify({'error': 'Projet introuvable'}), 404
+
+    session['active_project_id'] = project_id
+    results = _load_results(project.get('brand'), user_id=user['id'])
+    dashboard = _build_metrics_payload(results) if results else None
+
+    return jsonify({
+        'status': 'success',
+        'project': project,
+        'results': dashboard
+    })
 
 @app.route('/api/session', methods=['GET'])
 def get_session():
     """Retourne la dernière session (projet + résultats) pour auto-load."""
-    projects = get_all_projects()
-    if not projects:
-        return jsonify({'has_session': False})
-    
-    project = projects[0]
-    results = _load_results()
+    user = _current_user()
+    if not user:
+        return jsonify({'has_session': False, 'user': None})
+    project = _active_or_latest_project(user['id'])
+    if not project:
+        return jsonify({'has_session': False, 'user': _public_user(user)})
+
+    session['active_project_id'] = project.get('id')
+    results = _load_results(project.get('brand'), user_id=user['id'])
+    dashboard = _build_metrics_payload(results) if results else None
     
     return jsonify({
         'has_session': True,
+        'user': _public_user(user),
+        'active_project_id': project.get('id'),
         'project': project,
-        'results': results
+        'results': dashboard
     })
 
 @app.route('/api/generate-config', methods=['POST'])
@@ -384,7 +714,6 @@ def generate_config():
         return jsonify({'status': 'error', 'error': 'Marque et secteur requis'}), 400
 
     try:
-        from llm_client import LLMClient
         client = LLMClient()
         if not client.api_key or not client.clients:
             raise Exception("Pas de clé API")
@@ -463,7 +792,6 @@ def create_benchmark():
         }), 400
 
     try:
-        from llm_client import LLMClient
         client = LLMClient()
         if not client.api_key or not client.clients:
             raise Exception("Pas de clé API")
@@ -557,7 +885,6 @@ def run_benchmark_stream():
 
         if not use_demo and prompts:
             try:
-                from llm_client import LLMClient
                 llm_client = LLMClient()
                 active_models = llm_client.models if llm_client.clients else ['demo']
                 if not llm_client.clients:
@@ -685,7 +1012,7 @@ def run_benchmark_stream():
             'mode': 'benchmark'
         }
 
-        _save_results(results)
+        _save_results(results, user_id=user_id)
         save_analysis(results)
 
         yield _sse('complete', {
@@ -715,21 +1042,31 @@ def run_analysis():
     limit        = data.get('limit', min(len(prompts), 6) if prompts else 6)
     use_parallel = data.get('parallel', True)
     use_demo     = data.get('demo', False)
+    user         = _current_user()
+    user_id      = user['id'] if user else None
 
     if use_demo or not prompts:
         results = generate_demo_data(brand, competitors, prompts)
-        _save_results(results)
+        project_id = upsert_project(brand, data.get('sector', ''), competitors, prompts,
+                                    results.get('llms_used', ['qwen3.5']), user_id=user_id)
+        if user_id is not None:
+            session['active_project_id'] = project_id
+        _save_results(results, user_id=user_id)
+        save_analysis(results, user_id=user_id, project_id=project_id)
         return jsonify({'status': 'success', 'is_demo': True,
                         'timestamp': results['timestamp'],
                         'duration': round(time.time() - start, 2)})
 
     results = _run_real_or_demo(brand, competitors, prompts, limit, use_parallel)
-    _save_and_alert(results, brand)
+    project_id = None
     try:
-        upsert_project(brand, data.get('sector', ''), competitors, prompts,
-                       results.get('llms_used', ['qwen3.5']))
+        project_id = upsert_project(brand, data.get('sector', ''), competitors, prompts,
+                                    results.get('llms_used', ['qwen3.5']), user_id=user_id)
+        if user_id is not None and project_id is not None:
+            session['active_project_id'] = project_id
     except Exception as e:
         print(f"[PROJECT] {e}")
+    _save_and_alert(results, brand, user_id=user_id, project_id=project_id)
 
     return jsonify({'status': 'success', 'is_demo': results.get('is_demo', False),
                     'timestamp': results['timestamp'],
@@ -744,6 +1081,8 @@ def run_analysis_stream():
     limit        = data.get('limit', min(len(prompts), 6) if prompts else 6)
     use_demo     = data.get('demo', False)
     sector       = data.get('sector', '')
+    user         = _current_user()
+    user_id      = user['id'] if user else None
     
     # DEBUG : log des données reçues
     print(f"[STREAM] Reçu : brand={brand}, prompts={len(prompts)}, demo={use_demo}")
@@ -764,7 +1103,6 @@ def run_analysis_stream():
 
         if not use_demo and prompts:
             try:
-                from llm_client import LLMClient
                 llm_client    = LLMClient()
                 active_models = llm_client.models if llm_client.clients else ['demo']
                 if not llm_client.clients:
@@ -917,12 +1255,15 @@ def run_analysis_stream():
         results = {'timestamp': datetime.now().isoformat(), 'total_prompts': limit,
                    'llms_used': active_models, 'brand': brand,
                    'competitors': competitors, 'responses': responses, 'is_demo': is_demo}
-        _save_and_alert(results, brand)
+        project_id = None
         print(f"[STREAM] ✓ Sauvegarde terminée — {limit} prompts, is_demo={is_demo}")
         try:
-            upsert_project(brand, sector, competitors, prompts, active_models)
+            project_id = upsert_project(brand, sector, competitors, prompts, active_models, user_id=user_id)
+            if user_id is not None and project_id is not None:
+                session['active_project_id'] = project_id
         except Exception:
             pass
+        _save_and_alert(results, brand, user_id=user_id, project_id=project_id)
 
         yield _sse('complete', {'timestamp': results['timestamp'],
                                 'is_demo': is_demo, 'duration': round(time.time() - start, 2)})
@@ -934,68 +1275,52 @@ def run_analysis_stream():
 
 @app.route('/api/metrics', methods=['GET'])
 def get_metrics():
-    print(f"[METRICS] Appel de /api/metrics")
-    
-    # Essayer de charger results.json — s'il n'existe pas, attendre et réessayer
-    # Ça évite de générer des données démo pendant qu'un streaming est en cours
+    print('[METRICS] Appel de /api/metrics')
+    requested_brand = request.args.get('brand')
+    user = _current_user()
+    user_id = user['id'] if user else None
+
     results = None
-    for attempt in range(5):  # 5 tentatives × 2s = 10s max
-        results = _load_results()
+    if requested_brand:
+        results = _load_results(requested_brand, user_id=user_id)
         if results:
-            print(f"[METRICS] results.json trouvé après {attempt+1} tentative(s)")
-            break
-        print(f"[METRICS] results.json inexistant — attente 2s (tentative {attempt+1}/5)")
-        time.sleep(2)
-    
-    if not results:
-        print(f"[METRICS] results.json toujours vide → génération démo")
-        results = generate_demo_data()
-        _save_results(results)
-
-    brand       = results.get('brand') or results.get('main_brand', 'Marque')
-    # Support mode benchmark: brands est la liste complete
-    if results.get('brands') and len(results.get('brands', [])) > 0:
-        all_brands = results.get('brands')
-        competitors = results.get('brands', [])[1:] if len(results.get('brands', [])) > 1 else []
-    elif results.get('mode') == 'benchmark':
-        all_brands = [brand] + results.get('competitors', [])
-        competitors = results.get('competitors', [])
+            print(f'[METRICS] snapshot trouve pour {requested_brand}')
+    elif user_id is not None:
+        project = _project_from_request(user_id)
+        if project:
+            results = _load_results(project.get('brand'), user_id=user_id)
+            if results:
+                print(f"[METRICS] snapshot utilisateur trouve pour projet {project.get('id')}")
     else:
-        competitors = results.get('competitors', [])
-        all_brands = [brand] + competitors if competitors else None
-    az          = BrandAnalyzer(brands=all_brands)
-    all_analyses = [d['analysis'] for r in results['responses']
-                    for d in r['llm_analyses'].values()]
-    metrics  = az.calculate_metrics(all_analyses)
-    ranking  = az.generate_ranking(metrics)
-    insights = az.generate_insights(metrics, ranking, main_brand=brand)
+        # Legacy guest fallback: wait briefly for the global snapshot before generating demo data.
+        for attempt in range(5):
+            results = _load_results()
+            if results:
+                print(f'[METRICS] results.json trouve apres {attempt + 1} tentative(s)')
+                break
+            print(f'[METRICS] results.json inexistant, attente 2s (tentative {attempt + 1}/5)')
+            time.sleep(2)
 
-    cat_data: dict = {}
-    for response in results['responses']:
-        cat = response.get('category', 'general')
-        cat_data.setdefault(cat, [])
-        for d in response['llm_analyses'].values():
-            cat_data[cat].append(d['analysis'])
+    if not results:
+        if requested_brand:
+            return jsonify({'error': f'Aucune analyse trouvee pour {requested_brand}'}), 404
+        if user_id is not None:
+            return jsonify({'error': 'Aucune analyse trouvee pour cet utilisateur'}), 404
+        print('[METRICS] results.json toujours vide, generation demo')
+        results = generate_demo_data()
+        _save_results(results, user_id=user_id)
 
-    category_data = {}
-    for cat, analyses in cat_data.items():
-        cm = az.calculate_metrics(analyses)
-        category_data[cat] = {b: cm[b]['mention_rate'] for b in cm}
-
-    return jsonify({'metrics': metrics, 'ranking': ranking, 'insights': insights,
-                    'category_data': category_data,
-                    'metadata': {'brand': brand, 'competitors': competitors,
-                                 'total_prompts': results['total_prompts'],
-                                 'total_analyses': len(all_analyses),
-                                 'timestamp': results['timestamp'],
-                                 'is_demo': results.get('is_demo', False),
-                                 'models_used': results.get('llms_used', ['qwen3.5'])}})
+    return jsonify(_build_metrics_payload(results))
 
 @app.route('/api/metrics/by-model', methods=['GET'])
 def get_metrics_by_model():
-    results = _load_results()
+    requested_brand = request.args.get('brand')
+    user = _current_user()
+    user_id = user['id'] if user else None
+    results = _resolve_results_for_request(requested_brand, user_id=user_id)
     if not results:
-        return jsonify({'error': 'Aucune donnée — lancez une analyse'}), 404
+        target = f" pour {requested_brand}" if requested_brand else ''
+        return jsonify({'error': f'Aucune donnée{target} — lancez une analyse'}), 404
     brand       = results.get('brand') or results.get('main_brand', 'Marque')
     # Support mode benchmark
     if results.get('brands') and len(results.get('brands', [])) > 0:
@@ -1020,22 +1345,30 @@ def get_history_data():
     brand    = request.args.get('brand')
     model    = request.args.get('model')
     use_demo = request.args.get('demo', 'false').lower() == 'true'
+    user = _current_user()
+    user_id = user['id'] if user else None
+    project = _project_from_request(user_id) if user_id is not None else None
+    target_brand = brand or (project.get('brand') if project else None)
+    target_project_id = project.get('id') if project else None
     if use_demo:
-        results = _load_results()
-        b = results.get('brand', brand or 'Marque') if results else (brand or 'Marque')
+        results = _resolve_results_for_request(target_brand, user_id=user_id)
+        b = results.get('brand', target_brand or 'Marque') if results else (target_brand or 'Marque')
         c = results.get('competitors', []) if results else []
         return jsonify(generate_demo_history(b, c))
-    history = get_history(brand=brand, model=model)
+    history = get_history(brand=target_brand, model=model, user_id=user_id, project_id=target_project_id)
     if not history:
-        results = _load_results()
-        b = results.get('brand', brand or 'Marque') if results else (brand or 'Marque')
+        results = _resolve_results_for_request(target_brand, user_id=user_id)
+        b = results.get('brand', target_brand or 'Marque') if results else (target_brand or 'Marque')
         c = results.get('competitors', []) if results else []
         return jsonify(generate_demo_history(b, c))
     return jsonify(history)
 
 @app.route('/api/export', methods=['GET'])
 def export_json():
-    results = _load_results()
+    requested_brand = request.args.get('brand')
+    user = _current_user()
+    user_id = user['id'] if user else None
+    results = _resolve_results_for_request(requested_brand, user_id=user_id)
     if not results:
         return jsonify({'error': 'Aucune donnée'}), 404
     brand      = results.get('brand', 'Marque')
@@ -1051,7 +1384,10 @@ def export_json():
 
 @app.route('/api/prompts/compare', methods=['GET'])
 def compare_prompts():
-    results = _load_results()
+    requested_brand = request.args.get('brand')
+    user = _current_user()
+    user_id = user['id'] if user else None
+    results = _resolve_results_for_request(requested_brand, user_id=user_id)
     if not results:
         return jsonify({'error': 'Aucune donnée — lancez une analyse'}), 404
     brand       = results.get('brand', 'Marque')
@@ -1130,9 +1466,14 @@ def trigger_weekly():
 @app.route('/api/export/pdf', methods=['GET'])
 def export_pdf():
     fmt     = request.args.get('format', 'pdf')
-    results = _load_results()
+    requested_brand = request.args.get('brand')
+    user = _current_user()
+    user_id = user['id'] if user else None
+    results = _resolve_results_for_request(requested_brand, user_id=user_id)
 
     if not results:
+        if requested_brand:
+            return jsonify({'error': f'Aucune donnée pour {requested_brand}'}), 404
         results = generate_demo_data()
         _save_results(results)
 
@@ -1182,18 +1523,13 @@ def check_pdf_support():
             'install': 'pip install weasyprint --break-system-packages',
             'fallback': 'Le format HTML est disponible via ?format=html'
         })
-
-
-
-
 # ── Démarrage ─────────────────────────────────────────────────────────────────
-
-scheduler = None
 
 if __name__ == '__main__':
     port  = int(os.getenv('FLASK_PORT', 5000))
     debug = os.getenv('FLASK_DEBUG', 'False') == 'True'
     if not debug:
+        os.environ.setdefault('SCHEDULER_ROLE', 'local')
         scheduler = _start_scheduler()
     print(f"\n[INFO] GEO Monitor v2.4 — Sprint 4 — http://localhost:{port}")
     print(f"   GET /api/export/pdf       → Rapport PDF (WeasyPrint)")

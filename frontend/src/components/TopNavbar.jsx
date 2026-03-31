@@ -2,7 +2,7 @@ import React from 'react';
 import { RefreshCw, Download, Wifi, WifiOff, Target } from 'lucide-react';
 import './TopNavbar.css';
 
-export default function TopNavbar({ brand, onRefresh, onExport, isLoading, isBackendOnline, onReset, activeTab, onTabChange, exportSlot }) {
+export default function TopNavbar({ brand, onRefresh, onExport, isLoading, isBackendOnline, onReset, exportSlot }) {
   // Les onglets ont été déplacés exclusivement dans la Sidebar pour un design plus épuré
 
   return (
@@ -20,7 +20,7 @@ export default function TopNavbar({ brand, onRefresh, onExport, isLoading, isBac
         {onRefresh && (
           <button onClick={onRefresh} disabled={isLoading} className="nav-btn">
             <RefreshCw size={16} className={isLoading ? 'spin' : ''} />
-            <span>Refresh</span>
+            <span>Relancer</span>
           </button>
         )}
         
@@ -34,7 +34,7 @@ export default function TopNavbar({ brand, onRefresh, onExport, isLoading, isBac
         
         {onReset && (
           <button onClick={onReset} className="nav-btn nav-btn-reset">
-            <span>Reset</span>
+            <span>Changer de projet</span>
           </button>
         )}
       </div>

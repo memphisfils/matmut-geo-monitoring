@@ -168,7 +168,7 @@ export function RadarCompare({ ranking, brand }) {
                             domain={[0, 100]}
                             tick={{ fontSize: 9, fill: CHART_THEME.textColor }}
                         />
-                        {brands.map((b, i) => (
+                        {brands.map((b) => (
                             <Radar
                                 key={b.brand}
                                 name={b.brand}

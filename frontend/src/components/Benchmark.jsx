@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Crosshair, Plus, X, Loader2, Sparkles, Trophy, TrendingUp, Target } from 'lucide-react';
+import React, { useState } from 'react';
+import { Crosshair, Plus, X, Loader2, Sparkles, Trophy, TrendingUp, Target, WandSparkles } from 'lucide-react';
 import { createBenchmark, runBenchmarkStream, fetchMetrics } from '../services/api';
+import PanelState from './PanelState';
 import './Benchmark.css';
 
 const SECTOR_BRANDS = {
@@ -61,7 +62,7 @@ export default function Benchmark({ sector, onComplete }) {
       } else {
         setGenerated(data);
       }
-    } catch (err) {
+    } catch {
       setError('Erreur connexion backend');
     } finally {
       setIsGenerating(false);
@@ -79,7 +80,7 @@ export default function Benchmark({ sector, onComplete }) {
       for await (const event of runBenchmarkStream({
         name: generated.sector,
         brands,
-        prompts: generated.seo_prompts,
+        prompts: generated.prompts,
         demo: false
       })) {
         if (event.type === 'start') {
@@ -92,8 +93,7 @@ export default function Benchmark({ sector, onComplete }) {
         if (event.type === 'complete') {
           setProgress({ phase: 'complete', ...event });
           setIsRunning(false);
-          // Charger les résultats après un délai
-          setTimeout(() => loadResults(), 2000);
+          loadResults();
         }
         if (event.type === 'error') {
           setError(event.message || 'Erreur analyse');
@@ -191,7 +191,7 @@ export default function Benchmark({ sector, onComplete }) {
               <div className="config-info">
                 <span className="config-sector">{generated.sector}</span>
                 <span className="config-products">{generated.products?.length || 0} produits</span>
-                <span className="config-prompts">{generated.seo_prompts?.length || 0} prompts</span>
+                <span className="config-prompts">{generated.prompts?.length || 0} prompts</span>
               </div>
 
               {generated.products && (
@@ -205,15 +205,15 @@ export default function Benchmark({ sector, onComplete }) {
                 </div>
               )}
 
-              {generated.seo_prompts && (
+              {generated.prompts && (
                 <div className="prompts-preview">
                   <span className="prompts-label">Prompts:</span>
                   <ul>
-                    {generated.seo_prompts.slice(0, 3).map((p, i) => (
+                    {generated.prompts.slice(0, 3).map((p, i) => (
                       <li key={i}>{p}</li>
                     ))}
-                    {generated.seo_prompts.length > 3 && (
-                      <li className="more">+{generated.seo_prompts.length - 3} autres...</li>
+                    {generated.prompts.length > 3 && (
+                      <li className="more">+{generated.prompts.length - 3} autres...</li>
                     )}
                   </ul>
                 </div>
@@ -313,11 +313,21 @@ export default function Benchmark({ sector, onComplete }) {
 
           {/* État initial */}
           {!isRunning && !results && (
-            <div className="benchmark-empty">
-              <Crosshair size={48} />
-              <p>Sélectionnez des marques et lancez le benchmark pour voir les résultats comparatifs.</p>
-            </div>
+            <PanelState
+              icon={generated ? WandSparkles : Crosshair}
+              title={generated ? 'Configuration benchmark prete' : 'Aucun benchmark lance'}
+              description={generated
+                ? 'La configuration est generee. Lancez maintenant le benchmark pour produire un classement comparatif.'
+                : 'Selectionnez entre 2 et 6 marques pour preparer un benchmark comparatif et suivre les ecarts de visibilite.'
+              }
+              actions={generated ? (
+                <button onClick={handleRunBenchmark} disabled={isRunning}>
+                  Lancer le benchmark
+                </button>
+              ) : null}
+            />
           )}
+
         </div>
       </div>
     </div>

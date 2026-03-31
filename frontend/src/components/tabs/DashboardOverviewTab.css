@@ -1,0 +1,206 @@
+.overview-shell {
+  display: grid;
+  gap: 18px;
+}
+
+.overview-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  padding: 24px 26px;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at top right, rgba(115, 212, 255, 0.16), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(241, 247, 251, 0.94));
+  border: 1px solid rgba(145, 171, 191, 0.16);
+  box-shadow: 0 20px 44px rgba(31, 54, 72, 0.08);
+}
+
+.overview-kicker {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.46rem 0.82rem;
+  border-radius: 999px;
+  background: rgba(94, 188, 255, 0.12);
+  color: #0b698b;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.overview-copy h1 {
+  margin: 14px 0 12px;
+  color: #102435;
+  font-size: clamp(2rem, 3vw, 2.9rem);
+  line-height: 1.04;
+  letter-spacing: -0.05em;
+}
+
+.overview-copy p,
+.summary-panel p,
+.overview-card p,
+.strategy-card p {
+  margin: 0;
+  color: #5b7487;
+  line-height: 1.65;
+}
+
+.overview-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.summary-panel,
+.overview-card,
+.strategy-card,
+.overview-panel {
+  border-radius: 24px;
+  border: 1px solid rgba(145, 171, 191, 0.16);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 16px 30px rgba(34, 57, 76, 0.06);
+}
+
+.summary-panel {
+  padding: 18px;
+}
+
+.summary-panel.main {
+  background: linear-gradient(180deg, rgba(16, 36, 53, 0.96), rgba(28, 53, 76, 0.96));
+}
+
+.summary-panel.main .summary-label,
+.summary-panel.main strong,
+.summary-panel.main p {
+  color: #f4fbff;
+}
+
+.summary-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #6b8597;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.summary-panel strong,
+.overview-card strong {
+  display: block;
+  color: #102435;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.overview-card-grid,
+.overview-strategy-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.overview-card {
+  padding: 18px;
+}
+
+.overview-card.live {
+  background: linear-gradient(180deg, rgba(235, 249, 255, 0.94), rgba(255, 255, 255, 0.8));
+}
+
+.overview-card.good {
+  background: linear-gradient(180deg, rgba(233, 251, 244, 0.94), rgba(255, 255, 255, 0.8));
+}
+
+.overview-card.accent {
+  background: linear-gradient(180deg, rgba(241, 245, 255, 0.94), rgba(255, 255, 255, 0.8));
+}
+
+.overview-card-head,
+.strategy-head,
+.overview-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #0b698b;
+}
+
+.overview-card-head span,
+.overview-panel-head span {
+  color: #5a7285;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.overview-card strong {
+  font-size: 1.85rem;
+  letter-spacing: -0.05em;
+}
+
+.strategy-card {
+  padding: 18px;
+}
+
+.strategy-card.accent {
+  background: linear-gradient(180deg, rgba(235, 249, 255, 0.94), rgba(255, 255, 255, 0.8));
+}
+
+.overview-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.95fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.overview-main-left,
+.overview-main-right {
+  display: grid;
+  gap: 18px;
+}
+
+.overview-chart-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 18px;
+}
+
+.overview-panel {
+  padding: 18px;
+}
+
+.overview-panel-head {
+  justify-content: space-between;
+}
+
+.overview-panel-head h2 {
+  margin: 0;
+  color: #102435;
+  font-size: 1.02rem;
+}
+
+@media (max-width: 1180px) {
+  .overview-hero,
+  .overview-main-grid,
+  .overview-chart-row {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-card-grid,
+  .overview-strategy-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .overview-card-grid,
+  .overview-strategy-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-hero,
+  .overview-panel {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+}

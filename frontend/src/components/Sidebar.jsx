@@ -1,26 +1,26 @@
 import React from 'react';
 import {
-    BarChart3, Shield, TrendingUp, Download, RefreshCw,
-    Activity, Wifi, WifiOff, Target, MessageSquare, Bell,
-    FolderOpen, FileText, Clock, Search, Smile, Cpu, User, CreditCard, Key
+    BarChart3, Shield, Wifi, WifiOff, Target, MessageSquare, Bell,
+    FolderOpen, FileText, Clock, Search, Smile, Cpu, User
 } from 'lucide-react';
 import './Sidebar.css';
 
 export default function Sidebar({ isBackendOnline, brand, sector, onReset, activeTab, onTabChange }) {
     const navItems = [
-        { key: 'dashboard', icon: BarChart3, label: 'Dashboard' },
-        { key: 'benchmark', icon: Shield, label: 'Benchmark' },
-        { key: 'prompts', icon: MessageSquare, label: 'Prompts' },
+        { key: 'dashboard', icon: BarChart3, label: "Vue d'ensemble" },
+        { key: 'benchmark', icon: Shield, label: 'Benchmarks' },
+        { key: 'prompts', icon: MessageSquare, label: 'Requetes' },
         { key: 'alerts', icon: Bell, label: 'Alertes' },
-        { key: 'projects', icon: FolderOpen, label: 'Projets' },
-        { key: 'exports', icon: FileText, label: 'Exports' },
+        { key: 'projects', icon: FolderOpen, label: 'Mes marques' },
+        { key: 'exports', icon: FileText, label: 'Rapports' },
+        { key: 'account', icon: User, label: 'Compte' },
     ];
 
     const analysisItems = [
-        { key: 'history', icon: Clock, label: 'Historique' },
-        { key: 'keywords', icon: Search, label: 'Mots-clés' },
+        { key: 'history', icon: Clock, label: 'Tendances' },
+        { key: 'keywords', icon: Search, label: 'Intentions' },
         { key: 'sentiment', icon: Smile, label: 'Sentiment' },
-        { key: 'llm-status', icon: Cpu, label: 'LLM Status' },
+        { key: 'llm-status', icon: Cpu, label: 'LLM' },
     ];
 
     return (
@@ -74,7 +74,7 @@ export default function Sidebar({ isBackendOnline, brand, sector, onReset, activ
                 <div className="sidebar-version">v3.0.0 • GEO Monitor</div>
                 {onReset && (
                     <button onClick={onReset} className="btn-reset-brand">
-                        Changer de marque
+                        Retour aux projets
                     </button>
                 )}
             </div>

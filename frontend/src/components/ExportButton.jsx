@@ -6,25 +6,37 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 /**
  * Bouton d'export PDF/HTML — Sprint 4
  */
-export default function ExportButton({ brand }) {
+export default function ExportButton({ brand, projectId }) {
   const [pdfAvailable, setPdfAvailable] = useState(null);
   const [loading, setLoading]           = useState(false);
   const [open, setOpen]                 = useState(false);
   const [lastExport, setLastExport]     = useState(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/export/pdf/check`)
+    fetch(`${API_URL}/export/pdf/check`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setPdfAvailable(d.available))
       .catch(() => setPdfAvailable(false));
   }, []);
 
+  const exportParams = new URLSearchParams();
+  if (brand) exportParams.set('brand', brand);
+  if (projectId) exportParams.set('project_id', projectId);
+  const exportQuery = exportParams.toString();
+
   const handleExport = async (format = 'pdf') => {
     setLoading(true);
     setOpen(false);
     try {
-      const url = `${API_URL}/export/${format === 'json' ? '' : `pdf${format === 'html' ? '?format=html' : ''}`}`;
-      const resp = await fetch(url.endsWith('/') ? url.slice(0, -1) : url);
+      const basePath = format === 'json' ? `${API_URL}/export` : `${API_URL}/export/pdf`;
+      const params = new URLSearchParams();
+      if (format === 'html') params.set('format', 'html');
+      if (brand) params.set('brand', brand);
+      if (projectId) params.set('project_id', projectId);
+      const url = params.toString() ? `${basePath}?${params.toString()}` : basePath;
+      const resp = await fetch(url.endsWith('/') ? url.slice(0, -1) : url, {
+        credentials: 'include'
+      });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const blob     = await resp.blob();
@@ -50,7 +62,8 @@ export default function ExportButton({ brand }) {
     setLoading(true);
     setOpen(false);
     try {
-      const resp  = await fetch(`${API_URL}/export`);
+      const url = exportQuery ? `${API_URL}/export?${exportQuery}` : `${API_URL}/export`;
+      const resp  = await fetch(url, { credentials: 'include' });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data  = await resp.json();
       const blob  = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });

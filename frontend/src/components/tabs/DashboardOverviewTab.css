@@ -46,6 +46,25 @@
   line-height: 1.65;
 }
 
+.overview-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.overview-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(145, 171, 191, 0.16);
+  color: #355163;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .overview-summary {
   display: grid;
   gap: 12px;
@@ -59,6 +78,16 @@
   border: 1px solid rgba(145, 171, 191, 0.16);
   background: rgba(255, 255, 255, 0.78);
   box-shadow: 0 16px 30px rgba(34, 57, 76, 0.06);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.summary-panel:hover,
+.overview-card:hover,
+.strategy-card:hover,
+.overview-panel:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 36px rgba(34, 57, 76, 0.08);
+  border-color: rgba(84, 191, 255, 0.24);
 }
 
 .summary-panel {

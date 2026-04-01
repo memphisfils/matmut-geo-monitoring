@@ -78,6 +78,13 @@
   justify-content: flex-end;
 }
 
+.account-hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .account-chip {
   display: inline-flex;
   align-items: center;
@@ -89,6 +96,10 @@
   color: #1a3848;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(70, 101, 118, 0.12);
+}
+
+.account-chip.subtle {
+  color: #355163;
 }
 
 .account-chip.live {
@@ -129,6 +140,34 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #617784;
+}
+
+.account-highlight-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.account-highlight {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(239, 246, 251, 0.86);
+}
+
+.account-highlight span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #617784;
+}
+
+.account-highlight strong {
+  color: #10212b;
+  line-height: 1.4;
 }
 
 .account-stat-list,
@@ -237,6 +276,12 @@
   border-color: rgba(75, 163, 199, 0.35);
 }
 
+.account-action-card:focus-visible,
+.account-switch:focus-visible {
+  outline: 3px solid rgba(82, 189, 255, 0.34);
+  outline-offset: 3px;
+}
+
 .account-action-card strong {
   display: block;
   margin-bottom: 4px;
@@ -264,6 +309,10 @@
 @media (max-width: 1080px) {
   .account-grid,
   .account-actions-row {
+    grid-template-columns: 1fr;
+  }
+
+  .account-highlight-strip {
     grid-template-columns: 1fr;
   }
 }

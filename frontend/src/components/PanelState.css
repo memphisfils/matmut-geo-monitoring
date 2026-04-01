@@ -3,11 +3,20 @@
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 22px 24px;
-  border-radius: 22px;
-  border: 1px solid rgba(70, 101, 118, 0.12);
-  background: rgba(255, 255, 255, 0.74);
-  box-shadow: 0 18px 48px rgba(19, 56, 78, 0.07);
+  padding: 24px 26px;
+  border-radius: 24px;
+  border: 1px solid rgba(145, 171, 191, 0.16);
+  background:
+    radial-gradient(circle at top right, rgba(111, 214, 255, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(242, 248, 252, 0.92));
+  box-shadow: 0 20px 42px rgba(19, 56, 78, 0.07);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.panel-state:hover {
+  transform: translateY(-1px);
+  border-color: rgba(84, 191, 255, 0.24);
+  box-shadow: 0 24px 44px rgba(19, 56, 78, 0.09);
 }
 
 .panel-state.compact {
@@ -15,10 +24,10 @@
 }
 
 .panel-state-icon {
-  width: 46px;
-  height: 46px;
+  width: 50px;
+  height: 50px;
   flex-shrink: 0;
-  border-radius: 16px;
+  border-radius: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -33,14 +42,14 @@
 
 .panel-state-copy h3 {
   margin: 0 0 6px;
-  font-size: 1rem;
+  font-size: 1.02rem;
   color: #10212b;
 }
 
 .panel-state-copy p {
   margin: 0;
   color: #58717e;
-  line-height: 1.55;
+  line-height: 1.58;
 }
 
 .panel-state-actions {
@@ -51,19 +60,27 @@
 
 .panel-state-actions button,
 .panel-state-actions a {
+  min-height: 44px;
+  padding: 0 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   border: 0;
   border-radius: 999px;
-  padding: 0.85rem 1.1rem;
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: 0.84rem;
+  font-weight: 700;
   cursor: pointer;
   text-decoration: none;
-  color: #f4fbff;
-  background: linear-gradient(135deg, #4ba3c7, #1f6e95);
+  color: #072031;
+  background: linear-gradient(135deg, #8de7ff, #58bcff);
+  box-shadow: 0 18px 28px rgba(86, 188, 255, 0.18);
+}
+
+.panel-state-actions button:focus-visible,
+.panel-state-actions a:focus-visible {
+  outline: 3px solid rgba(82, 189, 255, 0.34);
+  outline-offset: 3px;
 }
 
 .panel-state.warning .panel-state-icon {

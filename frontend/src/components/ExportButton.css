@@ -1,101 +1,91 @@
-/* ExportButton — Arctic Professional Theme */
-
 .eb-wrapper {
   position: relative;
   display: inline-flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: 6px;
 }
 
-/* ── Main Button ── */
 .eb-main-btn {
-  display: flex;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(145, 171, 192, 0.22);
+  background: rgba(255, 255, 255, 0.76);
+  color: #1c3448;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
-  font-family: 'Outfit', sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  background: var(--bg-card);
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  border-radius: var(--radius);
   cursor: pointer;
-  transition: all var(--transition);
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
   white-space: nowrap;
 }
 
 .eb-main-btn:hover:not(:disabled) {
-  background: var(--accent);
-  color: var(--text-inverse);
-}
-
-.eb-main-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  transform: translateY(-1px);
+  border-color: rgba(88, 185, 255, 0.3);
+  background: rgba(240, 249, 255, 0.94);
 }
 
 .eb-main-btn.loading {
-  border-color: var(--border-strong);
-  color: var(--text-muted);
+  color: #6b8496;
 }
 
-.eb-icon    { font-size: 13px; }
-.eb-label   { flex: 1; }
-.eb-chevron { font-size: 8px; opacity: 0.6; }
-
-/* Spinner */
-.eb-spinner {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: eb-spin 0.7s linear infinite;
+.eb-chevron {
+  transition: transform 180ms ease;
 }
-@keyframes eb-spin { to { transform: rotate(360deg); } }
 
-/* ── Dropdown ── */
+.eb-chevron.open {
+  transform: rotate(180deg);
+}
+
+.eb-spin {
+  animation: eb-spin 900ms linear infinite;
+}
+
+@keyframes eb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .eb-dropdown {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   right: 0;
-  min-width: 280px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  z-index: 100;
-  box-shadow: var(--shadow-lg);
+  min-width: 320px;
+  padding: 10px;
+  border-radius: 22px;
+  background: rgba(250, 253, 255, 0.96);
+  border: 1px solid rgba(145, 171, 192, 0.18);
+  box-shadow: 0 24px 44px rgba(30, 54, 73, 0.12);
+  backdrop-filter: blur(20px);
+  z-index: 120;
 }
 
 .eb-option {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
-  padding: 12px 16px;
+  padding: 12px 12px;
+  border: 0;
+  border-radius: 16px;
   background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-secondary);
-  cursor: pointer;
   text-align: left;
-  transition: background var(--transition);
-  font-family: 'Outfit', sans-serif;
-}
-
-.eb-option:last-of-type {
-  border-bottom: none;
+  cursor: pointer;
+  transition: background 180ms ease;
 }
 
 .eb-option:hover:not(.disabled) {
-  background: var(--bg-hover);
+  background: rgba(111, 214, 255, 0.1);
 }
 
 .eb-option.primary:hover:not(.disabled) {
-  background: var(--accent-light);
+  background: rgba(94, 188, 255, 0.14);
 }
 
 .eb-option.disabled {
@@ -104,80 +94,96 @@
 }
 
 .eb-opt-icon {
-  font-size: 16px;
-  width: 24px;
-  text-align: center;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(18, 39, 58, 0.06);
+  color: #0b698b;
   flex-shrink: 0;
 }
 
 .eb-opt-body {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 2px;
 }
 
 .eb-opt-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
+  color: #102435;
+  font-size: 0.84rem;
+  font-weight: 700;
 }
 
 .eb-opt-desc {
-  font-size: 10px;
-  color: var(--text-muted);
-  line-height: 1.3;
-}
-
-.eb-opt-arrow {
-  font-size: 12px;
-  color: var(--text-muted);
-  flex-shrink: 0;
+  color: #6d8798;
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .eb-opt-badge {
-  font-size: 9px;
-  font-weight: 600;
-  padding: 2px 6px;
-  background: var(--danger-light);
-  color: var(--danger);
-  border: 1px solid var(--danger);
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  color: #b64b35;
+  background: rgba(255, 239, 234, 0.96);
+  font-size: 0.68rem;
+  font-weight: 700;
 }
 
-.eb-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 2px 0;
-}
-
-/* Install note */
 .eb-install-note {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 16px;
-  background: var(--accent-light);
-  border-top: 1px solid var(--border);
-  border-radius: 0 0 var(--radius) var(--radius);
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 248, 230, 0.76);
+  border: 1px solid rgba(234, 196, 110, 0.24);
+  display: grid;
+  gap: 4px;
 }
 
 .eb-install-note code {
-  font-size: 10px;
-  color: var(--accent);
-  font-weight: 600;
+  color: #9a6b19;
+  font-size: 0.76rem;
+  font-weight: 700;
 }
 
 .eb-install-note span {
-  font-size: 9px;
-  color: var(--text-muted);
+  color: #7b6a49;
+  font-size: 0.72rem;
 }
 
-/* Last export */
 .eb-last {
-  font-size: 9px;
-  color: var(--success);
-  letter-spacing: 0.02em;
-  text-align: right;
+  color: #5d7a8e;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.eb-feedback {
+  max-width: 280px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.eb-feedback.success {
+  color: #126c50;
+  background: rgba(230, 249, 239, 0.94);
+}
+
+.eb-feedback.error {
+  color: #ba5a44;
+  background: rgba(255, 240, 236, 0.94);
+}
+
+@media (max-width: 720px) {
+  .eb-dropdown {
+    min-width: 280px;
+    right: auto;
+    left: 0;
+  }
 }

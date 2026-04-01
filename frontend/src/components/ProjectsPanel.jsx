@@ -33,6 +33,12 @@ function freshnessLabel(dateValue) {
   return { label: 'A relancer', tone: 'stale' };
 }
 
+function portfolioAction(project) {
+  if (!project.last_run) return 'Nouveau projet a lancer';
+  if (!project.competitors.length) return 'Ajouter des concurrents pour fiabiliser le benchmark';
+  return 'Pret a reprendre';
+}
+
 export default function ProjectsPanel({
   onProjectSelect,
   projects: providedProjects,
@@ -134,6 +140,7 @@ export default function ProjectsPanel({
               <div className="portfolio-brand-block">
                 <strong>{project.brand}</strong>
                 <span>{project.sector || 'General'} · {project.competitors.length} concurrent{project.competitors.length > 1 ? 's' : ''}</span>
+                <small className="portfolio-action-note">{portfolioAction(project)}</small>
               </div>
             </div>
 

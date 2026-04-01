@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 import json
 import os
 import random
+import re
 import time
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -49,6 +50,13 @@ RESULTS_FILE = os.path.join(DATA_DIR, 'results.json')
 RESULTS_SNAPSHOTS_DIR = os.path.join(DATA_DIR, 'results_by_brand')
 START_TIME   = datetime.now()
 scheduler = None
+
+PROMPT_INTENT_RULES = [
+    ('comparaison', 'Comparaison', re.compile(r'(comparatif|compare|vs|alternative|alternatives|meilleur .* ou)', re.I)),
+    ('prix', 'Prix', re.compile(r'(prix|tarif|pas cher|cher|rapport qualite|budget)', re.I)),
+    ('reassurance', 'Reassurance', re.compile(r'(avis|fiable|confiance|service client|garantie|serieux)', re.I)),
+    ('decouverte', 'Decouverte', re.compile(r'(meilleur|top|quelle|quels|recommande|qui choisir)', re.I)),
+]
 
 
 def _normalize_email(value: str) -> str:
@@ -140,6 +148,218 @@ def _scheduler_state():
         'role': role,
         'running': running,
         'configured': role != 'disabled'
+    }
+
+
+def _normalize_prompt_text(value: str) -> str:
+    return re.sub(r'\s+', ' ', (value or '').strip())
+
+
+def _derive_prompt_intent(prompt: str):
+    for key, label, pattern in PROMPT_INTENT_RULES:
+        if pattern.search(prompt or ''):
+            return {'key': key, 'label': label}
+    return {'key': 'consideration', 'label': 'Consideration'}
+
+
+def _audit_single_prompt(prompt: str, brand: str, competitors=None, sector: str = None):
+    prompt = _normalize_prompt_text(prompt)
+    prompt_lower = prompt.lower()
+    competitors = competitors or []
+    sector = (sector or '').strip()
+    word_count = len([part for part in re.split(r'\s+', prompt) if part])
+    brand_present = bool(brand and brand.lower() in prompt_lower)
+    competitor_hits = [item for item in competitors if item and item.lower() in prompt_lower]
+    comparison_term = bool(re.search(r'(comparatif|compare|vs|alternative|alternatives|ou)', prompt_lower))
+    query_term = bool(re.search(r'(quel|quelle|quels|meilleur|top|avis|comparatif|pourquoi|comment)', prompt_lower))
+    sector_present = bool(sector and sector.lower() in prompt_lower)
+    intent = _derive_prompt_intent(prompt)
+
+    quality_score = 32
+    issues = []
+
+    if brand_present:
+        quality_score += 20
+    else:
+        issues.append('La marque n est pas nommee explicitement.')
+
+    if comparison_term:
+        quality_score += 18
+    else:
+        issues.append('Le prompt ne force pas une lecture comparative.')
+
+    if competitor_hits:
+        quality_score += min(18, len(competitor_hits) * 8)
+    elif competitors:
+        issues.append('Aucun concurrent du benchmark n apparait dans la formulation.')
+
+    if sector_present:
+        quality_score += 8
+
+    if query_term:
+        quality_score += 8
+    else:
+        issues.append('Le prompt est peu oriente decision ou recommandation.')
+
+    if 6 <= word_count <= 18:
+        quality_score += 10
+    elif word_count < 6:
+        quality_score -= 14
+        issues.append('Le prompt est trop court pour cadrer correctement la comparaison.')
+    else:
+        quality_score -= 8
+        issues.append('Le prompt est long et risque de diluer l intention.')
+
+    quality_score = max(0, min(100, quality_score))
+    if quality_score >= 75:
+        label = 'Fort'
+    elif quality_score >= 55:
+        label = 'Correct'
+    else:
+        label = 'Fragile'
+
+    return {
+        'prompt': prompt,
+        'intent': intent,
+        'brand_present': brand_present,
+        'competitor_hits': competitor_hits,
+        'competitor_coverage': round((len(competitor_hits) / len(competitors) * 100), 1) if competitors else 0,
+        'word_count': word_count,
+        'quality_score': quality_score,
+        'quality_label': label,
+        'issues': issues,
+        'query_term': query_term,
+        'comparison_term': comparison_term,
+        'sector_present': sector_present
+    }
+
+
+def _audit_prompt_collection(prompts, brand: str, competitors=None, sector: str = None):
+    audited = [_audit_single_prompt(prompt, brand, competitors=competitors, sector=sector) for prompt in (prompts or []) if _normalize_prompt_text(prompt)]
+    if not audited:
+        return {
+            'average_quality_score': 0,
+            'quality_distribution': {'Fort': 0, 'Correct': 0, 'Fragile': 0},
+            'weak_prompt_count': 0,
+            'top_intents': [],
+            'coverage_average': 0,
+            'prompts': []
+        }
+
+    distribution = {'Fort': 0, 'Correct': 0, 'Fragile': 0}
+    intent_counts = {}
+    for item in audited:
+        distribution[item['quality_label']] = distribution.get(item['quality_label'], 0) + 1
+        intent_label = item['intent']['label']
+        intent_counts[intent_label] = intent_counts.get(intent_label, 0) + 1
+
+    return {
+        'average_quality_score': round(sum(item['quality_score'] for item in audited) / len(audited), 1),
+        'quality_distribution': distribution,
+        'weak_prompt_count': sum(1 for item in audited if item['quality_label'] == 'Fragile'),
+        'top_intents': [
+            {'label': label, 'count': count}
+            for label, count in sorted(intent_counts.items(), key=lambda pair: pair[1], reverse=True)
+        ][:4],
+        'coverage_average': round(sum(item['competitor_coverage'] for item in audited) / len(audited), 1),
+        'prompts': audited
+    }
+
+
+def _repair_prompt_text(prompt: str, brand: str, competitors=None, sector: str = None):
+    repaired = _normalize_prompt_text(prompt)
+    if not repaired:
+        return repaired
+
+    competitors = [item for item in (competitors or []) if item]
+    audit = _audit_single_prompt(repaired, brand, competitors=competitors, sector=sector)
+
+    if audit['quality_label'] != 'Fragile':
+        return repaired
+
+    working = repaired.rstrip(' ?!.')
+    sector_suffix = f" en {sector.lower()}" if sector else ''
+    competitor = audit['competitor_hits'][0] if audit['competitor_hits'] else (competitors[0] if competitors else None)
+
+    if not audit['brand_present'] and brand:
+        working = f"{working} pour {brand}"
+
+    if not audit['sector_present'] and sector:
+        working = f"{working}{sector_suffix}"
+
+    if not audit['comparison_term'] and competitor:
+        working = f"Comparatif {working} vs {competitor}"
+    elif not audit['comparison_term'] and brand:
+        working = f"Meilleure option {working} pour {brand}"
+
+    if not audit['query_term']:
+        working = f"Quelle offre choisir : {working}"
+
+    return _normalize_prompt_text(f"{working} ?")
+
+
+def _stabilize_generated_config(config: dict, brand: str, sector: str = None):
+    next_config = dict(config or {})
+    competitors = list(next_config.get('suggested_competitors', []) or [])
+    repaired_count = 0
+    normalized_products = []
+
+    for product in next_config.get('products', []) or []:
+        product_copy = dict(product)
+        repaired_prompts = []
+        for prompt in product.get('prompts', []) or []:
+            normalized = _normalize_prompt_text(prompt)
+            if not normalized:
+                continue
+            repaired = _repair_prompt_text(normalized, brand, competitors=competitors, sector=sector)
+            if repaired != normalized:
+                repaired_count += 1
+            repaired_prompts.append(repaired)
+        product_copy['prompts'] = repaired_prompts
+        normalized_products.append(product_copy)
+
+    next_config['products'] = normalized_products
+    next_config['prompt_audit'] = _audit_prompt_collection(
+        [prompt for product in normalized_products for prompt in product.get('prompts', [])],
+        brand,
+        competitors=competitors,
+        sector=sector
+    )
+    return next_config, repaired_count
+
+
+def _prompt_model_breakdown(response: dict, brand: str):
+    per_model = []
+    positions = []
+    mention_flags = []
+
+    for model, data in (response.get('llm_analyses') or {}).items():
+        analysis = data.get('analysis', {})
+        position = analysis.get('positions', {}).get(brand)
+        mentioned = brand in analysis.get('brands_mentioned', [])
+        mention_flags.append(mentioned)
+        if position is not None:
+            positions.append(position)
+        per_model.append({
+            'model': model,
+            'brand_mentioned': mentioned,
+            'position': position,
+            'first_brand': analysis.get('first_brand')
+        })
+
+    total_models = len(per_model)
+    if total_models == 0:
+        return {'per_model': [], 'agreement_score': 0, 'position_spread': None, 'best_model': None}
+
+    majority = max(sum(1 for item in mention_flags if item), sum(1 for item in mention_flags if not item))
+    ranked_models = [item for item in per_model if item['position'] is not None]
+    ranked_models.sort(key=lambda item: item['position'])
+
+    return {
+        'per_model': per_model,
+        'agreement_score': round((majority / total_models) * 100, 1),
+        'position_spread': round(max(positions) - min(positions), 1) if len(positions) > 1 else 0,
+        'best_model': ranked_models[0]['model'] if ranked_models else None
     }
 
 
@@ -765,6 +985,17 @@ def generate_config():
         if len(config.get('suggested_competitors', [])) < 1:
             raise ValueError("Aucun concurrent")
 
+        config, repaired_count = _stabilize_generated_config(config, brand, sector=sector)
+        config['generation_notes'] = {
+            'source': 'llm',
+            'brand': brand,
+            'sector': sector,
+            'generated_at': datetime.now().isoformat(),
+            'products_count': len(config.get('products', [])),
+            'competitors_count': len(config.get('suggested_competitors', [])),
+            'repaired_prompts_count': repaired_count
+        }
+
         return jsonify({'status': 'success', 'config': config})
 
     except Exception as e:
@@ -1332,10 +1563,26 @@ def get_metrics_by_model():
     report = az.get_full_confidence_report(results['responses'], main_brand=brand)
     rankings_by_model = {model: az.generate_ranking(metrics)
                          for model, metrics in report['by_model'].items()}
+    mention_rates = {
+        model: metrics.get(brand, {}).get('mention_rate', 0)
+        for model, metrics in report['by_model'].items()
+    }
+    strongest_model = max(mention_rates, key=mention_rates.get) if mention_rates else None
+    weakest_model = min(mention_rates, key=mention_rates.get) if mention_rates else None
+    spread = (max(mention_rates.values()) - min(mention_rates.values())) if mention_rates else 0
+    main_brand_confidence = report['main_brand_confidence']
     return jsonify({'by_model': report['by_model'], 'rankings_by_model': rankings_by_model,
                     'confidence': report['confidence'],
-                    'main_brand_confidence': report['main_brand_confidence'],
+                    'main_brand_confidence': main_brand_confidence,
                     'models': list(report['by_model'].keys()), 'brand': brand,
+                    'summary': {
+                        'strongest_model': strongest_model,
+                        'weakest_model': weakest_model,
+                        'mention_spread': round(spread, 1),
+                        'agreement_score': main_brand_confidence.get('confidence'),
+                        'divergence_level': main_brand_confidence.get('divergence_level'),
+                        'model_count': len(report['by_model'])
+                    },
                     'metadata': {'timestamp': results['timestamp'],
                                  'is_demo': results.get('is_demo', False),
                                  'total_prompts': results['total_prompts']}})
@@ -1391,6 +1638,8 @@ def compare_prompts():
     if not results:
         return jsonify({'error': 'Aucune donnée — lancez une analyse'}), 404
     brand       = results.get('brand', 'Marque')
+    competitors = results.get('competitors', [])
+    sector = results.get('sector', '')
     prompt_stats = []
     for response in results['responses']:
         prompt = response.get('prompt', '')
@@ -1413,17 +1662,42 @@ def compare_prompts():
                 if b != brand:
                     comp_mentions[b] = comp_mentions.get(b, 0) + 1
         comps_list = [b for b, _ in sorted(comp_mentions.items(), key=lambda x: -x[1])[:3]]
+        prompt_audit = _audit_single_prompt(prompt, brand, competitors=competitors, sector=sector)
+        model_breakdown = _prompt_model_breakdown(response, brand)
         score = (mention_pct * 0.5 + (100 / avg_pos if avg_pos and avg_pos > 0 else 0) * 0.3 + top_of_mind * 0.2)
         prompt_stats.append({'prompt': prompt, 'mention_rate': mention_pct, 'avg_position': avg_pos,
                               'top_of_mind': top_of_mind, 'brand_mentioned': mentions > 0,
                               'brand_position': positions[0] if positions else None,
                               'competitors_mentioned': comps_list, 'models_count': total_models,
-                              'score': round(score, 1)})
+                              'score': round(score, 1),
+                              'intent': prompt_audit['intent'],
+                              'prompt_quality_score': prompt_audit['quality_score'],
+                              'prompt_quality_label': prompt_audit['quality_label'],
+                              'prompt_issues': prompt_audit['issues'],
+                              'competitor_coverage': prompt_audit['competitor_coverage'],
+                              'word_count': prompt_audit['word_count'],
+                              'agreement_score': model_breakdown['agreement_score'],
+                              'position_spread': model_breakdown['position_spread'],
+                              'best_model': model_breakdown['best_model'],
+                              'per_model': model_breakdown['per_model']})
     prompt_stats.sort(key=lambda x: -x['score'])
+    prompt_audit_summary = _audit_prompt_collection(
+        [item['prompt'] for item in prompt_stats],
+        brand,
+        competitors=competitors,
+        sector=sector
+    )
     return jsonify({'brand': brand, 'prompts': prompt_stats,
                     'best_prompt':  prompt_stats[0]['prompt']  if prompt_stats else None,
                     'worst_prompt': prompt_stats[-1]['prompt'] if prompt_stats else None,
                     'total_prompts': len(prompt_stats),
+                    'summary': {
+                        'average_quality_score': prompt_audit_summary['average_quality_score'],
+                        'quality_distribution': prompt_audit_summary['quality_distribution'],
+                        'weak_prompt_count': prompt_audit_summary['weak_prompt_count'],
+                        'top_intents': prompt_audit_summary['top_intents'],
+                        'coverage_average': prompt_audit_summary['coverage_average']
+                    },
                     'metadata': {'timestamp': results['timestamp'],
                                  'is_demo': results.get('is_demo', False),
                                  'models': results.get('llms_used', ['qwen3.5'])}})

@@ -1,32 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { ChevronDown, Code2, Download, FileCode2, FileText, Loader2 } from 'lucide-react';
 import './ExportButton.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-/**
- * Bouton d'export PDF/HTML — Sprint 4
- */
 export default function ExportButton({ brand, projectId }) {
   const [pdfAvailable, setPdfAvailable] = useState(null);
-  const [loading, setLoading]           = useState(false);
-  const [open, setOpen]                 = useState(false);
-  const [lastExport, setLastExport]     = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [lastExport, setLastExport] = useState(null);
+  const [feedback, setFeedback] = useState(null);
 
   useEffect(() => {
     fetch(`${API_URL}/export/pdf/check`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => setPdfAvailable(d.available))
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((payload) => setPdfAvailable(payload.available))
       .catch(() => setPdfAvailable(false));
   }, []);
 
-  const exportParams = new URLSearchParams();
-  if (brand) exportParams.set('brand', brand);
-  if (projectId) exportParams.set('project_id', projectId);
-  const exportQuery = exportParams.toString();
+  const handleBlobDownload = (blob, filename) => {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
 
   const handleExport = async (format = 'pdf') => {
     setLoading(true);
     setOpen(false);
+    setFeedback(null);
+
     try {
       const basePath = format === 'json' ? `${API_URL}/export` : `${API_URL}/export/pdf`;
       const params = new URLSearchParams();
@@ -34,50 +38,36 @@ export default function ExportButton({ brand, projectId }) {
       if (brand) params.set('brand', brand);
       if (projectId) params.set('project_id', projectId);
       const url = params.toString() ? `${basePath}?${params.toString()}` : basePath;
-      const resp = await fetch(url.endsWith('/') ? url.slice(0, -1) : url, {
-        credentials: 'include'
+
+      const response = await fetch(url, { credentials: 'include' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const ext = format === 'json' ? 'json' : format === 'html' ? 'html' : 'pdf';
+      const fileName = `geo-${(brand || 'rapport').toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.${ext}`;
+
+      if (format === 'json') {
+        const data = await response.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        handleBlobDownload(blob, fileName);
+      } else {
+        const blob = await response.blob();
+        handleBlobDownload(blob, fileName);
+      }
+
+      setLastExport({
+        format: ext.toUpperCase(),
+        time: new Date().toLocaleTimeString('fr-FR')
       });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-      const blob     = await resp.blob();
-      const date_str = new Date().toISOString().split('T')[0];
-      const ext      = format === 'json' ? 'json' : (format === 'html' ? 'html' : 'pdf');
-      const fname    = `geo-${(brand || 'rapport').toLowerCase().replace(/\s+/g, '-')}-${date_str}.${ext}`;
-
-      const link = document.createElement('a');
-      link.href  = URL.createObjectURL(blob);
-      link.download = fname;
-      link.click();
-      URL.revokeObjectURL(link.href);
-      setLastExport({ format: ext, name: fname, time: new Date().toLocaleTimeString('fr-FR') });
-    } catch (err) {
-      console.error('[EXPORT]', err);
-      alert(`Erreur lors de l'export : ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleJsonExport = async () => {
-    setLoading(true);
-    setOpen(false);
-    try {
-      const url = exportQuery ? `${API_URL}/export?${exportQuery}` : `${API_URL}/export`;
-      const resp  = await fetch(url, { credentials: 'include' });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data  = await resp.json();
-      const blob  = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const date_str = new Date().toISOString().split('T')[0];
-      const fname    = `geo-${(brand || 'export').toLowerCase().replace(/\s+/g, '-')}-${date_str}.json`;
-      const link     = document.createElement('a');
-      link.href      = URL.createObjectURL(blob);
-      link.download  = fname;
-      link.click();
-      URL.revokeObjectURL(link.href);
-      setLastExport({ format: 'json', name: fname, time: new Date().toLocaleTimeString('fr-FR') });
-    } catch (err) {
-      console.error('[EXPORT JSON]', err);
-      alert(`Erreur JSON : ${err.message}`);
+      setFeedback({
+        tone: 'success',
+        message: `${ext.toUpperCase()} exporte pour ${brand || 'le projet actif'}.`
+      });
+    } catch (error) {
+      console.error('[EXPORT]', error);
+      setFeedback({
+        tone: 'error',
+        message: `Export impossible: ${error.message}`
+      });
     } finally {
       setLoading(false);
     }
@@ -86,71 +76,58 @@ export default function ExportButton({ brand, projectId }) {
   return (
     <div className="eb-wrapper">
       <button
+        type="button"
         className={`eb-main-btn ${loading ? 'loading' : ''}`}
-        onClick={() => !loading && setOpen(o => !o)}
+        onClick={() => !loading && setOpen((current) => !current)}
         disabled={loading}
       >
-        {loading
-          ? <span className="eb-spinner" />
-          : <span className="eb-icon">↓</span>
-        }
-        <span className="eb-label">
-          {loading ? 'Génération…' : 'Exporter'}
-        </span>
-        {!loading && <span className="eb-chevron">{open ? '▲' : '▼'}</span>}
+        {loading ? <Loader2 size={14} className="eb-spin" /> : <Download size={14} />}
+        <span className="eb-label">{loading ? 'Generation...' : 'Exporter'}</span>
+        {!loading && <ChevronDown size={14} className={`eb-chevron ${open ? 'open' : ''}`} />}
       </button>
 
       {open && (
         <div className="eb-dropdown">
           <button
+            type="button"
             className={`eb-option ${!pdfAvailable ? 'disabled' : 'primary'}`}
             onClick={() => pdfAvailable && handleExport('pdf')}
             disabled={!pdfAvailable}
           >
-            <span className="eb-opt-icon">📄</span>
+            <span className="eb-opt-icon"><FileText size={16} /></span>
             <div className="eb-opt-body">
               <span className="eb-opt-label">Rapport PDF</span>
               <span className="eb-opt-desc">
                 {pdfAvailable === null
-                  ? 'Vérification…'
+                  ? 'Verification du moteur PDF...'
                   : pdfAvailable
-                    ? 'Rapport complet, mise en page professionnelle'
-                    : 'WeasyPrint requis — voir docs'
-                }
+                    ? 'Rapport executive et partageable'
+                    : 'Moteur PDF indisponible'}
               </span>
             </div>
-            {pdfAvailable && <span className="eb-opt-arrow">→</span>}
-            {pdfAvailable === false && <span className="eb-opt-badge">INDISPO</span>}
+            {pdfAvailable === false && <span className="eb-opt-badge">OFF</span>}
           </button>
 
-          <button className="eb-option" onClick={() => handleExport('html')}>
-            <span className="eb-opt-icon">🌐</span>
+          <button type="button" className="eb-option" onClick={() => handleExport('html')}>
+            <span className="eb-opt-icon"><FileCode2 size={16} /></span>
             <div className="eb-opt-body">
               <span className="eb-opt-label">Rapport HTML</span>
-              <span className="eb-opt-desc">
-                {pdfAvailable === false
-                  ? 'Fallback PDF — ouvrir dans le navigateur'
-                  : 'Version web du rapport PDF'}
-              </span>
+              <span className="eb-opt-desc">Version web du rapport, immediate a ouvrir</span>
             </div>
-            <span className="eb-opt-arrow">→</span>
           </button>
 
-          <div className="eb-divider" />
-
-          <button className="eb-option" onClick={handleJsonExport}>
-            <span className="eb-opt-icon">{ }</span>
+          <button type="button" className="eb-option" onClick={() => handleExport('json')}>
+            <span className="eb-opt-icon"><Code2 size={16} /></span>
             <div className="eb-opt-body">
-              <span className="eb-opt-label">Données JSON</span>
-              <span className="eb-opt-desc">Métriques brutes — pour intégration</span>
+              <span className="eb-opt-label">Donnees JSON</span>
+              <span className="eb-opt-desc">Export brut pour integration ou audit</span>
             </div>
-            <span className="eb-opt-arrow">→</span>
           </button>
 
           {pdfAvailable === false && (
             <div className="eb-install-note">
               <code>pip install weasyprint</code>
-              <span>pour activer le PDF natif</span>
+              <span>pour activer l'export PDF natif cote backend</span>
             </div>
           )}
         </div>
@@ -158,7 +135,13 @@ export default function ExportButton({ brand, projectId }) {
 
       {lastExport && !open && (
         <div className="eb-last">
-          ✓ {lastExport.format.toUpperCase()} · {lastExport.time}
+          {lastExport.format} · {lastExport.time}
+        </div>
+      )}
+
+      {feedback && !open && (
+        <div className={`eb-feedback ${feedback.tone}`}>
+          {feedback.message}
         </div>
       )}
     </div>

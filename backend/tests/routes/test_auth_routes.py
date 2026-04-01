@@ -39,6 +39,75 @@ def _signup(client, name, email, password='password123'):
     })
 
 
+def _make_multimodel_results(brand, competitors, prompts):
+    responses = []
+    models = ['model-alpha', 'model-beta']
+
+    for index, prompt in enumerate(prompts):
+        if index == 0:
+            llm_analyses = {
+                'model-alpha': {
+                    'response': 'alpha',
+                    'analysis': {
+                        'brands_mentioned': [brand, competitors[0]],
+                        'positions': {brand: 1, competitors[0]: 2},
+                        'first_brand': brand,
+                        'brand_mentioned': True,
+                        'brand_position': 1
+                    }
+                },
+                'model-beta': {
+                    'response': 'beta',
+                    'analysis': {
+                        'brands_mentioned': [competitors[0], brand],
+                        'positions': {competitors[0]: 1, brand: 2},
+                        'first_brand': competitors[0],
+                        'brand_mentioned': True,
+                        'brand_position': 2
+                    }
+                }
+            }
+        else:
+            llm_analyses = {
+                'model-alpha': {
+                    'response': 'alpha',
+                    'analysis': {
+                        'brands_mentioned': [competitors[0]],
+                        'positions': {competitors[0]: 1},
+                        'first_brand': competitors[0],
+                        'brand_mentioned': False,
+                        'brand_position': None
+                    }
+                },
+                'model-beta': {
+                    'response': 'beta',
+                    'analysis': {
+                        'brands_mentioned': [competitors[0], competitors[1]],
+                        'positions': {competitors[0]: 1, competitors[1]: 2},
+                        'first_brand': competitors[0],
+                        'brand_mentioned': False,
+                        'brand_position': None
+                    }
+                }
+            }
+
+        responses.append({
+            'category': 'general',
+            'prompt': prompt,
+            'llm_analyses': llm_analyses
+        })
+
+    return {
+        'timestamp': '2026-04-01T10:00:00',
+        'total_prompts': len(prompts),
+        'llms_used': models,
+        'brand': brand,
+        'competitors': competitors,
+        'responses': responses,
+        'is_demo': False
+    }
+
+
 def test_signup_sets_session_and_me(client):
     response = _signup(client, 'Alice', 'alice@example.com')
 
@@ -177,3 +246,76 @@ def test_active_project_drives_metrics_and_history(client):
     beta_metrics_payload = beta_metrics_response.get_json()
     assert beta_metrics_response.status_code == 200
     assert beta_metrics_payload['metadata']['brand'] == 'Brand Beta'
+
+
+def test_prompt_compare_exposes_quality_and_model_breakdown(client):
+    _signup(client, 'Alice', 'alice@example.com')
+    me_payload = client.get('/api/auth/me').get_json()
+    user_id = me_payload['user']['id']
+
+    results = _make_multimodel_results(
+        'Brand Prompt',
+        ['Competitor One', 'Competitor Two'],
+        ['Comparatif assurance Brand Prompt vs Competitor One', 'avis general assurance']
+    )
+    project_id = db_module.upsert_project(
+        'Brand Prompt', 'Assurance', ['Competitor One', 'Competitor Two'],
+        ['Comparatif assurance Brand Prompt vs Competitor One', 'avis general assurance'],
+        ['model-alpha', 'model-beta'], user_id=user_id
+    )
+    app_module._save_results(results, user_id=user_id)
+    db_module.save_analysis(results, user_id=user_id, project_id=project_id)
+
+    response = client.get('/api/prompts/compare')
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert 'summary' in payload
+    assert 'average_quality_score' in payload['summary']
+    assert payload['prompts']
+    first_prompt = payload['prompts'][0]
+    assert 'prompt_quality_score' in first_prompt
+    assert 'agreement_score' in first_prompt
+    assert 'intent' in first_prompt
+    assert 'per_model' in first_prompt
+
+
+def test_metrics_by_model_exposes_summary(client):
+    _signup(client, 'Alice', 'alice@example.com')
+    me_payload = client.get('/api/auth/me').get_json()
+    user_id = me_payload['user']['id']
+
+    results = _make_multimodel_results(
+        'Brand Multi',
+        ['Competitor One', 'Competitor Two'],
+        ['Comparatif assurance Brand Multi vs Competitor One', 'avis general assurance']
+    )
+    project_id = db_module.upsert_project(
+        'Brand Multi', 'Assurance', ['Competitor One', 'Competitor Two'],
+        ['Comparatif assurance Brand Multi vs Competitor One', 'avis general assurance'],
+        ['model-alpha', 'model-beta'], user_id=user_id
+    )
+    app_module._save_results(results, user_id=user_id)
+    db_module.save_analysis(results, user_id=user_id, project_id=project_id)
+
+    response = client.get('/api/metrics/by-model')
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert 'summary' in payload
+    assert payload['summary']['model_count'] == 2
+    assert 'strongest_model' in payload['summary']
+    assert 'mention_spread' in payload['summary']
+
+
+def test_repair_prompt_text_adds_brand_and_comparison():
+    repaired = app_module._repair_prompt_text(
+        'avis general assurance',
+        'Brand Repair',
+        competitors=['Competitor One'],
+        sector='Assurance'
+    )
+
+    assert 'Brand Repair' in repaired
+    assert 'Competitor One' in repaired
+    assert '?' in repaired

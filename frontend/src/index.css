@@ -136,6 +136,11 @@ a:hover {
   text-decoration: underline;
 }
 
+:focus-visible {
+  outline: 3px solid rgba(82, 189, 255, 0.34);
+  outline-offset: 3px;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

@@ -68,6 +68,57 @@ function uniquePrompts(products, selectedProducts) {
   return prompts;
 }
 
+function normalizePromptLine(value) {
+  return (value || '').trim().replace(/\s+/g, ' ');
+}
+
+function auditPromptLine(prompt, brand, sector, competitors = []) {
+  const normalized = normalizePromptLine(prompt);
+  const lower = normalized.toLowerCase();
+  const hasBrand = brand ? lower.includes(brand.toLowerCase()) : false;
+  const hasSector = sector ? lower.includes(sector.toLowerCase()) : false;
+  const hasComparison = /(comparatif|compare|vs|alternative|alternatives| ou )/i.test(normalized);
+  const hasQueryTerm = /(quel|quelle|quels|meilleur|top|avis|comparatif|pourquoi|comment)/i.test(normalized);
+  const competitorHits = competitors.filter((item) => item && lower.includes(item.toLowerCase()));
+  const wordCount = normalized ? normalized.split(/\s+/).length : 0;
+
+  let score = 32;
+  if (hasBrand) score += 20;
+  if (hasComparison) score += 18;
+  if (competitorHits.length > 0) score += Math.min(18, competitorHits.length * 8);
+  if (hasSector) score += 8;
+  if (hasQueryTerm) score += 8;
+  if (wordCount >= 6 && wordCount <= 18) score += 10;
+  if (wordCount < 6) score -= 14;
+  if (wordCount > 18) score -= 8;
+
+  return {
+    normalized,
+    score: Math.max(0, Math.min(100, score)),
+    hasBrand,
+    hasSector,
+    hasComparison,
+    hasQueryTerm,
+    competitorHits
+  };
+}
+
+function repairPromptLine(prompt, brand, sector, competitors = []) {
+  const audit = auditPromptLine(prompt, brand, sector, competitors);
+  if (audit.score >= 55) return audit.normalized;
+
+  let next = audit.normalized.replace(/[?!.\s]+$/, '');
+  const competitor = audit.competitorHits[0] || competitors[0] || '';
+
+  if (!audit.hasBrand && brand) next = `${next} pour ${brand}`;
+  if (!audit.hasSector && sector) next = `${next} en ${sector.toLowerCase()}`;
+  if (!audit.hasComparison && competitor) next = `Comparatif ${next} vs ${competitor}`;
+  else if (!audit.hasComparison && brand) next = `Meilleure option ${next} pour ${brand}`;
+  if (!audit.hasQueryTerm) next = `Quelle offre choisir : ${next}`;
+
+  return normalizePromptLine(`${next} ?`);
+}
+
 export default function Onboarding({ onComplete }) {
   const [step, setStep] = useState(1);
   const [brand, setBrand] = useState('');
@@ -96,6 +147,12 @@ export default function Onboarding({ onComplete }) {
       ? manualPrompts
       : uniquePrompts(generated?.products || [], selectedProducts);
   }, [generated, promptDraft, selectedProducts]);
+  const launchReadyPrompts = useMemo(() => {
+    return promptList.map((prompt) => repairPromptLine(prompt, brand, sector, competitors));
+  }, [promptList, brand, sector, competitors]);
+  const repairedPromptCount = useMemo(() => (
+    promptList.filter((prompt, index) => normalizePromptLine(prompt) !== launchReadyPrompts[index]).length
+  ), [promptList, launchReadyPrompts]);
 
   const selectedProductRecords = useMemo(() => {
     return (generated?.products || []).filter((product) => selectedProducts.includes(product.id));
@@ -175,9 +232,14 @@ export default function Onboarding({ onComplete }) {
       sector,
       products: selectedProductRecords,
       competitors,
-      prompts: promptList,
+      prompts: launchReadyPrompts,
       models: selectedModels,
-      setup_mode: generated?.suggested_competitors?.length ? 'assisted' : 'manual'
+      setup_mode: generated?.suggested_competitors?.length ? 'assisted' : 'manual',
+      prompt_audit: generated?.prompt_audit || null,
+      generation_notes: {
+        ...(generated?.generation_notes || {}),
+        repaired_before_launch: repairedPromptCount
+      }
     });
   };
 
@@ -192,7 +254,7 @@ export default function Onboarding({ onComplete }) {
           </div>
           <div>
             <span className="onboarding-brand-name">GEO Arctic</span>
-            <span className="onboarding-brand-meta">Project setup</span>
+            <span className="onboarding-brand-meta">Configuration projet</span>
           </div>
         </div>
 
@@ -454,6 +516,11 @@ export default function Onboarding({ onComplete }) {
                     <div className="prompt-helper">
                       Un prompt par ligne. Les doublons vides sont ignores au lancement.
                     </div>
+                    {repairedPromptCount > 0 && (
+                      <div className="prompt-helper emphasis">
+                        {repairedPromptCount} prompt{repairedPromptCount > 1 ? 's seront' : ' sera'} durci{repairedPromptCount > 1 ? 's' : ''} automatiquement au lancement pour renforcer la marque, la comparaison ou le contexte secteur.
+                      </div>
+                    )}
                   </div>
 
                   <div className="selection-panel">

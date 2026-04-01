@@ -47,6 +47,8 @@ export default function AccountPanel({
   onCreateAnalysis,
   onLogout
 }) {
+  const backendLabel = isBackendOnline ? 'API connectee' : 'Mode demo';
+
   return (
     <div className="account-panel">
       <section className="account-hero">
@@ -56,6 +58,11 @@ export default function AccountPanel({
             <span className="account-kicker">Compte</span>
             <h1>{user?.name || 'Utilisateur GEO'}</h1>
             <p>{user?.email}</p>
+            <div className="account-hero-chips">
+              <span className="account-chip subtle">{projects.length} projet{projects.length > 1 ? 's' : ''}</span>
+              <span className="account-chip subtle">{formatProvider(user?.auth_provider)}</span>
+              <span className={`account-chip subtle ${isBackendOnline ? 'live' : 'demo'}`}>{backendLabel}</span>
+            </div>
           </div>
         </div>
 
@@ -76,6 +83,16 @@ export default function AccountPanel({
           <div className="account-card-head">
             <h2>Session et acces</h2>
             <span>Etat courant</span>
+          </div>
+          <div className="account-highlight-strip">
+            <div className="account-highlight">
+              <span>Lecture rapide</span>
+              <strong>{projects.length > 0 ? 'Espace pret a reprendre' : 'Compte encore vide'}</strong>
+            </div>
+            <div className="account-highlight">
+              <span>Priorite</span>
+              <strong>{projects.length > 0 ? 'Suivre l evolution des projets existants' : 'Lancer une premiere analyse'}</strong>
+            </div>
           </div>
           <div className="account-stat-list">
             <div className="account-stat">

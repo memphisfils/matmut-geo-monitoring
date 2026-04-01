@@ -557,14 +557,8 @@ export default function App() {
                 isComplete={isAnalysisComplete}
                 isDemo={isDemo}
                 completedPrompts={completedPrompts}
+                promptTarget={config?.prompts?.length}
               />
-            )}
-
-            {isAnalyzing && !analysisProgress && (
-              <div className="loading-state">
-                <div className="loader" />
-                <p>Connexion a {analysisModels[0] || 'qwen3.5'}...</p>
-              </div>
             )}
 
             {error && !data && (

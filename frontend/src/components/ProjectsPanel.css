@@ -153,6 +153,14 @@
   color: #5b7487;
 }
 
+.portfolio-action-note {
+  display: block;
+  margin-top: 6px;
+  color: #0b698b;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .portfolio-metrics {
   display: flex;
   flex-wrap: wrap;

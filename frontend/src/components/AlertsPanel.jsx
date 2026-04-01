@@ -106,6 +106,11 @@ export default function AlertsPanel({ brand }) {
 
   const configuredCount = channels.filter((channel) => channel.configured).length;
   const scheduler = health?.scheduler || { role: 'disabled', running: false, configured: false };
+  const primaryAction = configuredCount === 0
+    ? 'Configurer un canal de sortie'
+    : scheduler.running
+      ? 'Surveiller la perte de rang'
+      : 'Relancer le moteur d alertes';
 
   const alertFeed = useMemo(() => {
     const feed = [];
@@ -212,6 +217,11 @@ export default function AlertsPanel({ brand }) {
           <span className="alerts-kicker">Alertes</span>
           <h2>Feed operationnel pour {brand}</h2>
           <p>Cette vue priorise ce qui sort du dashboard: moteur actif ou non, canaux disponibles, et regles qui peuvent vraiment notifier.</p>
+          <div className="alerts-chip-row">
+            <span className="alerts-chip">{configuredCount}/3 canaux actifs</span>
+            <span className="alerts-chip">{scheduler.running ? 'Scheduler en ligne' : 'Scheduler hors ligne'}</span>
+            <span className="alerts-chip">{primaryAction}</span>
+          </div>
         </div>
 
         <div className="alerts-hero-stats">
@@ -237,6 +247,30 @@ export default function AlertsPanel({ brand }) {
             </div>
           </article>
         </div>
+      </section>
+
+      <section className="alerts-summary-band">
+        <article className="alerts-summary-card accent">
+          <span>Action prioritaire</span>
+          <strong>{primaryAction}</strong>
+          <p>
+            {configuredCount === 0
+              ? 'Sans canal configure, les alertes restent visibles ici mais ne sortent pas du dashboard.'
+              : scheduler.running
+                ? `La chaine est exploitable pour ${brand}. Le prochain gain vient du reglage fin des regles.`
+                : 'Les regles sont pretes, mais aucune execution planifiee ne partira tant que le scheduler reste inactif.'}
+          </p>
+        </article>
+        <article className="alerts-summary-card">
+          <span>Canal le plus proche du pret</span>
+          <strong>{channels.find((channel) => channel.configured)?.label || 'Aucun canal actif'}</strong>
+          <p>{channels.find((channel) => channel.configured)?.detail || 'Activez Slack, Email ou Telegram pour tester la sortie reelle.'}</p>
+        </article>
+        <article className={`alerts-summary-card ${scheduler.running ? 'good' : 'risk'}`}>
+          <span>Etat moteur</span>
+          <strong>{scheduler.running ? `Mode ${scheduler.role}` : 'Moteur non lance'}</strong>
+          <p>{scheduler.running ? 'Les regles et le digest hebdomadaire peuvent tourner automatiquement.' : 'Le dashboard reste consultable, mais sans declenchement automatise.'}</p>
+        </article>
       </section>
 
       <section className="alerts-feed">

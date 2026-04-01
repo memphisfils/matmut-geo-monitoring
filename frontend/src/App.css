@@ -4,7 +4,9 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background-color: var(--bg-main);
+  background:
+    radial-gradient(circle at top left, rgba(130, 209, 255, 0.08), transparent 24%),
+    linear-gradient(180deg, #f3f8fc 0%, #edf4f9 100%);
   color: var(--text-primary);
   font-family: 'Outfit', sans-serif;
 }
@@ -13,28 +15,30 @@
   display: flex;
   flex: 1;
   width: 100%;
+  padding-top: calc(var(--navbar-height) + 10px);
 }
 
 .main-content {
   flex: 1;
-  background-color: var(--bg-main);
-  min-height: 100vh;
+  background: transparent;
+  min-height: calc(100vh - var(--navbar-height));
   display: flex;
   flex-direction: column;
-  min-width: 0; 
+  min-width: 0;
 }
 
 .page-content {
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
-  padding: 32px 40px;
+  padding: 28px 34px 40px;
 }
 
 .onboarding-main-content {
   background:
     radial-gradient(circle at top left, rgba(113, 208, 255, 0.1), transparent 28%),
     linear-gradient(180deg, rgba(239, 246, 252, 0.92), rgba(229, 238, 246, 0.92));
+  min-height: 100vh;
 }
 
 .onboarding-page {
@@ -44,12 +48,13 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  overflow: visible;
+  overflow-x: clip;
+  overflow-y: auto;
 }
 
 .onboarding-stage {
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 auto;
+  min-height: fit-content;
 }
 
 /* Page Header */
@@ -188,13 +193,13 @@
 .loading-state, .error-state {
   text-align: center;
   padding: 64px;
-  background: var(--bg-card);
-  border-radius: var(--radius);
-  border: 1px dashed var(--border-strong);
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 24px;
+  border: 1px dashed rgba(148, 171, 191, 0.34);
   margin-top: 32px;
   color: var(--text-muted);
   font-weight: 500;
-  box-shadow: var(--shadow);
+  box-shadow: 0 20px 40px rgba(32, 56, 74, 0.08);
 }
 
 .loader {
@@ -213,10 +218,11 @@
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
-  padding: 16px 18px;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.68);
+  padding: 18px 20px;
+  border: 1px solid rgba(144, 171, 192, 0.22);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 16px 32px rgba(34, 59, 79, 0.06);
 }
 
 .workspace-onboarding-head p {
@@ -259,6 +265,7 @@
   .charts-row, .charts-row.small { grid-template-columns: 1fr; }
   .lsb-models { flex-wrap: wrap; gap: 16px; }
   .page-content { padding: 24px 20px; }
-  .onboarding-page { min-height: auto; padding: 12px 0 20px; }
+  .app-body { padding-top: calc(var(--navbar-height) + 84px); }
+  .onboarding-page { min-height: auto; padding: 12px 12px 20px; }
   .workspace-onboarding-head { flex-direction: column; align-items: flex-start; }
 }

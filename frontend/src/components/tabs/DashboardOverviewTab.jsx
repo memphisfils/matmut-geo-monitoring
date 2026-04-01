@@ -60,9 +60,18 @@ export default function DashboardOverviewTab({ config, data, trendHistory }) {
   const delta7d = deltaLabel(brandHistory, Math.min(7, Math.max(1, brandHistory.length - 1)));
   const delta30d = deltaLabel(brandHistory, Math.min(30, Math.max(1, brandHistory.length - 1)));
   const intentLeader = strongestIntent(config.prompts);
+  const activeModels = data?.metadata?.models || config.models || [];
+  const promptCount = config.prompts?.length || 0;
   const freshness = data?.metadata?.timestamp
     ? new Date(data.metadata.timestamp).toLocaleString('fr-FR')
     : 'n/a';
+  const pressureGap = leader && currentMetrics.global_score
+    ? Math.abs((leader.score || 0) - currentMetrics.global_score).toFixed(1)
+    : 'n/a';
+  const nextAction = data?.insights?.recommendations?.[0]
+    || (currentRank === 1
+      ? 'Consolider les prompts a forte presence avant le prochain run.'
+      : 'Renforcer les prompts ou la marque reste citee mais pas dominante.');
 
   const overviewCards = [
     {
@@ -105,6 +114,12 @@ export default function DashboardOverviewTab({ config, data, trendHistory }) {
             La vue priorise ce qui bouge maintenant: score, rang, pression concurrente,
             fraicheur des donnees et composition reelle du moteur d analyse.
           </p>
+          <div className="overview-chip-row">
+            <span className="overview-chip">{config.sector || 'General'}</span>
+            <span className="overview-chip">{promptCount} prompts actifs</span>
+            <span className="overview-chip">{activeModels.length || 1} modele{(activeModels.length || 1) > 1 ? 's' : ''}</span>
+            <span className="overview-chip">{freshness === 'n/a' ? 'Fraicheur indisponible' : `Maj ${freshness}`}</span>
+          </div>
         </div>
 
         <div className="overview-summary">
@@ -121,13 +136,13 @@ export default function DashboardOverviewTab({ config, data, trendHistory }) {
           <article className="summary-panel">
             <span className="summary-label">Derniere analyse</span>
             <strong>{freshness}</strong>
-            <p>{(data?.metadata?.models || config.models || []).join(', ') || 'Modeles actifs backend'}</p>
+            <p>{activeModels.join(', ') || 'Modeles actifs backend'}</p>
           </article>
 
           <article className="summary-panel">
             <span className="summary-label">A faire</span>
             <strong>{runnerUp ? `Surveiller ${runnerUp.brand}` : 'Relancer le benchmark'}</strong>
-            <p>{data?.insights?.recommendations?.[0] || 'Verifier les prompts strategiques et les divergences inter-modeles.'}</p>
+            <p>{nextAction}</p>
           </article>
         </div>
       </header>
@@ -165,7 +180,7 @@ export default function DashboardOverviewTab({ config, data, trendHistory }) {
           </div>
           <p>
             {runnerUp
-              ? `${runnerUp.brand} est le concurrent immediat a surveiller dans ce projet.`
+              ? `${runnerUp.brand} est le concurrent immediat a surveiller dans ce projet. Ecart actuel ${pressureGap}.`
               : 'Le projet manque de benchmark concurrent exploitable.'}
           </p>
         </article>
@@ -175,7 +190,7 @@ export default function DashboardOverviewTab({ config, data, trendHistory }) {
             <BellRing size={16} />
             <strong>Prochaine action</strong>
           </div>
-          <p>{data?.insights?.recommendations?.[1] || 'Relancer une analyse avec les prompts les plus critiques.'}</p>
+          <p>{data?.insights?.recommendations?.[1] || nextAction}</p>
         </article>
 
         <article className="strategy-card accent">

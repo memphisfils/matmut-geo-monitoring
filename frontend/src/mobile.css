@@ -1,310 +1,226 @@
-/*
- * GEO Monitor — Sprint 4 — Responsive Mobile
- * Fichier autonome : importer dans index.css ou App.css
- * Breakpoints : 768px (tablet), 480px (mobile)
- */
+@media (max-width: 1024px) {
+  .page-content {
+    padding: 24px 20px 32px;
+  }
 
-/* ══════════════════════════════════════════════════════════
-   LAYOUT GÉNÉRAL
-══════════════════════════════════════════════════════════ */
+  .overview-hero,
+  .overview-main-grid,
+  .overview-chart-row,
+  .proof-topbar,
+  .proof-workspace,
+  .alerts-hero,
+  .alerts-grid,
+  .alerts-summary-band,
+  .account-grid,
+  .account-actions-row,
+  .workspace-hero,
+  .workspace-strip,
+  .benchmark-layout,
+  .benchmark-hero,
+  .benchmark-hero-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .top-navbar {
+    grid-template-columns: 1fr;
+    height: auto;
+    gap: 12px;
+    padding: 14px 18px;
+  }
+
+  .nav-status-shell {
+    display: none;
+  }
+
+  .nav-primary,
+  .nav-actions {
+    width: 100%;
+  }
+
+  .nav-primary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .nav-context {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .nav-actions {
+    flex-wrap: wrap;
+  }
+}
 
 @media (max-width: 768px) {
-
-  /* Main padding réduit */
-  .main-content {
-    padding: 12px;
-  }
-
-  .page-content {
-    gap: 12px;
-  }
-
-  /* ── TopNavbar ── */
-  .navbar {
-    padding: 10px 14px;
-    flex-wrap: wrap;
-    gap: 8px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-
-  .navbar-brand-name {
-    font-size: 14px;
-  }
-
-  .navbar-actions {
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .navbar-btn {
-    padding: 6px 10px;
-    font-size: 9px;
-  }
-
-  /* ── Onglets navigation (Sprint 3) ── */
-  .app-tabs {
-    padding: 0 12px;
-  }
-
-  .app-tab {
-    padding: 12px 14px;
-    font-size: 10px;
-  }
-
-  /* ── KPI cards — 2 colonnes ── */
-  .kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-
-  .kpi-card {
-    padding: 14px;
-  }
-
-  .kpi-val {
-    font-size: 22px;
-  }
-
-  /* ── Dashboard section ── */
-  .dashboard-section {
-    gap: 12px;
-  }
-
-  /* ── Ranking table — scroll horizontal ── */
-  .ranking-wrapper,
-  .llm-table-scroll,
-  .pc-list {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* ── Charts — pleine largeur ── */
-  .charts-row {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  /* ── Cards génériques ── */
-  .card,
-  .ap-wrapper,
-  .llm-wrapper,
-  .pc-wrapper,
-  .ap2-wrapper {
-    border-radius: 0;
-    margin-left: -12px;
-    margin-right: -12px;
-  }
-
-  /* ── AnalysisProgress log ── */
-  .ap-log {
-    max-height: 180px;
-  }
-
-  .ap-bar-label {
-    min-width: 60px;
-    font-size: 10px;
-  }
-
-  /* ── LLMBreakdown ── */
-  .llm-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-
-  .llm-legend {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  /* ── PromptComparator ── */
-  .pc-bw-row {
-    grid-template-columns: 1fr;
-  }
-
-  .pc-controls {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 10px 14px;
-  }
-
-  .pc-row-meta {
-    gap: 8px;
-  }
-
-  .pc-row-badge {
-    min-width: 44px;
-    padding: 0 10px;
-  }
-
-  /* ── AlertsPanel ── */
-  .ap2-channels {
-    grid-template-columns: 1fr;
-  }
-
-  .ap2-weekly-section {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  /* ── InsightsPanel ── */
-  .insights-grid {
-    grid-template-columns: 1fr;
-  }
-
-  /* ── DuelCard ── */
-  .duel-brands {
-    gap: 12px;
-  }
-
-  .duel-vs {
-    font-size: 16px;
-  }
-
-  /* ── Onboarding ── */
-  .onboarding-card {
-    padding: 24px 16px;
-    margin: 12px;
-  }
-
-  .onboarding-step-indicator {
-    gap: 6px;
-  }
-
-  .step-dot { width: 6px; height: 6px; }
-
-  /* ── ExportButton dropdown ── */
-  .eb-dropdown {
-    right: auto;
-    left: 0;
-    min-width: 260px;
-  }
-
-  /* ── Radar chart ── */
-  .recharts-wrapper {
-    max-width: 100% !important;
-  }
-}
-
-/* ══════════════════════════════════════════════════════════
-   MOBILE STRICT 480px
-══════════════════════════════════════════════════════════ */
-
-@media (max-width: 480px) {
-
-  .main-content { padding: 8px; }
-
-  /* KPI sur 1 colonne */
-  .kpi-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .kpi-val { font-size: 20px; }
-  .kpi-label { font-size: 7px; }
-
-  /* Navbar compacte */
-  .navbar-brand-name { font-size: 12px; letter-spacing: 1px; }
-  .navbar-logo { font-size: 10px; letter-spacing: 2px; }
-
-  .navbar-btn-text { display: none; }  /* masque le texte, garde l'icône */
-
-  /* Onglets scroll */
-  .app-tab {
-    padding: 10px 12px;
-    font-size: 9px;
-  }
-
-  /* AnalysisProgress compacte */
-  .ap-wrapper { padding: 16px 12px; }
-  .ap-current { padding: 8px; }
-  .ap-current-text { font-size: 11px; }
-
-  /* Log entries compacts */
-  .ap-log-row { padding: 6px 8px; font-size: 10px; }
-
-  /* PromptComparator compact */
-  .pc-row-body { padding: 10px; }
-  .pc-prompt-text { font-size: 11px; }
-
-  /* ExportButton inline compacte */
-  .eb-main-btn { padding: 7px 12px; font-size: 10px; }
-  .eb-dropdown { min-width: 220px; }
-
-  /* Cards full-bleed */
-  .card,
-  .ap-wrapper,
-  .llm-wrapper,
-  .pc-wrapper,
-  .ap2-wrapper {
-    margin-left: -8px;
-    margin-right: -8px;
-  }
-}
-
-/* ══════════════════════════════════════════════════════════
-   TOUCH IMPROVEMENTS
-══════════════════════════════════════════════════════════ */
-
-@media (hover: none) and (pointer: coarse) {
-  /* Agrandir les zones cliquables */
-  .pc-ctrl-btn {
-    padding: 8px 14px;
-    min-height: 36px;
-  }
-
-  .app-tab {
-    min-height: 44px;
-  }
-
-  .ap2-test-btn {
-    min-height: 40px;
-    padding: 8px 16px;
-  }
-
-  .eb-option {
-    padding: 14px 16px;
-    min-height: 52px;
-  }
-
-  .navbar-btn {
-    min-height: 38px;
-    padding: 8px 14px;
-  }
-
-  /* Supprimer les effets hover sur touch */
-  .ap-log-row:hover { background: transparent; }
-  .llm-table tr:hover { background: transparent; }
-  .pc-row:hover { background: transparent; }
-}
-
-/* ══════════════════════════════════════════════════════════
-   PRINT (bonus)
-══════════════════════════════════════════════════════════ */
-
-@media print {
-  .navbar,
-  .app-tabs,
-  .eb-wrapper,
-  .ap2-channel-footer,
-  .navbar-btn,
-  .pc-controls {
-    display: none !important;
-  }
-
   .main-content {
     padding: 0;
   }
 
-  .charts-row {
-    grid-template-columns: 1fr 1fr;
+  .page-content {
+    padding: 18px 14px 28px;
+    gap: 14px;
   }
 
-  body {
-    background: white;
-    color: black;
+  .onboarding-page {
+    padding: 10px 10px 20px;
+  }
+
+  .workspace-onboarding-head,
+  .overview-hero,
+  .overview-panel,
+  .alerts-hero,
+  .alerts-panel,
+  .proof-topbar,
+  .proof-controls,
+  .proof-list-item,
+  .focus-card,
+  .rail-card,
+  .benchmark-panel,
+  .results-panel,
+  .progress-panel,
+  .account-hero,
+  .account-card,
+  .portfolio-shell,
+  .workspace-hero,
+  .workspace-strip,
+  .ap-shell {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .overview-card-grid,
+  .overview-strategy-grid,
+  .proof-summary-band,
+  .alerts-summary-band,
+  .alerts-feed,
+  .focus-grid,
+  .ap-stats,
+  .account-highlight-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-topline,
+  .portfolio-header,
+  .account-hero,
+  .workspace-strip,
+  .ap-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .onboarding-shell {
+    grid-template-columns: 1fr;
+    border-radius: 24px;
+  }
+
+  .onboarding-aside {
+    position: static;
+    order: 2;
+    padding: 22px;
+  }
+
+  .onboarding-main {
+    order: 1;
+    padding: 18px;
+  }
+
+  .onboarding-progress-steps,
+  .step-grid.dual,
+  .step-grid.prompts {
+    grid-template-columns: 1fr;
+  }
+
+  .step-actions,
+  .step-actions.split {
+    justify-content: stretch;
+  }
+
+  .onboarding-btn-primary,
+  .onboarding-btn-secondary,
+  .workspace-primary,
+  .workspace-secondary,
+  .workspace-inline-link,
+  .portfolio-create,
+  .portfolio-open,
+  .nav-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .table-wrapper,
+  .llm-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .eb-wrapper {
+    align-items: stretch;
+  }
+
+  .eb-dropdown {
+    position: static;
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-content {
+    padding: 14px 10px 22px;
+  }
+
+  .top-navbar {
+    padding: 12px 12px;
+  }
+
+  .brand-name {
+    font-size: 0.82rem;
+  }
+
+  .brand-meta,
+  .nav-context span:last-child,
+  .sidebar-version {
+    font-size: 0.72rem;
+  }
+
+  .overview-copy h1,
+  .proof-title-block h2,
+  .alerts-hero h2,
+  .workspace-title,
+  .account-identity h1 {
+    font-size: clamp(1.6rem, 8vw, 2.2rem);
+  }
+
+  .ranking-table th,
+  .ranking-table td,
+  .llm-th-brand,
+  .llm-th-model,
+  .llm-th-conf,
+  .llm-td-brand,
+  .llm-td-val,
+  .llm-td-conf {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .ap-current-text,
+  .proof-list-copy strong,
+  .rule-card p,
+  .feed-item-copy p {
+    font-size: 0.92rem;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .nav-btn:hover,
+  .account-action-card:hover,
+  .portfolio-open:hover,
+  .portfolio-create:hover,
+  .proof-list-item:hover,
+  .alerts-panel:hover,
+  .feed-item:hover,
+  .chart-container:hover {
+    transform: none;
   }
 }

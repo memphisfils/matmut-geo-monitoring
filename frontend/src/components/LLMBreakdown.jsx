@@ -102,6 +102,9 @@ export default function LLMBreakdown({ brand, projectId }) {
     return avgRight - avgLeft;
   });
   const mainConf = confMap[brand] || {};
+  const averageMention = models.length
+    ? Math.round(models.reduce((sum, model) => sum + (byModel[model]?.[brand]?.mention_rate || 0), 0) / models.length)
+    : 0;
 
   return (
     <div className="llm-wrapper">
@@ -117,6 +120,24 @@ export default function LLMBreakdown({ brand, projectId }) {
             Modele unique - divergence N/A
           </div>
         )}
+      </div>
+
+      <div className="llm-summary-band">
+        <article className="llm-summary-card accent">
+          <span>Modeles actifs</span>
+          <strong>{models.length || 1}</strong>
+          <p>{models.join(', ') || 'qwen3.5'}</p>
+        </article>
+        <article className="llm-summary-card">
+          <span>Mention moyenne</span>
+          <strong>{averageMention}%</strong>
+          <p>Lecture consolidee sur la marque suivie.</p>
+        </article>
+        <article className={`llm-summary-card ${singleModel ? 'muted' : getConfLevel(mainConf.confidence || 0)}`}>
+          <span>Lecture divergence</span>
+          <strong>{singleModel ? 'N/A' : mainConf.divergence_level || 'n/a'}</strong>
+          <p>{singleModel ? 'Ajoutez un second modele pour ouvrir la comparaison inter-LLM.' : `Confiance ${mainConf.confidence ?? 'n/a'}%.`}</p>
+        </article>
       </div>
 
       {singleModel && (
@@ -177,9 +198,9 @@ export default function LLMBreakdown({ brand, projectId }) {
 
       {!singleModel && (
         <div className="llm-legend">
-          <span className="llm-leg high">■ Faible divergence - resultats fiables</span>
-          <span className="llm-leg mid">■ Divergence moderee</span>
-          <span className="llm-leg low">■ Forte divergence - interpreter avec precaution</span>
+          <span className="llm-leg high">Faible divergence - resultats fiables</span>
+          <span className="llm-leg mid">Divergence moderee</span>
+          <span className="llm-leg low">Forte divergence - interpreter avec precaution</span>
         </div>
       )}
     </div>

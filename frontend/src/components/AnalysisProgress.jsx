@@ -1,96 +1,129 @@
 import React from 'react';
-import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, Loader2, Sparkles, Target, XCircle } from 'lucide-react';
 import './AnalysisProgress.css';
 
-/**
- * Affiche la progression en temps réel de l'analyse SSE.
- *
- * Props:
- *   brand        : string
- *   progress     : { current, total, prompt, brands_found, brand_mentioned, brand_position }
- *   models       : string[]
- *   isComplete   : boolean
- *   isDemo       : boolean
- *   completedPrompts : array of progress events (historique)
- */
 export default function AnalysisProgress({
   brand,
   progress,
   models = [],
   isComplete = false,
   isDemo = false,
-  completedPrompts = []
+  completedPrompts = [],
+  promptTarget = 0
 }) {
-  const pct = progress?.total > 0
-    ? Math.round((progress.current / progress.total) * 100)
-    : 0;
+  const totalPrompts = progress?.total || promptTarget || completedPrompts.length || 0;
+  const currentPrompt = progress?.current || completedPrompts.length || 0;
+  const pct = totalPrompts > 0 ? Math.round((currentPrompt / totalPrompts) * 100) : 0;
+  const mentionCount = completedPrompts.filter((item) => item.brand_mentioned).length;
+  const currentText = progress?.prompt || 'Preparation du run, connexion au moteur et chargement des prompts.';
 
   return (
-    <div className="ap-wrapper">
-
-      {/* Header */}
-      <div className="ap-header">
-        <div className="ap-title-row">
-          {isComplete
-            ? <CheckCircle size={18} className="ap-icon-done" />
-            : <Loader2 size={18} className="ap-icon-spin" />
-          }
-          <span className="ap-title">
-            {isComplete ? 'Analyse terminée' : `Analyse de ${brand} en cours…`}
-          </span>
-          {isDemo && <span className="ap-badge-demo">DÉMO</span>}
+    <section className="ap-shell">
+      <div className="ap-hero">
+        <div className="ap-hero-copy">
+          <span className="ap-kicker">{isComplete ? 'Run termine' : 'Analyse GEO en cours'}</span>
+          <h2>{brand}</h2>
+          <p>
+            {isComplete
+              ? 'Le run est termine. Les resultats consolides sont prets dans le dashboard.'
+              : 'Le moteur evalue les prompts, compare les modeles et construit le classement actif.'}
+          </p>
         </div>
 
-        <div className="ap-models">
-          {models.map(m => (
-            <span key={m} className="ap-model-chip">{m}</span>
-          ))}
+        <div className="ap-state">
+          <div className={`ap-state-icon ${isComplete ? 'done' : 'live'}`}>
+            {isComplete ? <CheckCircle size={20} /> : <Loader2 size={20} className="ap-icon-spin" />}
+          </div>
+          <div>
+            <strong>{isComplete ? 'Analyse finalisee' : 'Moteur en execution'}</strong>
+            <span>{isDemo ? 'Mode demo' : 'Mode live'}</span>
+          </div>
         </div>
       </div>
 
-      {/* Barre de progression */}
-      <div className="ap-bar-wrapper">
+      <div className="ap-stats">
+        <div className="ap-stat-card">
+          <span>Prompts</span>
+          <strong>{currentPrompt} / {totalPrompts || '?'}</strong>
+        </div>
+        <div className="ap-stat-card">
+          <span>Modeles</span>
+          <strong>{models.length || 1}</strong>
+        </div>
+        <div className="ap-stat-card">
+          <span>Mentions detectees</span>
+          <strong>{mentionCount}</strong>
+        </div>
+      </div>
+
+      <div className="ap-bar-block">
+        <div className="ap-bar-head">
+          <span>Progression du run</span>
+          <strong>{pct}%</strong>
+        </div>
         <div className="ap-bar-track">
-          <div
-            className={`ap-bar-fill ${isComplete ? 'complete' : ''}`}
-            style={{ width: `${pct}%` }}
-          />
+          <div className={`ap-bar-fill ${isComplete ? 'complete' : ''}`} style={{ width: `${pct}%` }} />
         </div>
-        <span className="ap-bar-label">
-          {progress?.current ?? 0} / {progress?.total ?? '?'} prompts
-        </span>
       </div>
 
-      {/* Prompt en cours */}
-      {progress && !isComplete && (
+      <div className="ap-worksurface">
         <div className="ap-current">
-          <span className="ap-current-label">PROMPT EN COURS</span>
-          <span className="ap-current-text">{progress.prompt}</span>
-        </div>
-      )}
+          <div className="ap-current-head">
+            <span className="ap-current-label">Prompt en cours</span>
+            {!isComplete && (
+              <span className="ap-live-chip">
+                <Sparkles size={12} />
+                <span>Live</span>
+              </span>
+            )}
+          </div>
+          <p className="ap-current-text">{currentText}</p>
 
-      {/* Historique des prompts traités */}
-      {completedPrompts.length > 0 && (
-        <div className="ap-log">
-          {completedPrompts.map((p, i) => (
-            <div key={i} className={`ap-log-row ${p.brand_mentioned ? 'mentioned' : ''}`}>
-              <span className="ap-log-num">{p.current}</span>
-              <span className="ap-log-prompt">{p.prompt}</span>
-              <div className="ap-log-right">
-                {p.brand_mentioned
-                  ? <span className="ap-log-pos">#{p.brand_position ?? '?'}</span>
-                  : <span className="ap-log-absent">—</span>
-                }
-                {p.brand_mentioned
-                  ? <CheckCircle size={12} className="ap-log-check" />
-                  : <XCircle size={12} className="ap-log-x" />
-                }
-              </div>
+          {models.length > 0 && (
+            <div className="ap-models">
+              {models.map((model) => (
+                <span key={model} className="ap-model-chip">{model}</span>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      )}
 
-    </div>
+        <div className="ap-log-panel">
+          <div className="ap-log-head">
+            <span>Prompts deja traites</span>
+            <strong>{completedPrompts.length}</strong>
+          </div>
+
+          {completedPrompts.length === 0 ? (
+            <div className="ap-empty">
+              <Target size={16} />
+              <span>Le journal s'alimente des que le premier prompt est traite.</span>
+            </div>
+          ) : (
+            <div className="ap-log">
+              {completedPrompts.map((item, index) => (
+                <div key={`${item.current}-${index}`} className={`ap-log-row ${item.brand_mentioned ? 'mentioned' : 'missed'}`}>
+                  <span className="ap-log-num">{item.current}</span>
+                  <span className="ap-log-prompt">{item.prompt}</span>
+                  <div className="ap-log-right">
+                    {item.brand_mentioned ? (
+                      <>
+                        <span className="ap-log-pos">#{item.brand_position ?? '?'}</span>
+                        <CheckCircle size={12} className="ap-log-check" />
+                      </>
+                    ) : (
+                      <>
+                        <span className="ap-log-absent">Absente</span>
+                        <XCircle size={12} className="ap-log-x" />
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }

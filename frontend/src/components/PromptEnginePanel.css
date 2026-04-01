@@ -108,6 +108,13 @@
   gap: 8px;
 }
 
+.engine-coverage-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .intent-chip {
   display: inline-flex;
   align-items: center;

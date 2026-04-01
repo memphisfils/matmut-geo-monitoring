@@ -1,83 +1,110 @@
 import React from 'react';
 import {
-    BarChart3, Shield, Wifi, WifiOff, Target, MessageSquare, Bell,
-    FolderOpen, FileText, Clock, Search, Smile, Cpu, User
+  BarChart3,
+  Bell,
+  Clock,
+  Cpu,
+  FileText,
+  FolderOpen,
+  MessageSquare,
+  Search,
+  Shield,
+  Smile,
+  Sparkles,
+  Target,
+  User,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import './Sidebar.css';
 
 export default function Sidebar({ isBackendOnline, brand, sector, onReset, activeTab, onTabChange }) {
-    const navItems = [
-        { key: 'dashboard', icon: BarChart3, label: "Vue d'ensemble" },
-        { key: 'benchmark', icon: Shield, label: 'Benchmarks' },
-        { key: 'prompts', icon: MessageSquare, label: 'Requetes' },
-        { key: 'alerts', icon: Bell, label: 'Alertes' },
-        { key: 'projects', icon: FolderOpen, label: 'Mes marques' },
-        { key: 'exports', icon: FileText, label: 'Rapports' },
-        { key: 'account', icon: User, label: 'Compte' },
-    ];
+  const navItems = [
+    { key: 'dashboard', icon: BarChart3, label: "Vue d'ensemble" },
+    { key: 'benchmark', icon: Shield, label: 'Benchmarks' },
+    { key: 'prompts', icon: MessageSquare, label: 'Requetes' },
+    { key: 'alerts', icon: Bell, label: 'Alertes' },
+    { key: 'projects', icon: FolderOpen, label: 'Mes marques' },
+    { key: 'exports', icon: FileText, label: 'Rapports' },
+    { key: 'account', icon: User, label: 'Compte' }
+  ];
 
-    const analysisItems = [
-        { key: 'history', icon: Clock, label: 'Tendances' },
-        { key: 'keywords', icon: Search, label: 'Intentions' },
-        { key: 'sentiment', icon: Smile, label: 'Sentiment' },
-        { key: 'llm-status', icon: Cpu, label: 'LLM' },
-    ];
+  const analysisItems = [
+    { key: 'history', icon: Clock, label: 'Tendances' },
+    { key: 'keywords', icon: Search, label: 'Intentions' },
+    { key: 'sentiment', icon: Smile, label: 'Sentiment' },
+    { key: 'llm-status', icon: Cpu, label: 'LLM' }
+  ];
 
-    return (
-        <aside className="sidebar">
-            {/* Project Switcher */}
-            <div className="sidebar-logo">
-                <div className="logo-icon">
-                    <Target size={16} strokeWidth={2.5} color="white" />
-                </div>
-                <div className="logo-text">
-                    <span className="logo-title">{brand || 'GEO Monitor'}</span>
-                    <span className="logo-subtitle">{sector || 'Assurance'} • #1</span>
-                </div>
-            </div>
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-head">
+        <div className="sidebar-logo">
+          <div className="logo-icon">
+            <Target size={16} strokeWidth={2.5} color="white" />
+          </div>
+          <div className="logo-text">
+            <span className="logo-title">GEO Arctic</span>
+            <span className="logo-subtitle">Console GEO</span>
+          </div>
+        </div>
 
-            {/* Navigation */}
-            <nav className="sidebar-nav">
-                <div className="nav-section-title">Navigation</div>
-                {navItems.map(item => (
-                    <a
-                        key={item.key}
-                        className={`nav-item ${activeTab === item.key ? 'active' : ''}`}
-                        onClick={() => onTabChange && onTabChange(item.key)}
-                    >
-                        <item.icon size={16} />
-                        <span>{item.label}</span>
-                    </a>
-                ))}
+        <div className="sidebar-project">
+          <span className="sidebar-project-label">Marque active</span>
+          <strong>{brand || 'Aucun projet'}</strong>
+          <span>{sector || 'Secteur non defini'}</span>
+        </div>
 
-                <div className="nav-separator" />
+        <div className="sidebar-status-row">
+          <div className={`status-badge ${isBackendOnline ? 'online' : 'offline'}`}>
+            {isBackendOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
+            <span>{isBackendOnline ? 'API connectee' : 'Mode demo'}</span>
+          </div>
+          <div className="sidebar-live-chip">
+            <Sparkles size={12} />
+            <span>Arctic</span>
+          </div>
+        </div>
+      </div>
 
-                <div className="nav-section-title">Analyse</div>
-                {analysisItems.map(item => (
-                    <a
-                        key={item.key}
-                        className={`nav-item ${activeTab === item.key ? 'active' : ''}`}
-                        onClick={() => onTabChange && onTabChange(item.key)}
-                    >
-                        <item.icon size={16} />
-                        <span>{item.label}</span>
-                    </a>
-                ))}
-            </nav>
+      <nav className="sidebar-nav">
+        <div className="nav-section-title">Pilotage</div>
+        {navItems.map((item) => (
+          <button
+            type="button"
+            key={item.key}
+            className={`nav-item ${activeTab === item.key ? 'active' : ''}`}
+            onClick={() => onTabChange && onTabChange(item.key)}
+          >
+            <item.icon size={16} />
+            <span>{item.label}</span>
+          </button>
+        ))}
 
-            {/* Footer */}
-            <div className="sidebar-footer">
-                <div className={`status-badge ${isBackendOnline ? 'online' : 'offline'}`}>
-                    {isBackendOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
-                    <span>{isBackendOnline ? 'API Connectée' : 'Mode Démo'}</span>
-                </div>
-                <div className="sidebar-version">v3.0.0 • GEO Monitor</div>
-                {onReset && (
-                    <button onClick={onReset} className="btn-reset-brand">
-                        Retour aux projets
-                    </button>
-                )}
-            </div>
-        </aside>
-    );
+        <div className="nav-separator" />
+
+        <div className="nav-section-title">Lecture</div>
+        {analysisItems.map((item) => (
+          <button
+            type="button"
+            key={item.key}
+            className={`nav-item ${activeTab === item.key ? 'active' : ''}`}
+            onClick={() => onTabChange && onTabChange(item.key)}
+          >
+            <item.icon size={16} />
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      <div className="sidebar-footer">
+        <div className="sidebar-version">Espace connecte · GEO Arctic</div>
+        {onReset && (
+          <button onClick={onReset} className="btn-reset-brand">
+            Retour aux projets
+          </button>
+        )}
+      </div>
+    </aside>
+  );
 }

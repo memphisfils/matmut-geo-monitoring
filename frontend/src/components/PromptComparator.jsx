@@ -30,14 +30,16 @@ function deriveIntent(prompt) {
 }
 
 function buildPromptSummary(prompt) {
-  const intent = deriveIntent(prompt.prompt);
+  const intent = prompt.intent || deriveIntent(prompt.prompt);
   const competitivePressure = (prompt.competitors_mentioned || []).length;
   const goodPosition = prompt.avg_position && prompt.avg_position <= 2;
   const missedPrompt = !prompt.brand_mentioned;
+  const promptQualityScore = prompt.prompt_quality_score ?? 0;
+  const promptQualityLabel = prompt.prompt_quality_label || 'n/a';
 
   let status = 'watch';
   let statusLabel = 'A surveiller';
-  let rationale = 'Prompt utile, mais non decisif pour l instant.';
+  let rationale = `Prompt ${promptQualityLabel.toLowerCase()} (${promptQualityScore}/100), utile mais non decisif pour l instant.`;
 
   if (missedPrompt) {
     status = 'risk';
@@ -60,6 +62,8 @@ function buildPromptSummary(prompt) {
     statusLabel,
     rationale,
     competitivePressure,
+    promptQualityScore,
+    promptQualityLabel,
     proofLine: missedPrompt
       ? 'Aucune citation detectee sur les modeles actifs.'
       : `${prompt.mention_rate}% des modeles citent la marque, position moyenne ${prompt.avg_position || 'n/a'}.`
@@ -195,8 +199,16 @@ export default function PromptComparator({ brand, projectId }) {
     const mentionedCount = prompts.filter((prompt) => prompt.brand_mentioned).length;
     const absentCount = prompts.length - mentionedCount;
     const strongCount = prompts.filter((prompt) => prompt.status === 'win').length;
-    return { mentionedCount, absentCount, strongCount };
-  }, [enrichedPrompts]);
+    return {
+      mentionedCount,
+      absentCount,
+      strongCount,
+      averageQuality: data?.summary?.average_quality_score ?? 0,
+      weakPromptCount: data?.summary?.weak_prompt_count ?? 0
+    };
+  }, [data, enrichedPrompts]);
+  const bestPrompt = filteredPrompts[0] || null;
+  const worstPrompt = [...filteredPrompts].reverse().find(Boolean) || null;
 
   if (!brand || !data || data._brand !== brand) {
     return (
@@ -235,6 +247,13 @@ export default function PromptComparator({ brand, projectId }) {
             <div>
               <span>Prompts manques</span>
               <strong>{summary.absentCount}</strong>
+            </div>
+          </div>
+          <div className="proof-stat-card">
+            <Sparkles size={18} />
+            <div>
+              <span>Qualite moyenne</span>
+              <strong>{summary.averageQuality || 'n/a'}</strong>
             </div>
           </div>
         </div>
@@ -297,6 +316,24 @@ export default function PromptComparator({ brand, projectId }) {
           ))}
         </div>
       </div>
+
+      <section className="proof-summary-band">
+        <article className="summary-band-card accent">
+          <span>Lecture prioritaire</span>
+          <strong>{selectedPrompt?.statusLabel || 'Selectionnez un prompt'}</strong>
+          <p>{selectedPrompt?.rationale || 'Choisissez une requete pour lire son poids decisionnel et la pression associee.'}</p>
+        </article>
+        <article className="summary-band-card">
+          <span>Meilleur prompt</span>
+          <strong>{bestPrompt?.intent.label || 'n/a'}</strong>
+          <p>{bestPrompt?.prompt || 'Aucun prompt classe pour le moment.'}</p>
+        </article>
+        <article className="summary-band-card risk">
+          <span>Prompt le plus faible</span>
+          <strong>{worstPrompt?.statusLabel || 'n/a'}</strong>
+          <p>{worstPrompt?.prompt || 'Aucun signal faible a afficher.'}</p>
+        </article>
+      </section>
 
       <div className="proof-workspace">
         <aside className="proof-list">
@@ -365,8 +402,16 @@ export default function PromptComparator({ brand, projectId }) {
                 <p className="focus-paragraph">{selectedPrompt.proofLine}</p>
                 <div className="focus-inline-list">
                   <span className="mini-chip">
+                    <Sparkles size={14} />
+                    Qualite {selectedPrompt.promptQualityScore}/100
+                  </span>
+                  <span className="mini-chip">
                     <Bot size={14} />
                     {selectedPrompt.models_count} modele{selectedPrompt.models_count > 1 ? 's' : ''}
+                  </span>
+                  <span className="mini-chip">
+                    <ShieldAlert size={14} />
+                    Accord {selectedPrompt.agreement_score ?? 'n/a'}%
                   </span>
                   <span className="mini-chip">
                     <Crosshair size={14} />
@@ -402,6 +447,13 @@ export default function PromptComparator({ brand, projectId }) {
             {selectedPrompt ? (
               <>
                 <p>{selectedPrompt.rationale}</p>
+                {selectedPrompt.prompt_issues?.length ? (
+                  <ul className="rail-list">
+                    {selectedPrompt.prompt_issues.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                ) : null}
                 <ul className="rail-list">
                   <li>
                     {selectedPrompt.brand_mentioned
@@ -439,6 +491,31 @@ export default function PromptComparator({ brand, projectId }) {
             ) : (
               <p>Aucun concurrent dominant detecte sur ce prompt.</p>
             )}
+          </div>
+
+          <div className="rail-card">
+            <div className="focus-section-head">
+              <Bot size={16} />
+              <strong>Cadre du run</strong>
+            </div>
+              <div className="rail-metric-list">
+                <div>
+                  <span>Total prompts</span>
+                  <strong>{data.total_prompts}</strong>
+                </div>
+              <div>
+                <span>Modeles</span>
+                <strong>{data.metadata?.models?.length || 1}</strong>
+              </div>
+                <div>
+                  <span>Marque citee</span>
+                  <strong>{summary.mentionedCount}</strong>
+                </div>
+                <div>
+                  <span>Prompts fragiles</span>
+                  <strong>{summary.weakPromptCount}</strong>
+                </div>
+              </div>
           </div>
 
           <div className="rail-footer">

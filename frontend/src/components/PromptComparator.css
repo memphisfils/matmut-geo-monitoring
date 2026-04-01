@@ -54,7 +54,7 @@
 
 .proof-stat-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -96,6 +96,51 @@
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(145, 171, 191, 0.16);
+}
+
+.proof-summary-band {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.summary-band-card {
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(144, 170, 190, 0.16);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 16px 30px rgba(34, 57, 76, 0.06);
+}
+
+.summary-band-card.accent {
+  background: linear-gradient(180deg, rgba(235, 249, 255, 0.94), rgba(255, 255, 255, 0.82));
+}
+
+.summary-band-card.risk {
+  background: linear-gradient(180deg, rgba(255, 243, 239, 0.94), rgba(255, 255, 255, 0.82));
+}
+
+.summary-band-card span,
+.rail-metric-list span {
+  display: block;
+  margin-bottom: 8px;
+  color: #6b8597;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.summary-band-card strong,
+.rail-metric-list strong {
+  display: block;
+  color: #102435;
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+.summary-band-card p {
+  margin-top: 8px;
 }
 
 .control-group {
@@ -340,6 +385,17 @@
   gap: 10px;
 }
 
+.rail-metric-list {
+  display: grid;
+  gap: 12px;
+}
+
+.rail-metric-list div {
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(18, 39, 58, 0.05);
+}
+
 .competitor-pill {
   background: rgba(18, 39, 58, 0.06);
   color: #345062;
@@ -353,6 +409,7 @@
 
 @media (max-width: 1180px) {
   .proof-topbar,
+  .proof-summary-band,
   .proof-workspace {
     grid-template-columns: 1fr;
   }

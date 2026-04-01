@@ -34,6 +34,7 @@ function uniquePrompts(prompts) {
 
 export default function PromptEnginePanel({ config, compact = false }) {
   const prompts = useMemo(() => uniquePrompts(config?.prompts || []), [config?.prompts]);
+  const promptAudit = config?.prompt_audit || null;
   const intentMap = useMemo(() => {
     const counts = {};
     prompts.forEach((prompt) => {
@@ -47,8 +48,15 @@ export default function PromptEnginePanel({ config, compact = false }) {
   const competitors = config?.competitors || [];
   const models = config?.models || [];
   const setupMode = config?.setup_mode === 'manual' ? 'Manuel' : 'Assiste';
-
-  const leadingIntents = Object.entries(intentMap).sort((left, right) => right[1] - left[1]).slice(0, 4);
+  const leadingIntents = promptAudit?.top_intents?.length
+    ? promptAudit.top_intents.map((item) => [item.label, item.count])
+    : Object.entries(intentMap).sort((left, right) => right[1] - left[1]).slice(0, 4);
+  const averageQuality = promptAudit?.average_quality_score ?? 0;
+  const weakPromptCount = promptAudit?.weak_prompt_count ?? 0;
+  const coverageAverage = promptAudit?.coverage_average ?? 0;
+  const qualityLabel = averageQuality >= 75 ? 'Fort' : averageQuality >= 55 ? 'Correct' : 'Fragile';
+  const generationSource = config?.generation_notes?.source === 'llm' ? 'IA' : 'Manuel';
+  const repairedPromptCount = config?.generation_notes?.repaired_prompts_count || config?.generation_notes?.repaired_before_launch || 0;
 
   return (
     <section className={`prompt-engine ${compact ? 'compact' : ''}`}>
@@ -76,7 +84,7 @@ export default function PromptEnginePanel({ config, compact = false }) {
             <strong>Prompts</strong>
           </div>
           <div className="engine-stat">{prompts.length}</div>
-          <p>{products.length} offre{products.length > 1 ? 's' : ''} source{products.length > 1 ? 's' : ''}</p>
+          <p>{products.length} offre{products.length > 1 ? 's' : ''} source{products.length > 1 ? 's' : ''} · source {generationSource}</p>
         </article>
 
         <article className="engine-card">
@@ -91,10 +99,10 @@ export default function PromptEnginePanel({ config, compact = false }) {
         <article className="engine-card">
           <div className="engine-card-head">
             <Split size={16} />
-            <strong>Intentions</strong>
+            <strong>Qualite</strong>
           </div>
-          <div className="engine-stat">{Object.keys(intentMap).length || 1}</div>
-          <p>{leadingIntents.length > 0 ? leadingIntents.map(([label]) => label).join(', ') : 'A classifier'}</p>
+          <div className="engine-stat">{averageQuality || Object.keys(intentMap).length || 1}</div>
+          <p>{promptAudit ? `${qualityLabel} · ${weakPromptCount} prompt${weakPromptCount > 1 ? 's' : ''} fragile${weakPromptCount > 1 ? 's' : ''}` : 'Audit en attente'}</p>
         </article>
       </div>
 
@@ -115,7 +123,7 @@ export default function PromptEnginePanel({ config, compact = false }) {
         <div className="engine-bottom-panel">
           <div className="engine-card-head">
             <Boxes size={16} />
-            <strong>Clusters de prompts</strong>
+            <strong>Clusters et couverture</strong>
           </div>
           <div className="intent-chip-row">
             {leadingIntents.length > 0 ? (
@@ -126,9 +134,14 @@ export default function PromptEnginePanel({ config, compact = false }) {
               <span className="intent-chip muted">Aucun cluster disponible</span>
             )}
           </div>
+          <div className="engine-coverage-row">
+            <span className="intent-chip muted">Couverture benchmark · {coverageAverage}%</span>
+            {promptAudit ? <span className="intent-chip muted">Score moyen · {averageQuality}</span> : null}
+            {repairedPromptCount > 0 ? <span className="intent-chip muted">Prompts durcis · {repairedPromptCount}</span> : null}
+          </div>
           <div className="engine-note">
             <Sparkles size={14} />
-            <span>Exposez ce bloc pour expliquer pourquoi le score change, pas seulement combien il change.</span>
+            <span>Le moteur expose maintenant la qualite moyenne, les prompts fragiles et la couverture concurrentielle du run.</span>
           </div>
         </div>
       </div>

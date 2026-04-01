@@ -152,7 +152,7 @@ export function RadarCompare({ ranking, brand }) {
     return (
         <div className="chart-container chart-full">
             <div className="chart-header">
-                <h3>COMPARAISON MULTI-CRITÈRES</h3>
+                <h3>COMPARAISON MULTI-CRITERES</h3>
                 <span className="chart-badge">TOP 4</span>
             </div>
             <div className="chart-body">
@@ -204,14 +204,14 @@ export function CategoryHeatmap({ categoryData, brand, ranking }) {
     const categoryLabels = {
         assurance_auto: 'Auto',
         assurance_habitation: 'Habitation',
-        mutuelle_sante: 'Santé',
+        mutuelle_sante: 'Sante',
         assurance_pro: 'Pro',
-        general: 'Général',
+        general: 'General',
         automobile: 'Auto',
         banque: 'Banque',
-        telecoms: 'Télécoms',
-        energie: 'Énergie',
-        sante: 'Santé'
+        telecoms: 'Telecoms',
+        energie: 'Energie',
+        sante: 'Sante'
     };
 
     const getColor = (val) => {
@@ -224,7 +224,7 @@ export function CategoryHeatmap({ categoryData, brand, ranking }) {
     return (
         <div className="chart-container chart-full">
             <div className="chart-header">
-                <h3>PERFORMANCE PAR CATÉGORIE</h3>
+                <h3>PERFORMANCE PAR CATEGORIE</h3>
             </div>
             <div className="chart-body heatmap-body">
                 <table className="heatmap-table">

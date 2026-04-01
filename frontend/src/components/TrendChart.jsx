@@ -29,13 +29,13 @@ function CustomTooltip({ active, payload, label }) {
 export default function TrendChart({ data, brand }) {
     if (!data || data.length === 0) return null;
 
-    // Get dynamic competitors from data
+    const daySpan = data.length;
     const dataKeys = Object.keys(data[0]).filter(k => k !== 'date' && k !== 'timestamp');
     const competitors = dataKeys.filter(k => k !== brand).slice(0, 4);
     return (
         <div className="chart-container chart-full">
             <div className="chart-header">
-                <h3>ÉVOLUTION DU SCORE (30 JOURS)</h3>
+                <h3>Evolution du score ({daySpan} jours)</h3>
             </div>
             <div className="chart-body">
                 <ResponsiveContainer width="100%" height={400}>

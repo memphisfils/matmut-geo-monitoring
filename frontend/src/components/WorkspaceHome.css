@@ -99,6 +99,7 @@
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(70, 101, 118, 0.12);
+  box-shadow: 0 16px 30px rgba(34, 57, 76, 0.05);
 }
 
 .workspace-stat-label {
@@ -151,6 +152,13 @@
 .workspace-inline-link {
   color: #1d688d;
   background: rgba(73, 163, 202, 0.1);
+}
+
+.workspace-primary:focus-visible,
+.workspace-secondary:focus-visible,
+.workspace-inline-link:focus-visible {
+  outline: 3px solid rgba(82, 189, 255, 0.34);
+  outline-offset: 3px;
 }
 
 @media (max-width: 960px) {

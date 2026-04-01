@@ -141,6 +141,22 @@ async function flush() {
   })
 }
 
+async function waitForText(text, attempts = 12) {
+  for (let index = 0; index < attempts; index += 1) {
+    if (container.textContent?.includes(text)) return
+    await flush()
+  }
+  throw new Error(`Text not found: ${text}`)
+}
+
+async function waitForCondition(check, attempts = 12) {
+  for (let index = 0; index < attempts; index += 1) {
+    if (check()) return
+    await flush()
+  }
+  throw new Error('Condition not met in time')
+}
+
 function clickButton(label) {
   const button = [...container.querySelectorAll('button')].find((item) => item.textContent === label)
   if (!button) throw new Error(`Button not found: ${label}`)
@@ -201,11 +217,8 @@ describe('App critical flows', () => {
     await act(async () => {
       root.render(React.createElement(App))
     })
-    await flush()
-    await flush()
-
-    expect(container.textContent).toContain('workspace-home:1')
-  })
+    await waitForText('workspace-home:1')
+  }, 15000)
 
   it('opens onboarding from the connected workspace', async () => {
     apiMocks.fetchCurrentUser.mockResolvedValue({
@@ -219,14 +232,10 @@ describe('App critical flows', () => {
     await act(async () => {
       root.render(React.createElement(App))
     })
-    await flush()
-    await flush()
-
+    await waitForText('workspace-home:1')
     clickButton('workspace-create')
-    await flush()
-
-    expect(container.textContent).toContain('onboarding-view')
-  })
+    await waitForText('onboarding-view')
+  }, 15000)
 
   it('auto-opens the latest project when the preference is enabled', async () => {
     localStorage.setItem('geo_preferences', JSON.stringify({
@@ -245,13 +254,9 @@ describe('App critical flows', () => {
     await act(async () => {
       root.render(React.createElement(App))
     })
-    await flush()
-    await flush()
-    await flush()
-
-    expect(apiMocks.activateProject).toHaveBeenCalledWith(7)
-    expect(container.textContent).toContain('dashboard-overview')
-  })
+    await waitForCondition(() => apiMocks.activateProject.mock.calls.some((args) => args[0] === 7), 20)
+    await waitForText('dashboard-overview')
+  }, 15000)
 
   it('logs out from the account tab and returns to the public page', async () => {
     apiMocks.fetchCurrentUser.mockResolvedValue({
@@ -272,15 +277,12 @@ describe('App critical flows', () => {
     await act(async () => {
       root.render(React.createElement(App))
     })
-    await flush()
-    await flush()
-
+    await waitForText('dashboard-overview')
     clickButton('nav-account')
-    await flush()
+    await waitForText('account-view')
     clickButton('account-logout')
-    await flush()
+    await waitForText('landing-page')
 
     expect(apiMocks.logoutUser).toHaveBeenCalledTimes(1)
-    expect(container.textContent).toContain('landing-page')
-  })
+  }, 15000)
 })

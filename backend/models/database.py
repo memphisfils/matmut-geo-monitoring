@@ -6,14 +6,23 @@ Database helpers for GEO Monitor.
 - User accounts and session-backed project ownership
 - Historical metrics per user/project/brand/model
 """
+import base64
+import hashlib
 import json
 import os
 import random
 import sqlite3
 from datetime import datetime, timedelta
 
+try:
+    from cryptography.fernet import Fernet, InvalidToken
+except ImportError:  # pragma: no cover - dependency should exist in prod
+    Fernet = None
+    InvalidToken = Exception
+
 DATABASE_URL = os.getenv('DATABASE_URL')
 USE_POSTGRES = bool(DATABASE_URL)
+ALERT_CHANNEL_KEYS = ('slack', 'email', 'telegram')
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
 DB_PATH = os.path.join(DATA_DIR, 'history.db')
@@ -54,6 +63,46 @@ def _parse_json_fields(record, *fields):
         except Exception:
             record[field] = []
     return record
+
+
+def _alert_settings_key():
+    secret = (
+        os.getenv('ALERT_SETTINGS_ENCRYPTION_KEY')
+        or os.getenv('FLASK_SECRET_KEY')
+        or os.getenv('SECRET_KEY')
+        or 'geo-monitor-dev-secret'
+    )
+    if not secret or not Fernet:
+        return None
+    digest = hashlib.sha256(secret.encode('utf-8')).digest()
+    return base64.urlsafe_b64encode(digest)
+
+
+def _encrypt_config_payload(payload: dict) -> str:
+    raw = json.dumps(payload or {})
+    key = _alert_settings_key()
+    if not key:
+        return raw
+    return 'enc::' + Fernet(key).encrypt(raw.encode('utf-8')).decode('utf-8')
+
+
+def _decrypt_config_payload(value: str) -> dict:
+    raw = value or '{}'
+    if not raw:
+        return {}
+    if raw.startswith('enc::'):
+        key = _alert_settings_key()
+        if not key:
+            return {}
+        try:
+            decrypted = Fernet(key).decrypt(raw[5:].encode('utf-8')).decode('utf-8')
+            return json.loads(decrypted or '{}')
+        except (InvalidToken, ValueError, TypeError, json.JSONDecodeError):
+            return {}
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
 
 
 def init_db():
@@ -110,6 +159,63 @@ def init_db():
             sentiment_score REAL,
             FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        '''.replace('INTEGER  PRIMARY KEY AUTOINCREMENT', 'INTEGER PRIMARY KEY AUTOINCREMENT')
+    )
+
+    cur.execute(
+        f'''
+        CREATE TABLE IF NOT EXISTS prompt_history (
+            id              {'SERIAL' if USE_POSTGRES else 'INTEGER'} PRIMARY KEY {'AUTOINCREMENT' if not USE_POSTGRES else ''},
+            project_id      INTEGER,
+            user_id         INTEGER,
+            timestamp       TEXT NOT NULL,
+            brand           TEXT NOT NULL,
+            prompt          TEXT NOT NULL,
+            mention_rate    REAL,
+            avg_position    REAL,
+            top_of_mind     REAL,
+            score           REAL,
+            models_count    INTEGER,
+            brand_mentioned INTEGER DEFAULT 0,
+            rank_position   INTEGER,
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        '''.replace('INTEGER  PRIMARY KEY AUTOINCREMENT', 'INTEGER PRIMARY KEY AUTOINCREMENT')
+    )
+
+    cur.execute(
+        f'''
+        CREATE TABLE IF NOT EXISTS alert_channel_settings (
+            id          {'SERIAL' if USE_POSTGRES else 'INTEGER'} PRIMARY KEY {'AUTOINCREMENT' if not USE_POSTGRES else ''},
+            user_id     INTEGER NOT NULL,
+            project_id  INTEGER,
+            channel     TEXT NOT NULL,
+            enabled     INTEGER DEFAULT 0,
+            config      TEXT,
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE(user_id, project_id, channel)
+        )
+        '''.replace('INTEGER  PRIMARY KEY AUTOINCREMENT', 'INTEGER PRIMARY KEY AUTOINCREMENT')
+    )
+
+    cur.execute(
+        f'''
+        CREATE TABLE IF NOT EXISTS alert_rule_settings (
+            id          {'SERIAL' if USE_POSTGRES else 'INTEGER'} PRIMARY KEY {'AUTOINCREMENT' if not USE_POSTGRES else ''},
+            user_id     INTEGER NOT NULL,
+            project_id  INTEGER,
+            alert_id    TEXT NOT NULL,
+            enabled     INTEGER DEFAULT 1,
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE(user_id, project_id, alert_id)
         )
         '''.replace('INTEGER  PRIMARY KEY AUTOINCREMENT', 'INTEGER PRIMARY KEY AUTOINCREMENT')
     )
@@ -314,13 +420,213 @@ def get_project_by_id(project_id: int, user_id: int = None):
     return _parse_json_fields(project, 'competitors', 'prompts', 'models')
 
 
+def _load_alert_scope_rows(table: str, key_field: str, user_id: int, project_id: int = None) -> dict:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    ph = _ph()
+
+    merged = {}
+
+    cur.execute(
+        f'SELECT * FROM {table} WHERE user_id = {ph} AND project_id IS NULL',
+        (user_id,)
+    )
+    for row in cur.fetchall():
+        record = _row_to_dict(row)
+        merged[record[key_field]] = record
+
+    if project_id is not None:
+        cur.execute(
+            f'SELECT * FROM {table} WHERE user_id = {ph} AND project_id = {ph}',
+            (user_id, project_id)
+        )
+        for row in cur.fetchall():
+            record = _row_to_dict(row)
+            merged[record[key_field]] = record
+
+    conn.close()
+    return merged
+
+
+def upsert_alert_channel_setting(user_id: int, channel: str, enabled: bool = False,
+                                 config: dict = None, project_id: int = None):
+    if channel not in ALERT_CHANNEL_KEYS:
+        raise ValueError(f'Unsupported alert channel: {channel}')
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    ph = _ph()
+    now = datetime.now().isoformat()
+    config_json = _encrypt_config_payload(config or {})
+
+    if project_id is None:
+        cur.execute(
+            f'SELECT id FROM alert_channel_settings WHERE user_id = {ph} AND project_id IS NULL AND channel = {ph}',
+            (user_id, channel)
+        )
+    else:
+        cur.execute(
+            f'SELECT id FROM alert_channel_settings WHERE user_id = {ph} AND project_id = {ph} AND channel = {ph}',
+            (user_id, project_id, channel)
+        )
+
+    row = cur.fetchone()
+    if row:
+        row_id = _row_to_dict(row)['id']
+        cur.execute(
+            f'''
+            UPDATE alert_channel_settings
+            SET enabled = {ph}, config = {ph}, updated_at = {ph}
+            WHERE id = {ph}
+            ''',
+            (1 if enabled else 0, config_json, now, row_id)
+        )
+    else:
+        cur.execute(
+            f'''
+            INSERT INTO alert_channel_settings (user_id, project_id, channel, enabled, config, created_at, updated_at)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            ''',
+            (user_id, project_id, channel, 1 if enabled else 0, config_json, now, now)
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def upsert_alert_rule_setting(user_id: int, alert_id: str, enabled: bool = True, project_id: int = None):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    ph = _ph()
+    now = datetime.now().isoformat()
+
+    if project_id is None:
+        cur.execute(
+            f'SELECT id FROM alert_rule_settings WHERE user_id = {ph} AND project_id IS NULL AND alert_id = {ph}',
+            (user_id, alert_id)
+        )
+    else:
+        cur.execute(
+            f'SELECT id FROM alert_rule_settings WHERE user_id = {ph} AND project_id = {ph} AND alert_id = {ph}',
+            (user_id, project_id, alert_id)
+        )
+
+    row = cur.fetchone()
+    if row:
+        row_id = _row_to_dict(row)['id']
+        cur.execute(
+            f'''
+            UPDATE alert_rule_settings
+            SET enabled = {ph}, updated_at = {ph}
+            WHERE id = {ph}
+            ''',
+            (1 if enabled else 0, now, row_id)
+        )
+    else:
+        cur.execute(
+            f'''
+            INSERT INTO alert_rule_settings (user_id, project_id, alert_id, enabled, created_at, updated_at)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            ''',
+            (user_id, project_id, alert_id, 1 if enabled else 0, now, now)
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def get_alert_preferences(user_id: int, project_id: int = None) -> dict:
+    from catalogs import get_alert_catalog
+
+    raw_channels = _load_alert_scope_rows('alert_channel_settings', 'channel', user_id, project_id)
+    raw_rules = _load_alert_scope_rows('alert_rule_settings', 'alert_id', user_id, project_id)
+
+    channels = {}
+    for channel in ALERT_CHANNEL_KEYS:
+        record = raw_channels.get(channel) or {}
+        config = _decrypt_config_payload(record.get('config'))
+        channels[channel] = {
+            'enabled': bool(record.get('enabled', 0)),
+            'config': config,
+            'source': 'project' if record.get('project_id') is not None else ('user' if record else 'default')
+        }
+
+    rules = {}
+    for alert in get_alert_catalog():
+        alert_id = alert['id']
+        record = raw_rules.get(alert_id) or {}
+        default_enabled = alert.get('severity') in ('critical', 'high')
+        rules[alert_id] = {
+            **alert,
+            'enabled': bool(record.get('enabled', default_enabled)),
+            'source': 'project' if record.get('project_id') is not None else ('user' if record else 'default')
+        }
+
+    return {
+        'project_id': project_id,
+        'channels': channels,
+        'rules': rules
+    }
+
+
+def _extract_prompt_metrics(results: dict, brand: str) -> list:
+    prompt_metrics = []
+
+    for response in results.get('responses', []):
+        prompt = (response.get('prompt') or '').strip()
+        if not prompt:
+            continue
+
+        analyses_for_prompt = [
+            data.get('analysis', {})
+            for data in response.get('llm_analyses', {}).values()
+            if data.get('analysis')
+        ]
+        total_models = len(analyses_for_prompt)
+        if total_models == 0:
+            continue
+
+        mentions = sum(1 for analysis in analyses_for_prompt if brand in analysis.get('brands_mentioned', []))
+        mention_rate = round(mentions / total_models * 100, 1)
+        positions = [
+            analysis.get('positions', {}).get(brand)
+            for analysis in analyses_for_prompt
+            if analysis.get('positions', {}).get(brand) is not None
+        ]
+        avg_position = round(sum(positions) / len(positions), 2) if positions else None
+        first_counts = sum(1 for analysis in analyses_for_prompt if analysis.get('first_brand') == brand)
+        top_of_mind = round(first_counts / total_models * 100, 1)
+        score = round(
+            mention_rate * 0.5 +
+            ((100 / avg_position) if avg_position and avg_position > 0 else 0) * 0.3 +
+            top_of_mind * 0.2,
+            1
+        )
+
+        prompt_metrics.append({
+            'prompt': prompt,
+            'mention_rate': mention_rate,
+            'avg_position': avg_position,
+            'top_of_mind': top_of_mind,
+            'score': score,
+            'models_count': total_models,
+            'brand_mentioned': mentions > 0
+        })
+
+    prompt_metrics.sort(key=lambda item: (-item['score'], item['prompt']))
+    for index, item in enumerate(prompt_metrics, start=1):
+        item['rank_position'] = index
+
+    return prompt_metrics
+
+
 def save_analysis(results: dict, user_id: int = None, project_id: int = None):
     if not results or 'responses' not in results:
         return
 
     from services.analyzer import BrandAnalyzer
 
-    brand = results.get('brand', 'Unknown')
+    brand = results.get('brand') or results.get('main_brand', 'Unknown')
     competitors = results.get('competitors', [])
     all_brands = [brand] + competitors
     timestamp = results.get('timestamp', datetime.now().isoformat())
@@ -361,6 +667,27 @@ def save_analysis(results: dict, user_id: int = None, project_id: int = None):
                     metric.get('sentiment_score', 0)
                 )
             )
+
+    for prompt_metric in _extract_prompt_metrics(results, brand):
+        cur.execute(
+            f'''
+            INSERT INTO prompt_history
+            (project_id, user_id, timestamp, brand, prompt, mention_rate, avg_position,
+             top_of_mind, score, models_count, brand_mentioned, rank_position)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            ''',
+            (
+                project_id, user_id, timestamp, brand,
+                prompt_metric['prompt'],
+                prompt_metric['mention_rate'],
+                prompt_metric['avg_position'],
+                prompt_metric['top_of_mind'],
+                prompt_metric['score'],
+                prompt_metric['models_count'],
+                1 if prompt_metric['brand_mentioned'] else 0,
+                prompt_metric['rank_position']
+            )
+        )
 
     conn.commit()
     conn.close()
@@ -413,6 +740,59 @@ def get_history(brand: str = None, days: int = 30, model: str = None,
         history[date_key][record['brand']] = round(record['global_score'], 2)
 
     return list(history.values())
+
+
+def get_previous_prompt_run(brand: str, current_timestamp: str,
+                            user_id: int = None, project_id: int = None) -> dict:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    ph = _ph()
+
+    timestamp_query = f'SELECT DISTINCT timestamp FROM prompt_history WHERE brand = {ph} AND timestamp < {ph}'
+    timestamp_params = [brand, current_timestamp]
+
+    if user_id is not None:
+        timestamp_query += f' AND user_id = {ph}'
+        timestamp_params.append(user_id)
+    if project_id is not None:
+        timestamp_query += f' AND project_id = {ph}'
+        timestamp_params.append(project_id)
+
+    timestamp_query += ' ORDER BY timestamp DESC LIMIT 1'
+    cur.execute(timestamp_query, timestamp_params)
+    timestamp_row = cur.fetchone()
+
+    if not timestamp_row:
+        conn.close()
+        return {'timestamp': None, 'snapshot': {}}
+
+    previous_timestamp = timestamp_row['timestamp'] if isinstance(timestamp_row, dict) else timestamp_row[0]
+
+    snapshot_query = f'''
+        SELECT prompt, mention_rate, avg_position, top_of_mind, score, models_count,
+               brand_mentioned, rank_position
+        FROM prompt_history
+        WHERE brand = {ph} AND timestamp = {ph}
+    '''
+    snapshot_params = [brand, previous_timestamp]
+
+    if user_id is not None:
+        snapshot_query += f' AND user_id = {ph}'
+        snapshot_params.append(user_id)
+    if project_id is not None:
+        snapshot_query += f' AND project_id = {ph}'
+        snapshot_params.append(project_id)
+
+    cur.execute(snapshot_query, snapshot_params)
+    rows = cur.fetchall()
+    conn.close()
+
+    snapshot = {}
+    for row in rows:
+        record = _row_to_dict(row)
+        snapshot[record['prompt']] = record
+
+    return {'timestamp': previous_timestamp, 'snapshot': snapshot}
 
 
 def generate_demo_history(brand: str = 'Marque', competitors: list = None, days: int = 30) -> list:

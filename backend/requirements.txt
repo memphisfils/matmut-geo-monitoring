@@ -6,6 +6,7 @@ psycopg2-binary>=2.9.9
 gunicorn>=21.2.0
 apscheduler>=3.10.0
 google-auth>=2.38.0
+cryptography>=46.0.0
 
 # Async support (Option 1 - Backend Asynchrone)
 aiohttp>=3.9.0

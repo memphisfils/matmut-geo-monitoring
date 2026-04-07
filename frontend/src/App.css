@@ -6,32 +6,43 @@
   min-height: 100vh;
   background:
     radial-gradient(circle at top left, rgba(130, 209, 255, 0.08), transparent 24%),
+    radial-gradient(circle at top right, rgba(196, 229, 245, 0.16), transparent 26%),
     linear-gradient(180deg, #f3f8fc 0%, #edf4f9 100%);
   color: var(--text-primary);
   font-family: 'Outfit', sans-serif;
+}
+
+.app-layout.modal-open .top-navbar,
+.app-layout.modal-open .app-body,
+.app-layout.modal-open .main-content > .page-content {
+  filter: blur(9px) saturate(0.92);
+  pointer-events: none;
+  user-select: none;
 }
 
 .app-body {
   display: flex;
   flex: 1;
   width: 100%;
-  padding-top: calc(var(--navbar-height) + 10px);
+  gap: 18px;
+  align-items: flex-start;
+  padding: calc(var(--navbar-height) + 18px) 18px 18px;
 }
 
 .main-content {
   flex: 1;
   background: transparent;
-  min-height: calc(100vh - var(--navbar-height));
+  min-height: calc(100vh - var(--navbar-height) - 18px);
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
 .page-content {
-  max-width: 1400px;
+  max-width: 1360px;
   width: 100%;
   margin: 0 auto;
-  padding: 28px 34px 40px;
+  padding: 6px 4px 34px;
 }
 
 .onboarding-main-content {
@@ -242,6 +253,109 @@
   cursor: pointer;
 }
 
+.workspace-back-link:hover {
+  background: rgba(73, 163, 202, 0.16);
+}
+
+.onboarding-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(14, 29, 43, 0.18);
+  backdrop-filter: blur(14px);
+}
+
+.onboarding-modal-shell {
+  width: min(1320px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 34px;
+  border: 1px solid rgba(145, 171, 192, 0.2);
+  background: rgba(244, 249, 253, 0.9);
+  box-shadow: 0 36px 90px rgba(17, 36, 52, 0.2);
+  overflow: hidden;
+}
+
+.onboarding-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 12px 0;
+}
+
+.onboarding-modal-kicker {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(94, 188, 255, 0.12);
+  color: #0b698b;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.onboarding-modal-head h2 {
+  margin: 10px 0 4px;
+  color: #102435;
+  font-size: clamp(1.4rem, 2.1vw, 2rem);
+  letter-spacing: -0.04em;
+}
+
+.onboarding-modal-head p {
+  margin: 0;
+  color: #5b7487;
+  line-height: 1.6;
+}
+
+.onboarding-modal-close {
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(145, 171, 192, 0.22);
+  background: rgba(255, 255, 255, 0.76);
+  color: #1c3448;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.onboarding-modal-close:hover {
+  transform: translateY(-1px);
+  border-color: rgba(88, 185, 255, 0.3);
+  background: rgba(240, 249, 255, 0.94);
+}
+
+.onboarding-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 4px 4px;
+  overscroll-behavior: contain;
+}
+
+.onboarding-modal-body .onboarding-shell {
+  max-height: none;
+  box-shadow: none;
+  border-radius: 28px;
+}
+
+.onboarding-modal-body .onboarding-main {
+  min-height: 100%;
+}
+
 :root.reduced-motion *,
 :root.reduced-motion *::before,
 :root.reduced-motion *::after {
@@ -264,8 +378,25 @@
 @media (max-width: 768px) {
   .charts-row, .charts-row.small { grid-template-columns: 1fr; }
   .lsb-models { flex-wrap: wrap; gap: 16px; }
-  .page-content { padding: 24px 20px; }
-  .app-body { padding-top: calc(var(--navbar-height) + 84px); }
+  .page-content { padding: 8px 0 24px; }
+  .app-body {
+    padding: calc(var(--navbar-height) + 98px) 12px 12px;
+  }
   .onboarding-page { min-height: auto; padding: 12px 12px 20px; }
   .workspace-onboarding-head { flex-direction: column; align-items: flex-start; }
+  .onboarding-modal-backdrop { padding: 12px; }
+  .onboarding-modal-shell {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+    border-radius: 24px;
+  }
+  .onboarding-modal-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .app-layout.modal-open .top-navbar,
+  .app-layout.modal-open .app-body,
+  .app-layout.modal-open .main-content > .page-content {
+    filter: blur(7px) saturate(0.94);
+  }
 }

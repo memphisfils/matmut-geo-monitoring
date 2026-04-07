@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import AnimatedNumber from './AnimatedNumber';
 import './LLMBreakdown.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -34,7 +35,7 @@ function makeDemoData(brand) {
   allBrands.forEach((item) => {
     confidence[item] = {
       confidence: null,
-      divergence_level: 'N/A - modele unique',
+      divergence_level: 'N/A',
       std_dev: 0,
       avg_mention_rate: byModel['qwen3.5'][item]?.mention_rate || 0,
       per_model: { 'qwen3.5': byModel['qwen3.5'][item]?.mention_rate || 0 }
@@ -46,6 +47,14 @@ function makeDemoData(brand) {
     by_model: byModel,
     confidence,
     main_brand_confidence: confidence[brand] || {},
+    summary: {
+      strongest_model: 'qwen3.5',
+      weakest_model: 'qwen3.5',
+      mention_spread: 0,
+      agreement_score: null,
+      divergence_level: 'N/A',
+      model_count: 1
+    },
     brand,
     metadata: { is_demo: true }
   };
@@ -87,7 +96,7 @@ export default function LLMBreakdown({ brand, projectId }) {
   if (!brand || !data || data._brand !== brand) {
     return (
       <div className="llm-wrapper">
-        <div className="llm-loading">CHARGEMENT...</div>
+        <div className="llm-loading">Chargement...</div>
       </div>
     );
   }
@@ -95,98 +104,124 @@ export default function LLMBreakdown({ brand, projectId }) {
   const models = data.models || [];
   const byModel = data.by_model || {};
   const confMap = data.confidence || {};
+  const summary = data.summary || {};
   const singleModel = models.length <= 1;
-  const allBrands = Object.keys(Object.values(byModel)[0] || {}).sort((left, right) => {
-    const avgLeft = models.reduce((sum, model) => sum + (byModel[model]?.[left]?.global_score || 0), 0) / (models.length || 1);
-    const avgRight = models.reduce((sum, model) => sum + (byModel[model]?.[right]?.global_score || 0), 0) / (models.length || 1);
-    return avgRight - avgLeft;
-  });
   const mainConf = confMap[brand] || {};
+  const confidenceValue = typeof mainConf.confidence === 'number' ? mainConf.confidence : null;
+  const agreementValue = typeof summary.agreement_score === 'number' ? summary.agreement_score : null;
+  const allBrands = Object.keys(Object.values(byModel)[0] || {})
+    .sort((left, right) => {
+      const avgLeft = models.reduce((sum, model) => sum + (byModel[model]?.[left]?.global_score || 0), 0) / (models.length || 1);
+      const avgRight = models.reduce((sum, model) => sum + (byModel[model]?.[right]?.global_score || 0), 0) / (models.length || 1);
+      return avgRight - avgLeft;
+    })
+    .slice(0, 6);
   const averageMention = models.length
     ? Math.round(models.reduce((sum, model) => sum + (byModel[model]?.[brand]?.mention_rate || 0), 0) / models.length)
     : 0;
 
+  const summaryCards = [
+    {
+      label: 'Actifs',
+      numeric: summary.model_count ?? (models.length || 1),
+      note: models.join(', ') || 'qwen3.5'
+    },
+    {
+      label: 'Mention',
+      numeric: averageMention,
+      suffix: '%',
+      note: 'moyenne'
+    },
+    {
+      label: 'Leader',
+      text: summary.strongest_model || models[0] || 'n/a',
+      note: 'meilleur moteur'
+    },
+    {
+      label: 'Accord',
+      numeric: singleModel ? null : agreementValue,
+      suffix: singleModel ? '' : '%',
+      text: singleModel ? 'N/A' : null,
+      note: singleModel ? 'modele unique' : (summary.divergence_level || 'n/a')
+    }
+  ];
+
   return (
     <div className="llm-wrapper">
       <div className="llm-header">
-        <h3 className="llm-title">SCORE DE CONFIANCE - {brand?.toUpperCase()}</h3>
-        {!singleModel && mainConf.confidence != null && (
-          <div className={`llm-conf-badge ${getConfLevel(mainConf.confidence)}`}>
-            {mainConf.confidence}% confiance · divergence {mainConf.divergence_level}
-          </div>
-        )}
-        {singleModel && (
-          <div className="llm-conf-badge single">
-            Modele unique - divergence N/A
-          </div>
-        )}
+        <div className="llm-header-copy">
+          <h3 className="llm-title">Comparatif inter-modeles</h3>
+          <p>{brand} - accord, spread et mention par moteur</p>
+        </div>
+        <div className={`llm-conf-badge ${singleModel ? 'single' : confidenceValue == null ? 'single' : getConfLevel(confidenceValue)}`}>
+          {singleModel ? 'Modele unique' : confidenceValue == null ? 'Confiance partielle' : (
+            <>
+              <AnimatedNumber value={confidenceValue} decimals={0} suffix="%" /> confiance
+            </>
+          )}
+        </div>
       </div>
 
       <div className="llm-summary-band">
-        <article className="llm-summary-card accent">
-          <span>Modeles actifs</span>
-          <strong>{models.length || 1}</strong>
-          <p>{models.join(', ') || 'qwen3.5'}</p>
-        </article>
-        <article className="llm-summary-card">
-          <span>Mention moyenne</span>
-          <strong>{averageMention}%</strong>
-          <p>Lecture consolidee sur la marque suivie.</p>
-        </article>
-        <article className={`llm-summary-card ${singleModel ? 'muted' : getConfLevel(mainConf.confidence || 0)}`}>
-          <span>Lecture divergence</span>
-          <strong>{singleModel ? 'N/A' : mainConf.divergence_level || 'n/a'}</strong>
-          <p>{singleModel ? 'Ajoutez un second modele pour ouvrir la comparaison inter-LLM.' : `Confiance ${mainConf.confidence ?? 'n/a'}%.`}</p>
-        </article>
+        {summaryCards.map((card) => (
+          <article
+            key={card.label}
+            className={`llm-summary-card ${card.label === 'Accord' && !singleModel && agreementValue != null ? getConfLevel(agreementValue) : ''}`.trim()}
+          >
+            <span>{card.label}</span>
+            <strong>
+              {typeof card.numeric === 'number'
+                ? <AnimatedNumber value={card.numeric} decimals={0} suffix={card.suffix || ''} />
+                : (card.text || 'n/a')}
+            </strong>
+            <p>{card.note}</p>
+          </article>
+        ))}
       </div>
 
-      {singleModel && (
+      {singleModel ? (
         <div className="llm-single-note">
-          Ajoutez d'autres modeles dans <code>.env</code> : <code>OLLAMA_MODELS=qwen3.5,llama3.2:8b</code>
-          pour calculer la divergence inter-LLM.
+          Ajoutez d'autres modeles dans <code>.env</code> pour ouvrir la divergence inter-LLM.
         </div>
-      )}
+      ) : null}
 
       <div className="llm-table-scroll">
         <table className="llm-table">
           <thead>
             <tr>
-              <th className="llm-th-brand">MARQUE</th>
-              {models.map(model => (
+              <th className="llm-th-brand">Marque</th>
+              {models.map((model) => (
                 <th key={model} className="llm-th-model">{model}</th>
               ))}
-              {!singleModel && <th className="llm-th-conf">DIVERGENCE</th>}
+              {!singleModel && <th className="llm-th-conf">Spread</th>}
             </tr>
           </thead>
           <tbody>
-            {allBrands.map(item => {
+            {allBrands.map((item) => {
               const conf = confMap[item] || {};
               return (
                 <tr key={item} className={item === brand ? 'llm-row-target' : ''}>
                   <td className="llm-td-brand">{item}</td>
-                  {models.map(model => {
+                  {models.map((model) => {
                     const rate = byModel[model]?.[item]?.mention_rate ?? 0;
                     return (
                       <td key={model} className="llm-td-val">
                         <div className="llm-cell">
-                          <div
-                            className="llm-cell-bar"
-                            style={{ width: `${rate}%`, background: item === brand ? 'var(--accent-secondary)' : '#dddddd' }}
-                          />
-                          <span className="llm-cell-num">{rate}%</span>
+                          <div className={`llm-cell-bar ${item === brand ? 'target' : ''}`} style={{ width: `${rate}%` }} />
+                          <span className="llm-cell-num">
+                            <AnimatedNumber value={rate} decimals={0} suffix="%" />
+                          </span>
                         </div>
                       </td>
                     );
                   })}
                   {!singleModel && (
                     <td className="llm-td-conf">
-                      {conf.std_dev != null
-                        ? (
-                          <span className={`llm-div-badge ${getConfLevel(100 - conf.std_dev * 2.5)}`}>
-                            ±{conf.std_dev}%
-                          </span>
-                        )
-                        : '—'}
+                      {conf.std_dev != null ? (
+                        <span className={`llm-div-badge ${getConfLevel(100 - conf.std_dev * 2.5)}`}>
+                          +/- <AnimatedNumber value={conf.std_dev} decimals={1} suffix="%" />
+                        </span>
+                      ) : '-'}
                     </td>
                   )}
                 </tr>
@@ -198,9 +233,9 @@ export default function LLMBreakdown({ brand, projectId }) {
 
       {!singleModel && (
         <div className="llm-legend">
-          <span className="llm-leg high">Faible divergence - resultats fiables</span>
+          <span className="llm-leg high">Faible divergence</span>
           <span className="llm-leg mid">Divergence moderee</span>
-          <span className="llm-leg low">Forte divergence - interpreter avec precaution</span>
+          <span className="llm-leg low">Forte divergence</span>
         </div>
       )}
     </div>

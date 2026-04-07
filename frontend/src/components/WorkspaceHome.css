@@ -88,6 +88,11 @@
   border: 1px solid rgba(70, 101, 118, 0.15);
 }
 
+.workspace-secondary:hover {
+  background: rgba(244, 250, 254, 0.96);
+  border-color: rgba(82, 189, 255, 0.22);
+}
+
 .workspace-summary {
   display: grid;
   gap: 14px;

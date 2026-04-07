@@ -1,70 +1,54 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import {
-  ArrowRight,
-  BellRing,
-  Bot,
-  ChevronRight,
-  Compass,
-  LineChart,
-  ShieldCheck,
-  Sparkles,
-  Target
-} from 'lucide-react';
+import { ArrowRight, ChevronRight, Compass, LineChart, Radar, Sparkles, Target } from 'lucide-react';
+import MetricTape from './MetricTape';
 import './LandingPage.css';
 
 const MotionDiv = motion.div;
 const MotionH1 = motion.h1;
 const MotionP = motion.p;
 
-const metricItems = [
+const tapeItems = [
+  { label: 'Presence IA', value: 92.4, decimals: 1, change: 4.8, changeSuffix: ' pts' },
+  { label: 'Share of voice', value: 38.6, decimals: 1, suffix: '%', change: 2.4, changeSuffix: ' pts' },
+  { label: 'Prompt leader', value: 14, meta: 'comparatif' },
+  { label: 'Modeles', value: 4, meta: 'ChatGPT, Claude, Gemini, Qwen' },
+  { label: 'Alerte', value: 0, meta: 'aucune derive' }
+];
+
+const supportItems = [
   {
-    title: 'Presence IA',
-    text: 'Mesurez si votre marque apparait reellement dans les reponses des grands modeles.'
+    index: '01',
+    title: 'Mesure utile',
+    text: 'Lisez score, rang, taux de mention et pression concurrente dans la meme surface.'
   },
   {
-    title: 'Rang concurrentiel',
-    text: 'Suivez votre position face aux autres marques sur les memes requetes.'
+    index: '02',
+    title: 'Preuve par prompt',
+    text: 'Retrouvez les requetes qui vous font gagner, stagner ou disparaitre dans les reponses IA.'
   },
   {
-    title: 'Prompts decisifs',
-    text: 'Identifiez les questions qui vous font gagner ou perdre en visibilite.'
+    index: '03',
+    title: 'Suivi en continu',
+    text: 'Gardez un historique vivant par projet, avec alertes et comparaison inter-modeles.'
   }
 ];
 
 const workflowItems = [
   {
     icon: Compass,
-    title: 'Connectez votre espace',
-    text: 'Retrouvez vos projets, vos analyses et votre historique dans un seul cockpit.'
+    title: 'Cadrez la marque',
+    text: 'Marque, secteur, concurrents et prompts sont prepares dans un onboarding plus court.'
   },
   {
-    icon: Target,
-    title: 'Choisissez vos marques',
-    text: 'Suivez votre marque principale, vos concurrents et vos benchmarks actifs.'
+    icon: Radar,
+    title: 'Lancez le run',
+    text: 'Le moteur execute les prompts, compare les modeles et consolide les signaux utiles.'
   },
   {
     icon: LineChart,
-    title: 'Suivez l evolution',
-    text: 'Surveillez les tendances, les ecarts et les changements de perception dans le temps.'
-  }
-];
-
-const proofItems = [
-  {
-    icon: Bot,
-    label: 'Modeles suivis',
-    value: 'ChatGPT, Claude, Gemini, Qwen'
-  },
-  {
-    icon: ShieldCheck,
-    label: 'Lecture utile',
-    value: 'Score, rang, ecart, requetes, alertes'
-  },
-  {
-    icon: BellRing,
-    label: 'Actionnable',
-    value: 'Pilotage par marque, projet et benchmark'
+    title: 'Suivez les variations',
+    text: 'Le dashboard remonte les changements de score, rang et divergence sans noyer la lecture.'
   }
 ];
 
@@ -73,7 +57,7 @@ const fadeUp = {
   visible: (delay = 0) => ({
     opacity: 1,
     y: 0,
-    transition: { duration: 0.7, delay, ease: [0.22, 1, 0.36, 1] }
+    transition: { duration: 0.72, delay, ease: [0.22, 1, 0.36, 1] }
   })
 };
 
@@ -90,7 +74,7 @@ export default function LandingPage({ onStart, onLogin, onDemo }) {
           </div>
           <div>
             <span className="landing-brand-name">GEO Arctic</span>
-            <span className="landing-brand-meta">Visibility Intelligence</span>
+            <span className="landing-brand-meta">Visibility intelligence</span>
           </div>
         </div>
 
@@ -105,7 +89,7 @@ export default function LandingPage({ onStart, onLogin, onDemo }) {
             Connexion
           </button>
           <button className="landing-button primary" onClick={onStart}>
-            Commencer l analyse
+            Commencer
           </button>
         </div>
       </header>
@@ -115,7 +99,7 @@ export default function LandingPage({ onStart, onLogin, onDemo }) {
           <div className="landing-hero-copy">
             <MotionDiv className="landing-eyebrow" initial="hidden" animate="visible" variants={fadeUp} custom={0}>
               <Sparkles size={14} />
-              <span>Arctic Professional Interface</span>
+              <span>Arctic trading surface</span>
             </MotionDiv>
 
             <MotionH1 className="landing-title" initial="hidden" animate="visible" variants={fadeUp} custom={0.08}>
@@ -123,8 +107,8 @@ export default function LandingPage({ onStart, onLogin, onDemo }) {
             </MotionH1>
 
             <MotionP className="landing-subtitle" initial="hidden" animate="visible" variants={fadeUp} custom={0.16}>
-              Suivez votre presence, votre rang et vos ecarts face aux autres marques sur ChatGPT,
-              Claude, Gemini et Qwen.
+              Une lecture nette de votre presence, de votre rang et des changements qui comptent,
+              sur ChatGPT, Claude, Gemini et Qwen.
             </MotionP>
 
             <MotionDiv className="landing-cta-row" initial="hidden" animate="visible" variants={fadeUp} custom={0.24}>
@@ -137,128 +121,103 @@ export default function LandingPage({ onStart, onLogin, onDemo }) {
               </button>
             </MotionDiv>
 
-            <MotionDiv className="landing-trust" initial="hidden" animate="visible" variants={fadeUp} custom={0.32}>
-              <span>Mesure, comparaison, tendances et alertes sur vos marques.</span>
-            </MotionDiv>
+            <MotionP className="landing-trust" initial="hidden" animate="visible" variants={fadeUp} custom={0.32}>
+              Mesure, comparaison, tendances et alertes sans surcharge visuelle.
+            </MotionP>
           </div>
 
           <MotionDiv
             className="landing-hero-visual"
-            initial={{ opacity: 0, y: 30, scale: 0.96 }}
+            initial={{ opacity: 0, y: 28, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.9, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.9, delay: 0.16, ease: [0.22, 1, 0.36, 1] }}
           >
-            <div className="landing-hero-image" aria-hidden="true">
-              <div className="landing-hero-image-copy">
-                <span>Signal froid, lecture nette</span>
-                <strong>Un premier ecran plus editorial, puis une surface produit plus utile.</strong>
-              </div>
-            </div>
+            <div className="landing-screen">
+              <div className="landing-screen-image" aria-hidden="true" />
 
-            <div className="hero-panel hero-panel-main">
-              <div className="hero-panel-top">
-                <span className="hero-panel-label">Vue d ensemble</span>
-                <span className="hero-panel-chip">Live</span>
+              <div className="landing-screen-top">
+                <span>Live workspace</span>
+                <span className="landing-screen-chip">4 modeles actifs</span>
               </div>
 
-              <div className="hero-score-line">
+              <div className="landing-screen-score">
                 <div>
-                  <p className="hero-kpi-label">Score global</p>
-                  <div className="hero-kpi-value">92.4</div>
+                  <span>Score actif</span>
+                  <strong>92.4</strong>
                 </div>
-                <div className="hero-score-delta">+4.8 ce mois</div>
+                <em>+4.8 pts ce mois</em>
               </div>
 
-              <div className="hero-chart">
+              <div className="landing-screen-chart" aria-hidden="true">
                 <span style={{ height: '28%' }} />
-                <span style={{ height: '42%' }} />
-                <span style={{ height: '54%' }} />
-                <span style={{ height: '73%' }} />
+                <span style={{ height: '38%' }} />
+                <span style={{ height: '52%' }} />
+                <span style={{ height: '61%' }} />
+                <span style={{ height: '78%' }} />
                 <span style={{ height: '88%' }} className="active" />
-                <span style={{ height: '64%' }} />
+                <span style={{ height: '70%' }} />
               </div>
 
-              <div className="hero-grid">
-                <article>
-                  <span>Marque</span>
-                  <strong>#1 en presence</strong>
-                </article>
-                <article>
+              <div className="landing-screen-footer">
+                <div>
+                  <span>Rang</span>
+                  <strong>#1</strong>
+                </div>
+                <div>
                   <span>Prompt leader</span>
-                  <strong>Comparatif secteur</strong>
-                </article>
-                <article>
-                  <span>Tendance 30j</span>
-                  <strong>Hausse stable</strong>
-                </article>
-                <article>
-                  <span>Alerte active</span>
-                  <strong>Aucune derive</strong>
-                </article>
+                  <strong>Comparatif</strong>
+                </div>
+                <div>
+                  <span>Alertes</span>
+                  <strong>0 active</strong>
+                </div>
               </div>
-            </div>
-
-            <div className="hero-panel hero-panel-side">
-              <span className="hero-panel-label">Cockpit GEO</span>
-              <ul>
-                <li>Prompts critiques detectes</li>
-                <li>Ecarts concurrents visibles</li>
-                <li>Historique par projet</li>
-              </ul>
             </div>
           </MotionDiv>
         </section>
 
-        <section className="landing-proof">
-          {proofItems.map((item) => (
-            <article key={item.label} className="landing-proof-item">
-              <item.icon size={18} />
-              <div>
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-              </div>
-            </article>
-          ))}
-        </section>
+        <MetricTape items={tapeItems} />
 
-        <section id="measure" className="landing-section landing-measure">
+        <section id="measure" className="landing-section">
           <div className="landing-section-head">
-            <span className="landing-section-tag">Ce que vous suivez vraiment</span>
-            <h2>Un cockpit simple pour lire ce que les IA disent de votre marche.</h2>
+            <span className="landing-section-tag">Mesure</span>
+            <h2>Un premier ecran clair, puis un cockpit qui reste operable.</h2>
             <p>
-              La plateforme ne se limite pas a un score. Elle vous montre ou vous etes cites,
-              comment vous evoluez et sur quelles requetes votre position change.
+              La plateforme affiche d abord les changements, puis les preuves et enfin les details.
+              L ordre de lecture reste stable, meme quand les donnees bougent.
             </p>
           </div>
 
-          <div className="landing-measure-grid">
-            {metricItems.map((item) => (
-              <article key={item.title} className="landing-measure-item">
-                <h3>{item.title}</h3>
-                <p>{item.text}</p>
+          <div className="landing-support-list">
+            {supportItems.map((item) => (
+              <article key={item.title} className="landing-support-item">
+                <span className="landing-support-index">{item.index}</span>
+                <div>
+                  <h3>{item.title}</h3>
+                  <p>{item.text}</p>
+                </div>
               </article>
             ))}
           </div>
         </section>
 
-        <section id="workflow" className="landing-section landing-workflow">
+        <section id="workflow" className="landing-section landing-flow">
           <div className="landing-section-head compact">
             <span className="landing-section-tag">Workflow</span>
-            <h2>Un parcours court, puis une lecture operative.</h2>
+            <h2>Un parcours court, puis une lecture continue.</h2>
           </div>
 
-          <div className="landing-workflow-list">
-            {workflowItems.map((item, index) => (
-              <article key={item.title} className="landing-workflow-item">
-                <div className="landing-workflow-index">0{index + 1}</div>
-                <div className="landing-workflow-icon">
-                  <item.icon size={20} />
+          <div className="landing-flow-list">
+            {workflowItems.map((item) => (
+              <article key={item.title} className="landing-flow-item">
+                <div className="landing-flow-icon">
+                  <item.icon size={18} />
                 </div>
-                <div className="landing-workflow-copy">
+                <div className="landing-flow-copy">
                   <h3>{item.title}</h3>
                   <p>{item.text}</p>
                 </div>
-                <ChevronRight size={18} className="landing-workflow-arrow" />
+                <ChevronRight size={18} className="landing-flow-arrow" />
               </article>
             ))}
           </div>
@@ -266,12 +225,9 @@ export default function LandingPage({ onStart, onLogin, onDemo }) {
 
         <section id="final-cta" className="landing-final">
           <div className="landing-final-copy">
-            <span className="landing-section-tag">Passez a votre cockpit GEO</span>
-            <h2>Accedez a vos projets, votre historique et vos comparaisons en un seul espace.</h2>
-            <p>
-              Commencez par vous connecter. Le tableau de bord utilisateur et la session persistante
-              prennent ensuite le relais.
-            </p>
+            <span className="landing-section-tag">Acces</span>
+            <h2>Entrez dans votre workspace et reprenez vos projets sans friction.</h2>
+            <p>Connexion courte, session restauree et dashboard pret a suivre les variations.</p>
           </div>
 
           <div className="landing-final-actions">

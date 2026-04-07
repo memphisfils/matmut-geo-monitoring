@@ -8,6 +8,7 @@ import {
   Split,
   Target
 } from 'lucide-react';
+import AnimatedNumber from './AnimatedNumber';
 import './PromptEnginePanel.css';
 
 const INTENT_RULES = [
@@ -63,7 +64,7 @@ export default function PromptEnginePanel({ config, compact = false }) {
       <div className="prompt-engine-head">
         <div>
           <span className="prompt-engine-kicker">Moteur de prompts</span>
-          <h3>Ce qui part vraiment dans l analyse</h3>
+          <h3>{compact ? 'Lecture moteur' : 'Ce qui part vraiment dans l analyse'}</h3>
         </div>
         <span className="prompt-engine-mode">{setupMode}</span>
       </div>
@@ -74,8 +75,8 @@ export default function PromptEnginePanel({ config, compact = false }) {
             <Target size={16} />
             <strong>Perimetre</strong>
           </div>
-          <div className="engine-stat">{config?.brand || 'Marque'}</div>
-          <p>{config?.sector || 'Secteur non defini'} · {competitors.length} concurrent{competitors.length > 1 ? 's' : ''}</p>
+          <div className="engine-stat engine-stat-text">{config?.brand || 'Marque'}</div>
+          <p>{config?.sector || 'Secteur non defini'} - {competitors.length} concurrent{competitors.length > 1 ? 's' : ''}</p>
         </article>
 
         <article className="engine-card">
@@ -83,8 +84,8 @@ export default function PromptEnginePanel({ config, compact = false }) {
             <Layers3 size={16} />
             <strong>Prompts</strong>
           </div>
-          <div className="engine-stat">{prompts.length}</div>
-          <p>{products.length} offre{products.length > 1 ? 's' : ''} source{products.length > 1 ? 's' : ''} · source {generationSource}</p>
+          <div className="engine-stat"><AnimatedNumber value={prompts.length} decimals={0} /></div>
+          <p>{products.length} offre{products.length > 1 ? 's' : ''} source{products.length > 1 ? 's' : ''} - source {generationSource}</p>
         </article>
 
         <article className="engine-card">
@@ -92,7 +93,7 @@ export default function PromptEnginePanel({ config, compact = false }) {
             <Bot size={16} />
             <strong>Modeles</strong>
           </div>
-          <div className="engine-stat">{models.length || 1}</div>
+          <div className="engine-stat"><AnimatedNumber value={models.length || 1} decimals={0} /></div>
           <p>{models.length ? models.join(', ') : 'Modeles backend actifs'}</p>
         </article>
 
@@ -101,8 +102,8 @@ export default function PromptEnginePanel({ config, compact = false }) {
             <Split size={16} />
             <strong>Qualite</strong>
           </div>
-          <div className="engine-stat">{averageQuality || Object.keys(intentMap).length || 1}</div>
-          <p>{promptAudit ? `${qualityLabel} · ${weakPromptCount} prompt${weakPromptCount > 1 ? 's' : ''} fragile${weakPromptCount > 1 ? 's' : ''}` : 'Audit en attente'}</p>
+          <div className="engine-stat"><AnimatedNumber value={averageQuality || Object.keys(intentMap).length || 1} decimals={0} /></div>
+          <p>{promptAudit ? `${qualityLabel} - ${weakPromptCount} prompt${weakPromptCount > 1 ? 's' : ''} fragile${weakPromptCount > 1 ? 's' : ''}` : 'Audit en attente'}</p>
         </article>
       </div>
 
@@ -128,21 +129,23 @@ export default function PromptEnginePanel({ config, compact = false }) {
           <div className="intent-chip-row">
             {leadingIntents.length > 0 ? (
               leadingIntents.map(([label, count]) => (
-                <span key={label} className="intent-chip">{label} · {count}</span>
+                <span key={label} className="intent-chip">{label} - {count}</span>
               ))
             ) : (
               <span className="intent-chip muted">Aucun cluster disponible</span>
             )}
           </div>
           <div className="engine-coverage-row">
-            <span className="intent-chip muted">Couverture benchmark · {coverageAverage}%</span>
-            {promptAudit ? <span className="intent-chip muted">Score moyen · {averageQuality}</span> : null}
-            {repairedPromptCount > 0 ? <span className="intent-chip muted">Prompts durcis · {repairedPromptCount}</span> : null}
+            <span className="intent-chip muted">Couverture benchmark - {coverageAverage}%</span>
+            {promptAudit ? <span className="intent-chip muted">Score moyen - {averageQuality}</span> : null}
+            {repairedPromptCount > 0 ? <span className="intent-chip muted">Prompts durcis - {repairedPromptCount}</span> : null}
           </div>
-          <div className="engine-note">
-            <Sparkles size={14} />
-            <span>Le moteur expose maintenant la qualite moyenne, les prompts fragiles et la couverture concurrentielle du run.</span>
-          </div>
+          {!compact ? (
+            <div className="engine-note">
+              <Sparkles size={14} />
+              <span>Le moteur expose la qualite moyenne, les prompts fragiles et la couverture concurrentielle du run.</span>
+            </div>
+          ) : null}
         </div>
       </div>
     </section>

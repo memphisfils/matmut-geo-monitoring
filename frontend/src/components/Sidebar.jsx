@@ -12,7 +12,7 @@ import {
   Smile,
   Sparkles,
   Target,
-  User,
+  TrendingUp,
   Wifi,
   WifiOff
 } from 'lucide-react';
@@ -25,8 +25,7 @@ export default function Sidebar({ isBackendOnline, brand, sector, onReset, activ
     { key: 'prompts', icon: MessageSquare, label: 'Requetes' },
     { key: 'alerts', icon: Bell, label: 'Alertes' },
     { key: 'projects', icon: FolderOpen, label: 'Mes marques' },
-    { key: 'exports', icon: FileText, label: 'Rapports' },
-    { key: 'account', icon: User, label: 'Compte' }
+    { key: 'exports', icon: FileText, label: 'Rapports' }
   ];
 
   const analysisItems = [
@@ -50,7 +49,10 @@ export default function Sidebar({ isBackendOnline, brand, sector, onReset, activ
         </div>
 
         <div className="sidebar-project">
-          <span className="sidebar-project-label">Marque active</span>
+          <div className="sidebar-project-top">
+            <span className="sidebar-project-label">Projet actif</span>
+            <span className="sidebar-project-chip">Vue live</span>
+          </div>
           <strong>{brand || 'Aucun projet'}</strong>
           <span>{sector || 'Secteur non defini'}</span>
         </div>
@@ -64,6 +66,11 @@ export default function Sidebar({ isBackendOnline, brand, sector, onReset, activ
             <Sparkles size={12} />
             <span>Arctic</span>
           </div>
+        </div>
+
+        <div className="sidebar-context-line">
+          <TrendingUp size={13} />
+          <span>Pilotage des signaux GEO en direct</span>
         </div>
       </div>
 
@@ -83,7 +90,7 @@ export default function Sidebar({ isBackendOnline, brand, sector, onReset, activ
 
         <div className="nav-separator" />
 
-        <div className="nav-section-title">Lecture</div>
+        <div className="nav-section-title">Analyse</div>
         {analysisItems.map((item) => (
           <button
             type="button"
@@ -98,7 +105,7 @@ export default function Sidebar({ isBackendOnline, brand, sector, onReset, activ
       </nav>
 
       <div className="sidebar-footer">
-        <div className="sidebar-version">Espace connecte · GEO Arctic</div>
+        <div className="sidebar-version">Espace connecte - GEO Arctic</div>
         {onReset && (
           <button onClick={onReset} className="btn-reset-brand">
             Retour aux projets

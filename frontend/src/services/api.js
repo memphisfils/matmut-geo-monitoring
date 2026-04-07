@@ -267,11 +267,13 @@ export async function fetchMetrics(options = {}) {
   try {
     const r = await apiFetch(withQuery(`${API_URL}/metrics`, {
       brand: options.brand,
-      project_id: options.projectId
+      project_id: options.projectId,
+      benchmark: options.benchmark ? 'true' : undefined
     }));
     if (!r.ok) throw new Error('Backend not available');
     return await r.json();
-  } catch {
+  } catch (err) {
+    if (options.benchmark) throw err;
     return DEMO_DATA_FACTORY(options.brand, options.competitors);
   }
 }

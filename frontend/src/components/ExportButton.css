@@ -84,6 +84,12 @@
   background: rgba(111, 214, 255, 0.1);
 }
 
+.eb-main-btn:focus-visible,
+.eb-option:focus-visible {
+  outline: 3px solid rgba(82, 189, 255, 0.34);
+  outline-offset: 3px;
+}
+
 .eb-option.primary:hover:not(.disabled) {
   background: rgba(94, 188, 255, 0.14);
 }

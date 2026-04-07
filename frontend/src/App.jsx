@@ -181,6 +181,7 @@ export default function App() {
   }, []);
 
   const handleOnboardingComplete = async (cfg) => {
+    setShowOnboarding(false);
     setConfig(cfg);
     setIsAnalyzing(true);
     setIsAnalysisComplete(false);
@@ -385,10 +386,6 @@ export default function App() {
   }, [authUser]);
 
   const handleCreateAnalysis = useCallback(() => {
-    setConfig(null);
-    setData(null);
-    setTrendHistory([]);
-    setActiveTab('dashboard');
     setShowOnboarding(true);
     setError(null);
     setCompletedPrompts([]);
@@ -441,6 +438,58 @@ export default function App() {
     }
   }, []);
 
+  const closeOnboardingModal = useCallback(() => {
+    setShowOnboarding(false);
+    setError(null);
+  }, []);
+
+  useEffect(() => {
+    const shouldLockBody = Boolean(authUser && showOnboarding);
+    document.body.classList.toggle('modal-lock', shouldLockBody);
+    return () => document.body.classList.remove('modal-lock');
+  }, [authUser, showOnboarding]);
+
+  useEffect(() => {
+    if (!authUser || !showOnboarding) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        closeOnboardingModal();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [authUser, showOnboarding, closeOnboardingModal]);
+
+  const onboardingModal = authUser && showOnboarding ? (
+    <div
+      className="onboarding-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      onClick={closeOnboardingModal}
+    >
+      <div className="onboarding-modal-shell" onClick={(event) => event.stopPropagation()}>
+        <div className="onboarding-modal-head">
+          <div>
+            <span className="onboarding-modal-kicker">Nouvelle analyse</span>
+            <h2>Configurer une nouvelle marque</h2>
+            <p>Renseignez le contexte, le benchmark et les prompts du run.</p>
+          </div>
+          <button type="button" className="onboarding-modal-close" onClick={closeOnboardingModal}>
+            Fermer
+          </button>
+        </div>
+
+        <div className="onboarding-modal-body" onClick={(event) => event.stopPropagation()}>
+          <Suspense fallback={<LazySectionFallback label="Chargement de l onboarding..." />}>
+            <Onboarding onComplete={handleOnboardingComplete} />
+          </Suspense>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   useEffect(() => {
     if (!authUser || config || showOnboarding || projectsLoading || !preferences.autoOpenLatestProject) {
       return;
@@ -479,9 +528,9 @@ export default function App() {
   }
 
   if (!config) {
-    if (authUser && !showOnboarding) {
+    if (authUser) {
       return (
-        <div className="app-layout">
+        <div className={`app-layout ${showOnboarding ? 'modal-open' : ''}`}>
           <div className="main-content" style={{ marginTop: 0 }}>
             <div className="page-content">
               <Suspense fallback={<LazySectionFallback label="Chargement de votre espace..." />}>
@@ -496,6 +545,7 @@ export default function App() {
               </Suspense>
             </div>
           </div>
+          {onboardingModal}
         </div>
       );
     }
@@ -524,16 +574,20 @@ export default function App() {
   }
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout ${showOnboarding ? 'modal-open' : ''}`}>
       <TopNavbar
         brand={config.brand}
+        user={authUser}
         onRefresh={handleRefresh}
         onExport={handleExport}
         isLoading={isAnalyzing}
         isBackendOnline={isBackendOnline}
         onReset={resetWorkspace}
         activeTab={activeTab}
-        onTabChange={handleTabChange}
+        onCreateAnalysis={handleCreateAnalysis}
+        onOpenProjects={() => setActiveTab('projects')}
+        onOpenAccount={() => setActiveTab('account')}
+        onLogout={handleLogout}
         exportSlot={<ExportButton brand={config.brand} projectId={config.projectId} />}
       />
 
@@ -579,13 +633,13 @@ export default function App() {
 
             {activeTab === 'benchmark' && (
               <Suspense fallback={<LazySectionFallback label="Chargement des benchmarks..." />}>
-                <Benchmark sector={config.sector} />
+                <Benchmark config={config} data={data} sector={config.sector} />
               </Suspense>
             )}
 
             {activeTab === 'history' && (
               <Suspense fallback={<LazySectionFallback label="Chargement des tendances..." />}>
-                <HistoryTab config={config} trendHistory={trendHistory} />
+                <HistoryTab config={config} trendHistory={trendHistory} data={data} />
               </Suspense>
             )}
 
@@ -609,7 +663,7 @@ export default function App() {
 
             {activeTab === 'exports' && (
               <Suspense fallback={<LazySectionFallback label="Chargement des rapports..." />}>
-                <ExportsTab config={config} />
+                <ExportsTab config={config} data={data} />
               </Suspense>
             )}
 
@@ -647,6 +701,7 @@ export default function App() {
           </div>
         </div>
       </div>
+      {onboardingModal}
     </div>
   );
 }

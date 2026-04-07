@@ -1,10 +1,7 @@
 import React from 'react';
+import { Activity } from 'lucide-react';
+import AnimatedNumber from './AnimatedNumber';
 import './RankingTable.css';
-
-function formatMetric(value, digits = 1) {
-    if (typeof value !== 'number' || Number.isNaN(value)) return 'n/a';
-    return value.toFixed(digits);
-}
 
 export default function RankingTable({ ranking, brand }) {
     if (!ranking || ranking.length === 0) return null;
@@ -13,7 +10,13 @@ export default function RankingTable({ ranking, brand }) {
         <div className="ranking-container">
             <div className="ranking-header">
                 <h2>Classement global</h2>
-                <span className="ranking-count">{ranking.length} marques</span>
+                <div className="ranking-header-meta">
+                    <span className="ranking-count">{ranking.length} marques</span>
+                    <span className="ranking-live">
+                        <Activity size={12} />
+                        Live
+                    </span>
+                </div>
             </div>
             <div className="table-wrapper">
                 <table className="ranking-table">
@@ -34,15 +37,20 @@ export default function RankingTable({ ranking, brand }) {
                             return (
                                 <tr key={item.brand} className={isTarget ? 'row-target' : ''}>
                                     <td className="rank-cell">
-                                        {item.rank}
-                                    </td>
-                                    <td className="brand-cell">
-                                        <span className={`brand-name ${isTarget ? 'brand-highlight' : ''}`}>
-                                            {item.brand}
+                                        <span className={`rank-pill ${isTarget ? 'target' : ''}`}>
+                                            {item.rank}
                                         </span>
                                     </td>
+                                    <td className="brand-cell">
+                                        <div className="brand-cell-inner">
+                                            <span className={`brand-dot ${isTarget ? 'target' : ''}`} />
+                                            <span className={`brand-name ${isTarget ? 'brand-highlight' : ''}`}>
+                                                {item.brand}
+                                            </span>
+                                        </div>
+                                    </td>
                                     <td className="score-cell">
-                                        {formatMetric(item.global_score)}
+                                        <AnimatedNumber value={item.global_score} decimals={1} />
                                     </td>
                                     <td>
                                         <div className="bar-container">
@@ -55,12 +63,14 @@ export default function RankingTable({ ranking, brand }) {
                                                     }}
                                                 />
                                             </div>
-                                            <span className="bar-value">{formatMetric(item.mention_rate, 0)}%</span>
+                                            <span className="bar-value">
+                                                <AnimatedNumber value={item.mention_rate} decimals={0} suffix="%" />
+                                            </span>
                                         </div>
                                     </td>
-                                    <td>{formatMetric(item.avg_position)}</td>
-                                    <td>{formatMetric(item.share_of_voice, 0)}%</td>
-                                    <td>{formatMetric(item.top_of_mind, 0)}%</td>
+                                    <td><AnimatedNumber value={item.avg_position} decimals={1} /></td>
+                                    <td><AnimatedNumber value={item.share_of_voice} decimals={0} suffix="%" /></td>
+                                    <td><AnimatedNumber value={item.top_of_mind} decimals={0} suffix="%" /></td>
                                 </tr>
                             );
                         })}

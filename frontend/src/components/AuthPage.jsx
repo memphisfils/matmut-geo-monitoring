@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import './AuthPage.css';
 
 const MotionSection = motion.section;
@@ -33,21 +33,6 @@ function loadGoogleIdentityScript() {
 
   return googleIdentityScriptPromise;
 }
-
-const valueItems = [
-  {
-    title: 'Session persistante',
-    text: 'Retrouvez directement votre dashboard, vos projets et vos analyses recentes.'
-  },
-  {
-    title: 'Connexion centralisee',
-    text: 'Formulaire classique pour le produit, Google pour un acces rapide.'
-  },
-  {
-    title: 'Suivi multi-marques',
-    text: 'Comparez votre marque, vos concurrents et l evolution des reponses IA.'
-  }
-];
 
 export default function AuthPage({
   onBack,
@@ -90,6 +75,8 @@ export default function AuthPage({
       .then((google) => {
         if (cancelled || !google?.accounts?.id || !googleButtonRef.current) return;
 
+        const width = Math.max(240, Math.min(googleButtonRef.current.offsetWidth || 360, 380));
+
         google.accounts.id.initialize({
           client_id: googleClientId,
           callback: (response) => {
@@ -105,7 +92,7 @@ export default function AuthPage({
           size: 'large',
           text: 'continue_with',
           shape: 'pill',
-          width: 360,
+          width,
           locale: 'fr'
         });
 
@@ -127,74 +114,18 @@ export default function AuthPage({
         Retour
       </button>
 
-      <main className="auth-layout">
-        <MotionSection
-          className="auth-story"
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <div className="auth-story-header">
-            <span className="auth-eyebrow">GEO Arctic</span>
-            <h1>Accedez a votre cockpit GEO, vos projets et votre historique d analyse.</h1>
-            <p>
-              La connexion devient le point d entree du produit: session utilisateur,
-              projets deja suivis et lecture immediate des evolutions.
-            </p>
-          </div>
-
-          <div className="auth-story-visual" aria-hidden="true">
-            <div className="auth-story-visual-copy">
-              <span>Compte restaure</span>
-              <strong>Login court, reprise immediate du workspace.</strong>
-            </div>
-          </div>
-
-          <div className="auth-story-rail">
-            <div className="auth-story-card auth-story-card-primary">
-              <span className="auth-story-label">Vue d ensemble</span>
-              <strong>Dashboard restaure a la connexion</strong>
-              <p>Un utilisateur deja authentifie arrive directement sur son espace de pilotage.</p>
-            </div>
-
-            <div className="auth-story-card auth-story-card-secondary">
-              <div className="auth-story-badge">
-                <ShieldCheck size={16} />
-                Session securisee
-              </div>
-              <div className="auth-story-metrics">
-                <div>
-                  <span>Projets suivis</span>
-                  <strong>12</strong>
-                </div>
-                <div>
-                  <span>Alertes ouvertes</span>
-                  <strong>3</strong>
-                </div>
-                <div>
-                  <span>Derniere evolution</span>
-                  <strong>+4.8</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="auth-values">
-            {valueItems.map((item) => (
-              <article key={item.title} className="auth-value-item">
-                <h2>{item.title}</h2>
-                <p>{item.text}</p>
-              </article>
-            ))}
-          </div>
-        </MotionSection>
-
+      <main className="auth-stage">
         <MotionSection
           className="auth-panel"
-          initial={{ opacity: 0, y: 30, scale: 0.98 }}
+          initial={{ opacity: 0, y: 24, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.72, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
         >
+          <div className="auth-brandline">
+            <span className="auth-eyebrow">GEO Arctic</span>
+            <span className="auth-brandline-copy">Connexion securisee</span>
+          </div>
+
           <div className="auth-tabs">
             <button
               type="button"
@@ -215,13 +146,13 @@ export default function AuthPage({
           <div className="auth-panel-head">
             <span className="auth-form-tag">
               <LockKeyhole size={14} />
-              Espace securise
+              Session utilisateur
             </span>
-            <h2>{mode === 'login' ? 'Se connecter' : 'Creer votre compte'}</h2>
+            <h2>{mode === 'login' ? 'Entrez dans votre workspace' : 'Ouvrez votre espace GEO'}</h2>
             <p>
               {mode === 'login'
-                ? 'Accedez a vos projets, vos benchmarks et votre progression recente.'
-                : 'Preparez votre session utilisateur pour retrouver automatiquement vos analyses.'}
+                ? 'Accedez directement a vos projets et a votre dashboard.'
+                : 'Creez un compte pour retrouver ensuite vos analyses et vos comparaisons.'}
             </p>
           </div>
 
@@ -240,12 +171,16 @@ export default function AuthPage({
             {mode === 'signup' && (
               <label>
                 Nom complet
-                <input
-                  type="text"
-                  value={form.fullName}
-                  onChange={handleChange('fullName')}
-                  placeholder="Nom et prenom"
-                />
+                <div className="auth-input-wrap">
+                  <UserRound size={16} />
+                  <input
+                    type="text"
+                    value={form.fullName}
+                    onChange={handleChange('fullName')}
+                    placeholder="Nom et prenom"
+                    required={mode === 'signup'}
+                  />
+                </div>
               </label>
             )}
 
@@ -288,7 +223,7 @@ export default function AuthPage({
           ) : null}
 
           <p className="auth-footnote">
-            Google et le formulaire partageront ensuite la meme session backend cote utilisateur.
+            Formulaire et Google utilisent ensuite la meme session backend.
           </p>
         </MotionSection>
       </main>

@@ -13,10 +13,12 @@ import json
 import os
 import random
 import re
+import threading
 import time
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from services import BrandAnalyzer, LLMClient
+from catalogs import get_alert_catalog, get_alert_summary, get_report_catalog, get_report_definition
 
 load_dotenv()
 
@@ -25,7 +27,16 @@ app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY') or os.getenv('SECRET_KE
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = bool(os.getenv('RENDER') or os.getenv('FLASK_ENV') == 'production')
+app.config['SESSION_COOKIE_NAME'] = 'geo_arctic_session'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
+
+IS_PRODUCTION = bool(os.getenv('RENDER') or os.getenv('FLASK_ENV') == 'production')
+DEFAULT_SECRET_IN_USE = app.config['SECRET_KEY'] == 'geo-monitor-dev-secret'
+AUTH_RATE_LIMIT_WINDOW_SECONDS = 15 * 60
+AUTH_RATE_LIMIT_MAX_ATTEMPTS = 8
+_auth_attempts = {}
+_auth_attempts_lock = threading.Lock()
 
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
@@ -37,10 +48,11 @@ ALLOWED_ORIGINS = [
 ]
 CORS(app, resources={r"/*": {"origins": ALLOWED_ORIGINS}}, supports_credentials=True)
 
-from models import (init_db, save_analysis, get_history,
+from models import (init_db, save_analysis, get_history, get_previous_prompt_run,
                    generate_demo_history, upsert_project, get_all_projects, get_project_by_id,
                    create_user, get_user_by_id, get_user_by_email, get_user_by_google_sub,
-                   update_user_login, attach_google_identity)
+                   update_user_login, attach_google_identity, get_alert_preferences,
+                   upsert_alert_channel_setting, upsert_alert_rule_setting)
 from alerts import send_alert, alert_rank_lost, alert_weekly_summary, send_slack_alert
 from utils import build_geo_prompt, GEO_SYSTEM_PROMPT, generate_benchmark_prompt
 init_db()
@@ -61,6 +73,85 @@ PROMPT_INTENT_RULES = [
 
 def _normalize_email(value: str) -> str:
     return (value or '').strip().lower()
+
+
+def _client_ip():
+    forwarded_for = request.headers.get('X-Forwarded-For', '')
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+    return request.remote_addr or 'unknown'
+
+
+def _auth_scope_key(scope: str, email: str = ''):
+    return f"{scope}:{_client_ip()}:{_normalize_email(email)}"
+
+
+def _is_rate_limited(scope: str, email: str = ''):
+    key = _auth_scope_key(scope, email)
+    now = time.time()
+    with _auth_attempts_lock:
+        attempts = [stamp for stamp in _auth_attempts.get(key, []) if now - stamp < AUTH_RATE_LIMIT_WINDOW_SECONDS]
+        _auth_attempts[key] = attempts
+        return len(attempts) >= AUTH_RATE_LIMIT_MAX_ATTEMPTS
+
+
+def _register_failed_attempt(scope: str, email: str = ''):
+    key = _auth_scope_key(scope, email)
+    now = time.time()
+    with _auth_attempts_lock:
+        attempts = [stamp for stamp in _auth_attempts.get(key, []) if now - stamp < AUTH_RATE_LIMIT_WINDOW_SECONDS]
+        attempts.append(now)
+        _auth_attempts[key] = attempts
+
+
+def _clear_failed_attempts(scope: str, email: str = ''):
+    key = _auth_scope_key(scope, email)
+    with _auth_attempts_lock:
+        _auth_attempts.pop(key, None)
+
+
+def _rate_limited_response():
+    return jsonify({
+        'error': 'Trop de tentatives. Reessayez plus tard.',
+        'retry_after_seconds': AUTH_RATE_LIMIT_WINDOW_SECONDS
+    }), 429
+
+
+def _origin_allowed(origin: str):
+    return not origin or origin in ALLOWED_ORIGINS
+
+
+def _security_warnings():
+    warnings = []
+    if DEFAULT_SECRET_IN_USE:
+        warnings.append('default_secret_key')
+    if not app.config.get('SESSION_COOKIE_SECURE'):
+        warnings.append('session_cookie_not_secure')
+    if not os.getenv('ALERT_SETTINGS_ENCRYPTION_KEY') and DEFAULT_SECRET_IN_USE:
+        warnings.append('alert_settings_key_not_set')
+    return warnings
+
+
+@app.before_request
+def enforce_request_security():
+    if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+        origin = request.headers.get('Origin')
+        if not _origin_allowed(origin):
+            return jsonify({'error': 'Origin non autorisee'}), 403
+
+
+@app.after_request
+def apply_security_headers(response):
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
+    if app.config.get('SESSION_COOKIE_SECURE'):
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    if request.path.startswith('/api/auth') or request.path.startswith('/api/session'):
+        response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 def _public_user(user: dict = None):
@@ -139,6 +230,70 @@ def _project_from_request(user_id: int):
             return project
         return None
     return _active_or_latest_project(user_id)
+
+
+def _mask_secret(value: str):
+    value = (value or '').strip()
+    if not value:
+        return ''
+    if len(value) <= 6:
+        return '***'
+    return f"{value[:3]}***{value[-3:]}"
+
+
+def _serialize_alert_preferences(user_id: int, project_id: int = None):
+    preferences = get_alert_preferences(user_id=user_id, project_id=project_id)
+    channels = {}
+
+    for channel_key, settings in preferences['channels'].items():
+        config = settings.get('config') or {}
+        if channel_key == 'email':
+            target = config.get('recipient') or ''
+            config_preview = {
+                'recipient': _mask_secret(target),
+                'host': config.get('host', ''),
+                'port': config.get('port', '')
+            }
+            configured = bool(target and config.get('host') and config.get('user') and config.get('password'))
+        elif channel_key == 'slack':
+            target = config.get('webhook_url') or ''
+            config_preview = {'webhook_url': _mask_secret(target)}
+            configured = bool(target)
+        else:
+            target = config.get('chat_id') or ''
+            config_preview = {
+                'chat_id': _mask_secret(target),
+                'bot_token': _mask_secret(config.get('bot_token') or '')
+            }
+            configured = bool(target and config.get('bot_token'))
+
+        channels[channel_key] = {
+            'enabled': bool(settings.get('enabled')),
+            'configured': configured,
+            'source': settings.get('source', 'default'),
+            'config': config_preview
+        }
+
+    rules = []
+    for alert_id, rule in preferences['rules'].items():
+        rules.append({
+            'id': alert_id,
+            'name': rule.get('name'),
+            'severity': rule.get('severity'),
+            'frequency': rule.get('frequency'),
+            'enabled': bool(rule.get('enabled')),
+            'source': rule.get('source', 'default')
+        })
+
+    rules.sort(key=lambda item: (item['severity'], item['name']))
+
+    return {
+        'project_id': project_id,
+        'channels': channels,
+        'rules': rules,
+        'enabled_channels': [key for key, item in channels.items() if item.get('enabled')],
+        'enabled_rules_count': sum(1 for item in rules if item.get('enabled'))
+    }
 
 
 def _scheduler_state():
@@ -282,18 +437,18 @@ def _repair_prompt_text(prompt: str, brand: str, competitors=None, sector: str =
     competitor = audit['competitor_hits'][0] if audit['competitor_hits'] else (competitors[0] if competitors else None)
 
     if not audit['brand_present'] and brand:
-        working = f"{working} pour {brand}"
+        working = f"{working} : {brand}"
 
     if not audit['sector_present'] and sector:
         working = f"{working}{sector_suffix}"
 
-    if not audit['comparison_term'] and competitor:
+    if not audit['comparison_term'] and competitor and brand:
         working = f"Comparatif {working} vs {competitor}"
-    elif not audit['comparison_term'] and brand:
-        working = f"Meilleure option {working} pour {brand}"
+    elif not audit['comparison_term']:
+        working = f"Comparatif {working}"
 
     if not audit['query_term']:
-        working = f"Quelle offre choisir : {working}"
+        working = f"Quelles marques ressortent : {working}"
 
     return _normalize_prompt_text(f"{working} ?")
 
@@ -376,29 +531,48 @@ def _scheduled_analysis():
             continue
         try:
             results = _run_real_or_demo(brand, competitors, prompts, limit=6)
-            _save_and_alert(results, brand)
+            _save_and_alert(results, brand, user_id=project.get('user_id'), project_id=project.get('id'))
         except Exception as e:
             print(f"[SCHEDULER] {brand} : {e}")
 
 
 def _scheduled_weekly_summary():
-    results = _load_results()
-    if not results:
-        return
-    brand       = results.get('brand', 'Marque')
-    competitors = results.get('competitors', [])
-    az          = BrandAnalyzer(brands=[brand] + competitors)
-    all_analyses = [d['analysis'] for r in results['responses']
-                    for d in r['llm_analyses'].values()]
-    metrics = az.calculate_metrics(all_analyses)
-    ranking = az.generate_ranking(metrics)
-    brand_data      = metrics.get(brand, {})
-    brand_rank      = next((r['rank'] for r in ranking if r['brand'] == brand), None)
-    top_competitors = [r for r in ranking if r['brand'] != brand][:5]
-    alert_weekly_summary(brand=brand, rank=brand_rank or 0,
-                         score=brand_data.get('global_score', 0),
-                         mention_rate=brand_data.get('mention_rate', 0),
-                         top_competitors=top_competitors)
+    projects = get_all_projects()
+    for project in projects:
+        brand = project.get('brand', 'Marque')
+        user_id = project.get('user_id')
+        project_id = project.get('id')
+        results = _load_results(brand, user_id=user_id)
+        if not results:
+            continue
+
+        preferences = get_alert_preferences(user_id=user_id, project_id=project_id) if user_id else None
+        enabled_channels = [
+            key for key, item in (preferences or {}).get('channels', {}).items()
+            if item.get('enabled')
+        ]
+        weekly_rule = (preferences or {}).get('rules', {}).get('ALT-019', {})
+        if preferences and (not weekly_rule.get('enabled', True) or not enabled_channels):
+            continue
+
+        competitors = results.get('competitors', [])
+        az = BrandAnalyzer(brands=[brand] + competitors)
+        all_analyses = [d['analysis'] for r in results['responses']
+                        for d in r['llm_analyses'].values()]
+        metrics = az.calculate_metrics(all_analyses)
+        ranking = az.generate_ranking(metrics)
+        brand_data = metrics.get(brand, {})
+        brand_rank = next((r['rank'] for r in ranking if r['brand'] == brand), None)
+        top_competitors = [r for r in ranking if r['brand'] != brand][:5]
+        alert_weekly_summary(
+            brand=brand,
+            rank=brand_rank or 0,
+            score=brand_data.get('global_score', 0),
+            mention_rate=brand_data.get('mention_rate', 0),
+            top_competitors=top_competitors,
+            channel_settings=(preferences or {}).get('channels', {}),
+            enabled_channels=enabled_channels
+        )
 
 
 def _scheduled_daily_alert():
@@ -443,6 +617,59 @@ def _scheduled_daily_alert():
             print(f"[DAILY] Erreur envoi alerte: {e}")
 
 
+def _scheduled_daily_alert_v2():
+    """Alerte quotidienne - compare chaque projet avec sa precedente analyse."""
+    from models import get_history
+
+    projects = get_all_projects()
+    for project in projects:
+        brand = project.get('brand', 'Marque')
+        user_id = project.get('user_id')
+        project_id = project.get('id')
+        results = _load_results(brand, user_id=user_id)
+        if not results:
+            continue
+
+        preferences = get_alert_preferences(user_id=user_id, project_id=project_id) if user_id else None
+        enabled_channels = [
+            key for key, item in (preferences or {}).get('channels', {}).items()
+            if item.get('enabled')
+        ]
+        score_drop_rule = (preferences or {}).get('rules', {}).get('ALT-004', {})
+        if preferences and (not score_drop_rule.get('enabled', True) or not enabled_channels):
+            continue
+
+        competitors = results.get('competitors', [])
+        az = BrandAnalyzer(brands=[brand] + competitors)
+        all_analyses = [d['analysis'] for r in results['responses']
+                        for d in r['llm_analyses'].values()]
+        metrics = az.calculate_metrics(all_analyses)
+        ranking = az.generate_ranking(metrics)
+        current_score = metrics.get(brand, {}).get('global_score', 0)
+        current_rank = next((r['rank'] for r in ranking if r['brand'] == brand), 99)
+
+        history = get_history(brand=brand, days=2, user_id=user_id, project_id=project_id)
+        if len(history) < 2:
+            print(f"[DAILY] Pas assez d'historique pour {brand}")
+            continue
+
+        previous_score = history[-2].get(brand, current_score)
+        score_drop = current_score - previous_score
+        if score_drop >= -5:
+            continue
+
+        try:
+            send_alert(
+                message=f"Evolution: score {previous_score:.1f} -> {current_score:.1f} ({score_drop:+.1f}) | Rang actuel: #{current_rank}",
+                subject=f"Alerte quotidienne - {brand}",
+                channel_settings=(preferences or {}).get('channels', {}),
+                enabled_channels=enabled_channels
+            )
+            print(f"[DAILY] Alerte envoyee pour {brand}: {score_drop:+.1f}")
+        except Exception as e:
+            print(f"[DAILY] Erreur envoi alerte: {e}")
+
+
 def _start_scheduler():
     global scheduler
 
@@ -453,7 +680,7 @@ def _start_scheduler():
         from apscheduler.schedulers.background import BackgroundScheduler
         scheduler = BackgroundScheduler()
         scheduler.add_job(_scheduled_analysis, 'interval', hours=6, id='auto_analysis', replace_existing=True)
-        scheduler.add_job(_scheduled_daily_alert, 'cron',
+        scheduler.add_job(_scheduled_daily_alert_v2, 'cron',
                           hour=8, minute=0, id='daily_alert', replace_existing=True)
         scheduler.add_job(_scheduled_weekly_summary, 'cron',
                           day_of_week='mon', hour=9, minute=0, id='weekly_summary', replace_existing=True)
@@ -750,8 +977,16 @@ def health():
     return jsonify({'status': 'ok', 'version': '2.4', 'sprint': 4,
                     'uptime': uptime_str, 'timestamp': datetime.now().isoformat(),
                     'features': {'pdf_export': weasyprint_ok, 'streaming': True,
-                                 'alerts': True, 'prompt_compare': True},
-                    'scheduler': _scheduler_state()})
+                                 'alerts': True, 'prompt_compare': True,
+                                 'report_catalog': True, 'alert_catalog': True},
+                    'scheduler': _scheduler_state(),
+                    'security': {
+                        'production_mode': IS_PRODUCTION,
+                        'session_cookie_secure': bool(app.config.get('SESSION_COOKIE_SECURE')),
+                        'default_secret_in_use': DEFAULT_SECRET_IN_USE,
+                        'alert_settings_encrypted': True,
+                        'warnings': _security_warnings()
+                    }})
 
 @app.route('/api/status', methods=['GET'])
 def status():
@@ -772,11 +1007,17 @@ def auth_signup():
     email = _normalize_email(data.get('email'))
     password = data.get('password') or ''
 
+    if _is_rate_limited('signup', email):
+        return _rate_limited_response()
+
     if not email or '@' not in email:
+        _register_failed_attempt('signup', email)
         return jsonify({'error': 'Adresse email invalide'}), 400
     if len(password) < 8:
+        _register_failed_attempt('signup', email)
         return jsonify({'error': 'Le mot de passe doit contenir au moins 8 caracteres'}), 400
     if get_user_by_email(email):
+        _register_failed_attempt('signup', email)
         return jsonify({'error': 'Un compte existe deja pour cette adresse'}), 409
 
     user = create_user(
@@ -785,6 +1026,7 @@ def auth_signup():
         password_hash=generate_password_hash(password),
         auth_provider='password'
     )
+    _clear_failed_attempts('signup', email)
     _set_user_session(user)
     return jsonify({'authenticated': True, 'user': _public_user(user)}), 201
 
@@ -795,12 +1037,17 @@ def auth_login():
     email = _normalize_email(data.get('email'))
     password = data.get('password') or ''
 
+    if _is_rate_limited('login', email):
+        return _rate_limited_response()
+
     user = get_user_by_email(email)
     if not user or not user.get('password_hash') or not check_password_hash(user['password_hash'], password):
+        _register_failed_attempt('login', email)
         return jsonify({'error': 'Identifiants invalides'}), 401
 
     update_user_login(user['id'])
     user = get_user_by_id(user['id'])
+    _clear_failed_attempts('login', email)
     _set_user_session(user)
     return jsonify({'authenticated': True, 'user': _public_user(user)})
 
@@ -810,8 +1057,13 @@ def auth_google():
     data = request.get_json() or {}
     credential = data.get('credential') or data.get('id_token')
     google_client_id = os.getenv('GOOGLE_CLIENT_ID') or os.getenv('VITE_GOOGLE_CLIENT_ID')
+    email_hint = _normalize_email(data.get('email'))
+
+    if _is_rate_limited('google', email_hint or _client_ip()):
+        return _rate_limited_response()
 
     if not credential:
+        _register_failed_attempt('google', email_hint or _client_ip())
         return jsonify({'error': 'Google credential manquante'}), 400
     if not google_client_id:
         return jsonify({'error': 'GOOGLE_CLIENT_ID non configure'}), 503
@@ -829,10 +1081,12 @@ def auth_google():
             google_client_id
         )
     except Exception as exc:
+        _register_failed_attempt('google', email_hint or _client_ip())
         return jsonify({'error': f'Token Google invalide: {exc}'}), 401
 
     email = _normalize_email(id_info.get('email'))
     if not email:
+        _register_failed_attempt('google', email_hint or _client_ip())
         return jsonify({'error': 'Compte Google sans email exploitable'}), 400
 
     google_sub = id_info.get('sub')
@@ -849,12 +1103,14 @@ def auth_google():
             avatar_url=avatar_url
         )
     elif user.get('google_sub') not in (None, google_sub):
+        _register_failed_attempt('google', email)
         return jsonify({'error': 'Ce compte est deja lie a une autre identite Google'}), 409
     else:
         user = attach_google_identity(user['id'], google_sub, avatar_url=avatar_url)
 
     update_user_login(user['id'])
     user = get_user_by_id(user['id'])
+    _clear_failed_attempts('google', email)
     _set_user_session(user)
     return jsonify({'authenticated': True, 'user': _public_user(user)})
 
@@ -940,15 +1196,20 @@ def generate_config():
 
         # Appel direct avec think=False pour éviter le timeout
         import requests as req
-        # Prompts comparatifs: {{brand}} vs concurrents + requetes SEO habituelles
-        competitors_list = [f"[CONCURRENTS]"] * 5  # Placeholder, LLM génère les noms
         prompt_llm = (
-            f'Pour "{brand}" dans le secteur "{sector}", génère un JSON strict avec :\n'
-            f'- 3 produits avec id, name, description, prompts SEO comparatifs (qui mentionnent {brand} ET d\'autres marques)\n'
-            f'- 5 vrais concurrents du secteur\n'
-            f'Les prompts SEO doivent être du type "Meilleur [produit] {sector} : {brand} vs [autres]" ou "Comparatif [produit] {sector} : [marques]" '
-            f'pour forcer l\'IA à mentionner plusieurs marques.\n'
-            f'Format: {{"products":[{{"id":"p1","name":"...","description":"...","prompts":["prompt1 vs2...","prompt2..."]}}],"suggested_competitors":["C1","C2","C3","C4","C5"]}}\n'
+            f'Tu prepares un benchmark GEO neutre pour la marque "{brand}" dans le secteur "{sector}".\n'
+            f'Retourne un JSON strict avec:\n'
+            f'- 3 a 4 produits ou cas d usage comparables\n'
+            f'- 3 a 5 concurrents reels et credibles du meme marche\n'
+            f'- 2 prompts maximum par produit\n\n'
+            f'Contraintes obligatoires pour les prompts:\n'
+            f'- formulations neutres, non promotionnelles\n'
+            f'- ne pas ecrire des prompts centres sur "{brand}" du type "{brand} ou alternative"\n'
+            f'- utiliser un terrain commun de comparaison: "quelles marques", "comparatif", "quels acteurs", "meilleur choix"\n'
+            f'- mentionner "{brand}" et au moins 2 concurrents dans la plupart des prompts\n'
+            f'- les prompts doivent pouvoir etre reuses sans avantager automatiquement la marque suivie\n\n'
+            f'Format strict attendu:\n'
+            f'{{"products":[{{"id":"p1","name":"...","description":"...","prompts":["...","..."]}}],"suggested_competitors":["C1","C2","C3"]}}\n'
             f'JSON uniquement.'
         )
         resp = req.post(
@@ -1508,11 +1769,16 @@ def run_analysis_stream():
 def get_metrics():
     print('[METRICS] Appel de /api/metrics')
     requested_brand = request.args.get('brand')
+    benchmark_mode = request.args.get('benchmark', 'false').lower() == 'true'
     user = _current_user()
     user_id = user['id'] if user else None
 
     results = None
-    if requested_brand:
+    if benchmark_mode:
+        results = _load_results()
+        if not results or results.get('mode') != 'benchmark':
+            return jsonify({'error': 'Aucun benchmark disponible'}), 404
+    elif requested_brand:
         results = _load_results(requested_brand, user_id=user_id)
         if results:
             print(f'[METRICS] snapshot trouve pour {requested_brand}')
@@ -1533,6 +1799,8 @@ def get_metrics():
             time.sleep(2)
 
     if not results:
+        if benchmark_mode:
+            return jsonify({'error': 'Aucun benchmark disponible'}), 404
         if requested_brand:
             return jsonify({'error': f'Aucune analyse trouvee pour {requested_brand}'}), 404
         if user_id is not None:
@@ -1640,6 +1908,15 @@ def compare_prompts():
     brand       = results.get('brand', 'Marque')
     competitors = results.get('competitors', [])
     sector = results.get('sector', '')
+    project = _project_from_request(user_id) if user_id is not None else None
+    project_id = project.get('id') if project and (not requested_brand or project.get('brand') == brand) else None
+    previous_run = get_previous_prompt_run(
+        brand,
+        results.get('timestamp', datetime.now().isoformat()),
+        user_id=user_id,
+        project_id=project_id
+    )
+    previous_snapshot = previous_run.get('snapshot', {})
     prompt_stats = []
     for response in results['responses']:
         prompt = response.get('prompt', '')
@@ -1681,12 +1958,43 @@ def compare_prompts():
                               'best_model': model_breakdown['best_model'],
                               'per_model': model_breakdown['per_model']})
     prompt_stats.sort(key=lambda x: -x['score'])
+    for index, item in enumerate(prompt_stats, start=1):
+        previous = previous_snapshot.get(item['prompt'])
+        item['current_rank'] = index
+        item['previous_rank_position'] = previous.get('rank_position') if previous else None
+        item['rank_change'] = (
+            previous['rank_position'] - index
+            if previous and previous.get('rank_position') is not None else None
+        )
+        item['score_change'] = (
+            round(item['score'] - previous.get('score', 0), 1)
+            if previous and previous.get('score') is not None else None
+        )
+        item['mention_change'] = (
+            round(item['mention_rate'] - previous.get('mention_rate', 0), 1)
+            if previous and previous.get('mention_rate') is not None else None
+        )
+        if previous and previous.get('avg_position') is not None and item['avg_position'] is not None:
+            item['position_change'] = round(previous['avg_position'] - item['avg_position'], 2)
+        else:
+            item['position_change'] = None
+        item['has_history'] = previous is not None
+
     prompt_audit_summary = _audit_prompt_collection(
         [item['prompt'] for item in prompt_stats],
         brand,
         competitors=competitors,
         sector=sector
     )
+    improved_prompt_count = sum(
+        1 for item in prompt_stats
+        if (item.get('rank_change') or 0) > 0 or (item.get('score_change') or 0) > 0
+    )
+    declined_prompt_count = sum(
+        1 for item in prompt_stats
+        if (item.get('rank_change') or 0) < 0 or (item.get('score_change') or 0) < 0
+    )
+    tracked_prompt_count = sum(1 for item in prompt_stats if item.get('has_history'))
     return jsonify({'brand': brand, 'prompts': prompt_stats,
                     'best_prompt':  prompt_stats[0]['prompt']  if prompt_stats else None,
                     'worst_prompt': prompt_stats[-1]['prompt'] if prompt_stats else None,
@@ -1696,32 +2004,156 @@ def compare_prompts():
                         'quality_distribution': prompt_audit_summary['quality_distribution'],
                         'weak_prompt_count': prompt_audit_summary['weak_prompt_count'],
                         'top_intents': prompt_audit_summary['top_intents'],
-                        'coverage_average': prompt_audit_summary['coverage_average']
+                        'coverage_average': prompt_audit_summary['coverage_average'],
+                        'improved_prompt_count': improved_prompt_count,
+                        'declined_prompt_count': declined_prompt_count,
+                        'tracked_prompt_count': tracked_prompt_count
                     },
                     'metadata': {'timestamp': results['timestamp'],
+                                 'previous_timestamp': previous_run.get('timestamp'),
                                  'is_demo': results.get('is_demo', False),
                                  'models': results.get('llms_used', ['qwen3.5'])}})
 
 @app.route('/api/alerts/status', methods=['GET'])
 def alerts_status():
+    global_channels = {
+        'slack': {
+            'configured': bool(os.environ.get('SLACK_WEBHOOK_URL')),
+            'channel': 'webhook'
+        },
+        'email': {
+            'configured': all([os.environ.get(k) for k in ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'ALERT_EMAIL']]),
+            'recipient': _mask_secret(os.environ.get('ALERT_EMAIL', '—')),
+            'host': os.environ.get('SMTP_HOST', '—')
+        },
+        'telegram': {
+            'configured': all([os.environ.get('TELEGRAM_BOT_TOKEN'), os.environ.get('TELEGRAM_CHAT_ID')]),
+            'chat_id': _mask_secret(os.environ.get('TELEGRAM_CHAT_ID', '—'))
+        }
+    }
+    user = _current_user()
+    project = _project_from_request(user['id']) if user else None
+    preferences = _serialize_alert_preferences(user['id'], project['id']) if user and project else None
+
     return jsonify({
-        'slack':    {'configured': bool(os.environ.get('SLACK_WEBHOOK_URL')), 'channel': 'webhook'},
-        'email':    {'configured': all([os.environ.get(k) for k in ['SMTP_HOST','SMTP_USER','SMTP_PASS','ALERT_EMAIL']]),
-                     'recipient': os.environ.get('ALERT_EMAIL', '—'), 'host': os.environ.get('SMTP_HOST', '—')},
-        'telegram': {'configured': all([os.environ.get('TELEGRAM_BOT_TOKEN'), os.environ.get('TELEGRAM_CHAT_ID')]),
-                     'chat_id': os.environ.get('TELEGRAM_CHAT_ID', '—')}
+        **global_channels,
+        'summary': {
+            **get_alert_summary(),
+            'configured_channels': sum(1 for channel in global_channels.values() if channel.get('configured')),
+            'enabled_project_channels': len((preferences or {}).get('enabled_channels', []))
+        },
+        'catalog': get_alert_catalog(),
+        'preferences': preferences,
+        'project': {
+            'id': project.get('id'),
+            'brand': project.get('brand')
+        } if project else None
     })
+
+
+@app.route('/api/alerts/preferences', methods=['GET'])
+def get_alert_preferences_route():
+    user, auth_error = _require_auth()
+    if auth_error:
+        return auth_error
+
+    project = _project_from_request(user['id'])
+    project_id = project.get('id') if project else None
+    return jsonify(_serialize_alert_preferences(user['id'], project_id))
+
+
+@app.route('/api/alerts/preferences', methods=['PUT'])
+def update_alert_preferences_route():
+    user, auth_error = _require_auth()
+    if auth_error:
+        return auth_error
+
+    payload = request.get_json() or {}
+    project = None
+    project_id = payload.get('project_id')
+    if project_id is not None:
+        project = get_project_by_id(int(project_id), user_id=user['id'])
+        if not project:
+            return jsonify({'error': 'Project not found'}), 404
+    else:
+        project = _project_from_request(user['id'])
+        project_id = project.get('id') if project else None
+
+    if payload.get('channels'):
+        for channel, settings in payload['channels'].items():
+            config = settings.get('config') or {}
+            filtered_config = {}
+            if channel == 'slack':
+                filtered_config['webhook_url'] = (config.get('webhook_url') or '').strip()
+            elif channel == 'email':
+                filtered_config = {
+                    'recipient': (config.get('recipient') or '').strip(),
+                    'host': (config.get('host') or '').strip(),
+                    'port': str(config.get('port') or '').strip(),
+                    'user': (config.get('user') or '').strip(),
+                    'password': (config.get('password') or '').strip()
+                }
+            elif channel == 'telegram':
+                filtered_config = {
+                    'bot_token': (config.get('bot_token') or '').strip(),
+                    'chat_id': (config.get('chat_id') or '').strip()
+                }
+            upsert_alert_channel_setting(
+                user_id=user['id'],
+                project_id=project_id,
+                channel=channel,
+                enabled=bool(settings.get('enabled')),
+                config=filtered_config
+            )
+
+    if payload.get('rules'):
+        for alert_id, settings in payload['rules'].items():
+            upsert_alert_rule_setting(
+                user_id=user['id'],
+                project_id=project_id,
+                alert_id=alert_id,
+                enabled=bool(settings.get('enabled'))
+            )
+
+    return jsonify(_serialize_alert_preferences(user['id'], project_id))
+
+@app.route('/api/catalog/alerts', methods=['GET'])
+def alert_catalog():
+    return jsonify({
+        'summary': get_alert_summary(),
+        'items': get_alert_catalog()
+    })
+
+
+@app.route('/api/catalog/reports', methods=['GET'])
+def report_catalog():
+    return jsonify({
+        'count': len(get_report_catalog()),
+        'items': get_report_catalog()
+    })
+
 
 @app.route('/api/alerts/test', methods=['POST'])
 def test_alert():
     data    = request.get_json() or {}
     channel = data.get('channel', 'all')
     message = data.get('message', '🧪 Test GEO Monitor.')
-    results = {}
-    from alerts import send_slack_alert as _sl, send_email_alert as _em, send_telegram_alert as _tg
-    if channel in ('all', 'slack'):    results['slack']    = _sl(message)
-    if channel in ('all', 'email'):    results['email']    = _em("Test GEO Monitor", message)
-    if channel in ('all', 'telegram'): results['telegram'] = _tg(message)
+    user = _current_user()
+    project = _project_from_request(user['id']) if user else None
+    preferences = get_alert_preferences(user['id'], project.get('id')) if user and project else {'channels': {}}
+
+    enabled_channels = [channel] if channel != 'all' else [
+        key for key, item in preferences.get('channels', {}).items() if item.get('enabled')
+    ]
+    if channel == 'all' and not enabled_channels:
+        enabled_channels = ['slack', 'email', 'telegram']
+
+    results = send_alert(
+        message=message,
+        subject='Test GEO Monitor',
+        channel_settings=preferences.get('channels', {}),
+        enabled_channels=enabled_channels
+    )
     success = any(results.values())
     return jsonify({'status': 'success' if success else 'failed', 'results': results,
                     'message': 'OK' if success else 'Aucun canal configuré'})
@@ -1740,6 +2172,8 @@ def trigger_weekly():
 @app.route('/api/export/pdf', methods=['GET'])
 def export_pdf():
     fmt     = request.args.get('format', 'pdf')
+    report_type = request.args.get('report_type', 'analysis_main')
+    report_definition = get_report_definition(report_type)
     requested_brand = request.args.get('brand')
     user = _current_user()
     user_id = user['id'] if user else None
@@ -1762,22 +2196,25 @@ def export_pdf():
             brand=brand, ranking=ranking, metrics=metrics,
             insights=insights, prompt_stats=prompt_stats,
             confidence=confidence_data, metadata=metadata,
-            output_format=fmt
+            output_format=fmt,
+            report_definition=report_definition
         )
 
         date_str = datetime.now().strftime('%Y-%m-%d')
+        report_slug = report_definition.get('slug', report_type)
 
         if content_type == 'application/pdf':
-            filename = f"geo-{brand.lower().replace(' ','-')}-{date_str}.pdf"
+            filename = f"geo-{brand.lower().replace(' ','-')}-{report_slug}-{date_str}.pdf"
         else:
-            filename = f"geo-{brand.lower().replace(' ','-')}-{date_str}.html"
+            filename = f"geo-{brand.lower().replace(' ','-')}-{report_slug}-{date_str}.html"
 
         return Response(
             content,
             content_type=content_type,
             headers={
                 'Content-Disposition': f'attachment; filename="{filename}"',
-                'Content-Length': str(len(content))
+                'Content-Length': str(len(content)),
+                'X-Report-Type': report_definition.get('id', report_type)
             }
         )
 
@@ -1790,12 +2227,17 @@ def export_pdf():
 def check_pdf_support():
     try:
         import weasyprint
-        return jsonify({'available': True, 'version': weasyprint.__version__})
+        return jsonify({
+            'available': True,
+            'version': weasyprint.__version__,
+            'supported_reports': get_report_catalog()
+        })
     except ImportError:
         return jsonify({
             'available': False,
             'install': 'pip install weasyprint --break-system-packages',
-            'fallback': 'Le format HTML est disponible via ?format=html'
+            'fallback': 'Le format HTML est disponible via ?format=html',
+            'supported_reports': get_report_catalog()
         })
 # ── Démarrage ─────────────────────────────────────────────────────────────────
 

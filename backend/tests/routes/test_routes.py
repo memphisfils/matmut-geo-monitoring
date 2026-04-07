@@ -106,3 +106,52 @@ class TestAlertsStatusRoute:
         assert response.status_code == 200
         assert set(['slack', 'email', 'telegram']).issubset(data.keys())
         assert all('configured' in data[channel] for channel in ['slack', 'email', 'telegram'])
+        assert 'summary' in data
+        assert 'catalog' in data
+        assert 'configured_channels' in data['summary']
+        assert isinstance(data['catalog'], list)
+
+
+class TestAlertCatalogRoute:
+    """Tests pour /api/catalog/alerts"""
+
+    def test_alert_catalog_returns_reference_data(self, client):
+        response = client.get('/api/catalog/alerts')
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert 'summary' in data
+        assert 'items' in data
+        assert data['summary']['total'] >= 1
+        assert isinstance(data['items'], list)
+        assert all(set(['id', 'name', 'severity', 'trigger', 'frequency', 'channels']).issubset(item.keys())
+                   for item in data['items'])
+
+
+class TestReportCatalogRoute:
+    """Tests pour /api/catalog/reports"""
+
+    def test_report_catalog_returns_reference_data(self, client):
+        response = client.get('/api/catalog/reports')
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert 'count' in data
+        assert 'items' in data
+        assert data['count'] >= 1
+        assert isinstance(data['items'], dict)
+        assert 'analysis_main' in data['items']
+        assert set(['id', 'slug', 'name', 'description']).issubset(data['items']['analysis_main'].keys())
+
+
+class TestPdfSupportRoute:
+    """Tests pour /api/export/pdf/check"""
+
+    def test_pdf_support_exposes_supported_reports(self, client):
+        response = client.get('/api/export/pdf/check')
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert 'available' in data
+        assert 'supported_reports' in data
+        assert 'analysis_main' in data['supported_reports']

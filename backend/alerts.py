@@ -39,9 +39,9 @@ def _fmt_time() -> str:
 
 # ── Slack ─────────────────────────────────────────────────────────────────────
 
-def send_slack_alert(message: str) -> bool:
+def send_slack_alert(message: str, webhook_url: str = None) -> bool:
     """Envoie une alerte Slack via webhook URL."""
-    webhook_url = os.environ.get('SLACK_WEBHOOK_URL')
+    webhook_url = webhook_url or os.environ.get('SLACK_WEBHOOK_URL')
     if not webhook_url:
         print(f"[ALERT SLACK] Non configuré. Message : {message[:80]}")
         return False
@@ -56,7 +56,7 @@ def send_slack_alert(message: str) -> bool:
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 
-def send_email_alert(subject: str, body_text: str, body_html: str = None) -> bool:
+def send_email_alert(subject: str, body_text: str, body_html: str = None, smtp_config: dict = None) -> bool:
     """
     Envoie un email d'alerte via SMTP.
     Variables .env requises :
@@ -66,11 +66,12 @@ def send_email_alert(subject: str, body_text: str, body_html: str = None) -> boo
         SMTP_PASS     (ex: app-password-gmail)
         ALERT_EMAIL   (destinataire — peut être identique à SMTP_USER)
     """
-    host       = os.environ.get('SMTP_HOST')
-    port       = int(os.environ.get('SMTP_PORT', 587))
-    user       = os.environ.get('SMTP_USER')
-    password   = os.environ.get('SMTP_PASS')
-    recipient  = os.environ.get('ALERT_EMAIL')
+    smtp_config = smtp_config or {}
+    host       = smtp_config.get('host') or os.environ.get('SMTP_HOST')
+    port       = int(smtp_config.get('port') or os.environ.get('SMTP_PORT', 587))
+    user       = smtp_config.get('user') or os.environ.get('SMTP_USER')
+    password   = smtp_config.get('password') or os.environ.get('SMTP_PASS')
+    recipient  = smtp_config.get('recipient') or os.environ.get('ALERT_EMAIL')
 
     if not all([host, user, password, recipient]):
         missing = [k for k, v in {'SMTP_HOST': host, 'SMTP_USER': user,
@@ -120,7 +121,7 @@ def send_email_alert(subject: str, body_text: str, body_html: str = None) -> boo
 
 # ── Telegram ──────────────────────────────────────────────────────────────────
 
-def send_telegram_alert(message: str) -> bool:
+def send_telegram_alert(message: str, telegram_config: dict = None) -> bool:
     """
     Envoie un message Telegram via Bot API.
     Variables .env requises :
@@ -133,8 +134,9 @@ def send_telegram_alert(message: str) -> bool:
         3. Appelez https://api.telegram.org/bot{TOKEN}/getUpdates
         4. Copiez le "chat":{"id":...} dans TELEGRAM_CHAT_ID
     """
-    token   = os.environ.get('TELEGRAM_BOT_TOKEN')
-    chat_id = os.environ.get('TELEGRAM_CHAT_ID')
+    telegram_config = telegram_config or {}
+    token   = telegram_config.get('bot_token') or os.environ.get('TELEGRAM_BOT_TOKEN')
+    chat_id = telegram_config.get('chat_id') or os.environ.get('TELEGRAM_CHAT_ID')
 
     if not token or not chat_id:
         missing = []
@@ -160,7 +162,8 @@ def send_telegram_alert(message: str) -> bool:
 
 # ── Dispatcher unifié ─────────────────────────────────────────────────────────
 
-def send_alert(message: str, subject: str = None, html: str = None) -> dict:
+def send_alert(message: str, subject: str = None, html: str = None,
+               channel_settings: dict = None, enabled_channels=None) -> dict:
     """
     Envoie l'alerte sur tous les canaux configurés.
     Retourne un dict avec le statut de chaque canal.
@@ -171,13 +174,39 @@ def send_alert(message: str, subject: str = None, html: str = None) -> dict:
         html    : corps HTML de l'email (facultatif)
     """
     results = {}
+    channel_settings = channel_settings or {}
 
     email_subject = subject or message[:60] + ('…' if len(message) > 60 else '')
     email_html    = html or _default_html(message)
 
-    results['slack']    = send_slack_alert(message)
-    results['email']    = send_email_alert(email_subject, message, email_html)
-    results['telegram'] = send_telegram_alert(message)
+    if enabled_channels is None:
+        if channel_settings:
+            enabled_channels = [
+                channel for channel, settings in channel_settings.items()
+                if settings.get('enabled')
+            ]
+        else:
+            enabled_channels = ['slack', 'email', 'telegram']
+
+    enabled_channels = set(enabled_channels)
+
+    if 'slack' in enabled_channels:
+        results['slack'] = send_slack_alert(
+            message,
+            webhook_url=(channel_settings.get('slack') or {}).get('config', {}).get('webhook_url')
+        )
+    if 'email' in enabled_channels:
+        results['email'] = send_email_alert(
+            email_subject,
+            message,
+            email_html,
+            smtp_config=(channel_settings.get('email') or {}).get('config', {})
+        )
+    if 'telegram' in enabled_channels:
+        results['telegram'] = send_telegram_alert(
+            message,
+            telegram_config=(channel_settings.get('telegram') or {}).get('config', {})
+        )
 
     sent = [k for k, v in results.items() if v]
     print(f"[ALERT] Canaux actifs : {sent or ['aucun']}")
@@ -186,7 +215,8 @@ def send_alert(message: str, subject: str = None, html: str = None) -> dict:
 
 # ── Templates d'alertes typiques ─────────────────────────────────────────────
 
-def alert_rank_lost(brand: str, leader: str, gap: float, new_rank: int) -> dict:
+def alert_rank_lost(brand: str, leader: str, gap: float, new_rank: int,
+                    channel_settings: dict = None, enabled_channels=None) -> dict:
     """Alerte : la marque a perdu sa première place."""
     msg = (
         f"⚠️ *{brand}* a perdu sa 1ère place !\n"
@@ -194,11 +224,18 @@ def alert_rank_lost(brand: str, leader: str, gap: float, new_rank: int) -> dict:
         f"Nouveau rang {brand} : #{new_rank}"
     )
     html = _default_html(msg, title=f"{brand} — Perte de rang")
-    return send_alert(msg, subject=f"[GEO] {brand} n'est plus #1", html=html)
+    return send_alert(
+        msg,
+        subject=f"[GEO] {brand} n'est plus #1",
+        html=html,
+        channel_settings=channel_settings,
+        enabled_channels=enabled_channels
+    )
 
 
 def alert_weekly_summary(brand: str, rank: int, score: float,
-                         mention_rate: float, top_competitors: list) -> dict:
+                         mention_rate: float, top_competitors: list,
+                         channel_settings: dict = None, enabled_channels=None) -> dict:
     """Résumé hebdomadaire automatique."""
     comps = ', '.join([f"{c['brand']} ({c['global_score']:.1f})" for c in top_competitors[:3]])
     msg = (
@@ -207,7 +244,13 @@ def alert_weekly_summary(brand: str, rank: int, score: float,
         f"Top concurrents : {comps}"
     )
     html = _weekly_html(brand, rank, score, mention_rate, top_competitors)
-    return send_alert(msg, subject=f"[GEO] Résumé hebdo — {brand}", html=html)
+    return send_alert(
+        msg,
+        subject=f"[GEO] Résumé hebdo — {brand}",
+        html=html,
+        channel_settings=channel_settings,
+        enabled_channels=enabled_channels
+    )
 
 
 # ── Templates HTML ────────────────────────────────────────────────────────────

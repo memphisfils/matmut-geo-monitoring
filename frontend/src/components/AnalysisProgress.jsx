@@ -1,5 +1,6 @@
 import React from 'react';
 import { CheckCircle, Loader2, Sparkles, Target, XCircle } from 'lucide-react';
+import AnimatedNumber from './AnimatedNumber';
 import './AnalysisProgress.css';
 
 export default function AnalysisProgress({
@@ -44,22 +45,24 @@ export default function AnalysisProgress({
       <div className="ap-stats">
         <div className="ap-stat-card">
           <span>Prompts</span>
-          <strong>{currentPrompt} / {totalPrompts || '?'}</strong>
+          <strong>
+            <AnimatedNumber value={currentPrompt} decimals={0} /> / {totalPrompts || '?'}
+          </strong>
         </div>
         <div className="ap-stat-card">
           <span>Modeles</span>
-          <strong>{models.length || 1}</strong>
+          <strong><AnimatedNumber value={models.length || 1} decimals={0} /></strong>
         </div>
         <div className="ap-stat-card">
           <span>Mentions detectees</span>
-          <strong>{mentionCount}</strong>
+          <strong><AnimatedNumber value={mentionCount} decimals={0} /></strong>
         </div>
       </div>
 
       <div className="ap-bar-block">
         <div className="ap-bar-head">
           <span>Progression du run</span>
-          <strong>{pct}%</strong>
+          <strong><AnimatedNumber value={pct} decimals={0} suffix="%" /></strong>
         </div>
         <div className="ap-bar-track">
           <div className={`ap-bar-fill ${isComplete ? 'complete' : ''}`} style={{ width: `${pct}%` }} />

@@ -1,21 +1,26 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
-  BadgeCheck,
+  ArrowDownRight,
+  ArrowUpRight,
   Bot,
   ChevronsRight,
-  Crosshair,
-  Eye,
   Filter,
+  Gauge,
   MessageSquareText,
   Radar,
+  RefreshCw,
   ShieldAlert,
   Sparkles,
-  Target
+  Target,
+  TimerReset
 } from 'lucide-react';
+import AnimatedNumber from './AnimatedNumber';
+import MetricTape from './MetricTape';
 import './PromptComparator.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const REFRESH_INTERVAL_MS = 20000;
 
 const INTENT_RULES = [
   { key: 'comparaison', label: 'Comparaison', match: /(comparatif|vs|alternative|alternatives|compare)/i },
@@ -27,6 +32,25 @@ const INTENT_RULES = [
 function deriveIntent(prompt) {
   const rule = INTENT_RULES.find((item) => item.match.test(prompt || ''));
   return rule || { key: 'consideration', label: 'Consideration' };
+}
+
+function getDeltaTone(change) {
+  if (typeof change !== 'number' || Number.isNaN(change) || change === 0) return 'neutral';
+  return change > 0 ? 'positive' : 'negative';
+}
+
+function formatTimestamp(value) {
+  if (!value) return 'n/a';
+  try {
+    return new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
 }
 
 function buildPromptSummary(prompt) {
@@ -44,15 +68,15 @@ function buildPromptSummary(prompt) {
   if (missedPrompt) {
     status = 'risk';
     statusLabel = 'Marque absente';
-    rationale = 'La marque ne ressort pas sur cette requete. Priorite contenu et preuves de marque.';
+    rationale = 'La marque ne ressort pas sur cette requete. Il faut renforcer la preuve produit et la citation de marque.';
   } else if (goodPosition && prompt.mention_rate >= 60) {
     status = 'win';
     statusLabel = 'Point fort';
-    rationale = 'La marque est bien citee et ressort tot dans la reponse modele.';
+    rationale = 'La marque est bien citee et ressort haut dans la reponse du modele.';
   } else if (prompt.avg_position && prompt.avg_position > 2.5) {
     status = 'watch';
     statusLabel = 'Visible mais fragile';
-    rationale = 'La marque est citee, mais pas assez haut pour verrouiller la consideration.';
+    rationale = 'La marque est citee, mais trop bas pour verrouiller la consideration.';
   }
 
   return {
@@ -72,68 +96,109 @@ function buildPromptSummary(prompt) {
 
 function makeDemoData(brand) {
   const prompts = [
-    `Meilleure offre ${brand.toLowerCase()} pas cher ?`,
-    `Comparatif ${brand.toLowerCase()} vs concurrents`,
-    'Top marques recommandees par les experts',
-    `${brand} fiable ou pas ?`,
-    `Alternatives a ${brand.toLowerCase()}`,
-    `Avis sur ${brand.toLowerCase()}`
+    `Quel est le meilleur generateur d'image pour ${brand.toLowerCase()} ?`,
+    `Comparatif ${brand.toLowerCase()} vs Midjourney et Adobe Firefly`,
+    `Quelle API d agents choisir face a ${brand.toLowerCase()} ?`,
+    `${brand} est-il fiable pour la creation de contenu ?`,
+    `Top solutions IA recommandees avec ${brand.toLowerCase()}`,
+    `Alternatives a ${brand.toLowerCase()}`
   ];
-  const competitors = ['Concurrent A', 'Concurrent B', 'Concurrent C'];
-
-  function seededRand(seed) {
-    let state = seed;
-    return () => {
-      state = (state * 1664525 + 1013904223) & 0xffffffff;
-      return (state >>> 0) / 0xffffffff;
-    };
-  }
-
-  const stats = prompts.map((prompt, index) => {
-    const rand = seededRand(index * 997 + brand.charCodeAt(0) * 31);
-    const mentionRate = Math.round(rand() * 90);
-    const avgPosition = mentionRate > 0 ? parseFloat((1 + rand() * 4).toFixed(1)) : null;
-    const topOfMind = mentionRate > 0 ? Math.round(rand() * 50) : 0;
-    const score = parseFloat((mentionRate * 0.5 + (avgPosition ? 100 / avgPosition * 0.3 : 0) + topOfMind * 0.2).toFixed(1));
-    const comps = competitors.filter(() => rand() > 0.5).slice(0, 2);
-
-    return {
-      prompt,
-      mention_rate: mentionRate,
-      avg_position: avgPosition,
-      top_of_mind: topOfMind,
-      brand_mentioned: mentionRate > 0,
-      brand_position: avgPosition ? Math.round(avgPosition) : null,
-      competitors_mentioned: comps,
-      models_count: 1,
-      score
-    };
-  });
-
-  stats.sort((left, right) => right.score - left.score);
 
   return {
     brand,
-    prompts: stats,
-    best_prompt: stats[0]?.prompt,
-    worst_prompt: stats[stats.length - 1]?.prompt,
-    total_prompts: stats.length,
-    metadata: { is_demo: true, models: ['qwen3.5'] }
+    prompts: prompts.map((prompt, index) => {
+      const mentionRate = index === 5 ? 0 : 100 - index * 8;
+      const avgPosition = mentionRate === 0 ? null : 1 + index * 0.25;
+      const score = mentionRate === 0 ? 24 : Number((94 - index * 7.5).toFixed(1));
+      const currentRank = index + 1;
+      const previousRankPosition = index === 0 ? 2 : index === 1 ? 1 : currentRank;
+      const rankChange = previousRankPosition - currentRank;
+      return {
+        prompt,
+        mention_rate: mentionRate,
+        avg_position: avgPosition,
+        top_of_mind: mentionRate === 0 ? 0 : 100 - index * 14,
+        brand_mentioned: mentionRate > 0,
+        brand_position: avgPosition ? Math.round(avgPosition) : null,
+        competitors_mentioned: index === 5 ? ['Midjourney', 'Microsoft Copilot'] : ['Midjourney'],
+        models_count: 1,
+        score,
+        current_rank: currentRank,
+        previous_rank_position: previousRankPosition,
+        rank_change: rankChange,
+        score_change: index === 0 ? 8.4 : index === 1 ? -3.1 : index === 5 ? -9.6 : 1.2,
+        mention_change: index === 0 ? 12 : index === 5 ? -20 : 4,
+        position_change: index === 0 ? 1 : index === 1 ? -0.5 : null,
+        agreement_score: mentionRate === 0 ? 0 : 100,
+        position_spread: index === 0 ? 0 : 1,
+        best_model: 'qwen3.5',
+        prompt_quality_score: 88 - index * 4,
+        prompt_quality_label: index === 5 ? 'Faible' : 'Solide',
+        prompt_issues: index === 5 ? ['La marque ne ressort pas dans cette formulation.'] : [],
+        intent: deriveIntent(prompt),
+        per_model: [],
+        has_history: index < 3
+      };
+    }),
+    best_prompt: prompts[0],
+    worst_prompt: prompts[5],
+    total_prompts: prompts.length,
+    summary: {
+      average_quality_score: 84.7,
+      weak_prompt_count: 1,
+      improved_prompt_count: 3,
+      declined_prompt_count: 2,
+      tracked_prompt_count: 3
+    },
+    metadata: {
+      timestamp: new Date().toISOString(),
+      previous_timestamp: new Date(Date.now() - 86400000).toISOString(),
+      is_demo: true,
+      models: ['qwen3.5']
+    }
   };
+}
+
+function DeltaBadge({ label, change, suffix = '', decimals = 0, hideWhenEmpty = false }) {
+  if (typeof change !== 'number') {
+    return hideWhenEmpty ? null : (
+      <span className="delta-badge neutral">
+        <span className="delta-badge-label">{label}</span>
+        <span className="delta-badge-meta">Base initiale</span>
+      </span>
+    );
+  }
+
+  const tone = getDeltaTone(change);
+  const Icon = tone === 'positive' ? ArrowUpRight : ArrowDownRight;
+
+  return (
+    <span className={`delta-badge ${tone}`}>
+      <span className="delta-badge-label">{label}</span>
+      {tone === 'neutral' ? null : <Icon size={14} />}
+      <AnimatedNumber value={change} decimals={decimals} signed suffix={suffix} className="delta-badge-value" />
+    </span>
+  );
 }
 
 export default function PromptComparator({ brand, projectId }) {
   const [data, setData] = useState(null);
-  const [sortBy, setSortBy] = useState('score');
+  const [sortBy, setSortBy] = useState('current_rank');
   const [mentionFilter, setMentionFilter] = useState('all');
   const [intentFilter, setIntentFilter] = useState('all');
   const [selectedPromptId, setSelectedPromptId] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshFlash, setRefreshFlash] = useState(false);
 
   useEffect(() => {
-    if (!brand) return;
-    let cancelled = false;
+    if (!brand) return undefined;
 
-    const load = async () => {
+    let cancelled = false;
+    let flashTimeout = null;
+
+    const load = async (background = false) => {
+      if (background) setIsRefreshing(true);
+
       try {
         const params = new URLSearchParams();
         if (brand) params.set('brand', brand);
@@ -142,24 +207,43 @@ export default function PromptComparator({ brand, projectId }) {
           credentials: 'include'
         });
         const payload = response.ok ? await response.json() : makeDemoData(brand);
-        if (!cancelled) setData({ ...payload, _brand: brand });
+
+        if (!cancelled) {
+          setData({ ...payload, _brand: brand });
+          setRefreshFlash(true);
+          window.clearTimeout(flashTimeout);
+          flashTimeout = window.setTimeout(() => setRefreshFlash(false), 1100);
+        }
       } catch {
-        if (!cancelled) setData({ ...makeDemoData(brand), _brand: brand });
+        if (!cancelled) {
+          setData({ ...makeDemoData(brand), _brand: brand });
+          setRefreshFlash(true);
+          window.clearTimeout(flashTimeout);
+          flashTimeout = window.setTimeout(() => setRefreshFlash(false), 1100);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsRefreshing(false);
+        }
       }
     };
 
-    load();
+    load(false);
+    const intervalId = window.setInterval(() => load(true), REFRESH_INTERVAL_MS);
+
     return () => {
       cancelled = true;
+      window.clearInterval(intervalId);
+      window.clearTimeout(flashTimeout);
     };
   }, [brand, projectId]);
 
-  const enrichedPrompts = useMemo(() => {
-    return (data?.prompts || []).map((prompt, index) => ({
+  const enrichedPrompts = useMemo(() => (
+    (data?.prompts || []).map((prompt, index) => ({
       ...buildPromptSummary(prompt),
       id: `${prompt.prompt}-${index}`
-    }));
-  }, [data]);
+    }))
+  ), [data]);
 
   const filteredPrompts = useMemo(() => {
     const next = [...enrichedPrompts]
@@ -180,11 +264,12 @@ export default function PromptComparator({ brand, projectId }) {
         if (!right.avg_position) return -1;
         return left.avg_position - right.avg_position;
       }
-      return right.score - left.score;
+      if (sortBy === 'score') return right.score - left.score;
+      return (left.current_rank || 999) - (right.current_rank || 999);
     });
 
     return next;
-  }, [enrichedPrompts, mentionFilter, intentFilter, sortBy]);
+  }, [enrichedPrompts, intentFilter, mentionFilter, sortBy]);
 
   const effectiveSelectedPromptId = (
     selectedPromptId && filteredPrompts.some((item) => item.id === selectedPromptId)
@@ -204,62 +289,111 @@ export default function PromptComparator({ brand, projectId }) {
       absentCount,
       strongCount,
       averageQuality: data?.summary?.average_quality_score ?? 0,
-      weakPromptCount: data?.summary?.weak_prompt_count ?? 0
+      weakPromptCount: data?.summary?.weak_prompt_count ?? 0,
+      improvedPromptCount: data?.summary?.improved_prompt_count ?? 0,
+      declinedPromptCount: data?.summary?.declined_prompt_count ?? 0,
+      trackedPromptCount: data?.summary?.tracked_prompt_count ?? 0
     };
   }, [data, enrichedPrompts]);
-  const bestPrompt = filteredPrompts[0] || null;
-  const worstPrompt = [...filteredPrompts].reverse().find(Boolean) || null;
+
+  const bestPrompt = enrichedPrompts.find((item) => item.status === 'win') || enrichedPrompts[0] || null;
+  const weakestPrompt = [...enrichedPrompts].reverse().find((item) => item.status === 'risk') || [...enrichedPrompts].reverse().find(Boolean) || null;
+
+  const tapeItems = useMemo(() => {
+    const items = [
+      { label: 'Prompts en hausse', value: summary.improvedPromptCount, meta: 'vs run precedent' },
+      { label: 'Prompts en baisse', value: summary.declinedPromptCount, meta: 'a surveiller' },
+      { label: 'Prompts suivis', value: summary.trackedPromptCount, meta: data?.metadata?.previous_timestamp ? 'avec historique' : 'base initiale' },
+      { label: 'Qualite moyenne', value: summary.averageQuality, decimals: 1, meta: 'pack prompts' }
+    ];
+
+    if (selectedPrompt) {
+      items.push({
+        label: 'Score prompt',
+        value: selectedPrompt.score,
+        decimals: 1,
+        change: selectedPrompt.score_change,
+        changeSuffix: ' pts',
+        changeDecimals: 1
+      });
+    }
+
+    return items;
+  }, [data, selectedPrompt, summary]);
 
   if (!brand || !data || data._brand !== brand) {
     return (
       <div className="proof-shell">
-        <div className="proof-loading">Chargement du mode preuve...</div>
+        <div className="proof-loading">Chargement du mode requetes...</div>
       </div>
     );
   }
 
   return (
     <div className="proof-shell">
-      <header className="proof-topbar">
-        <div className="proof-title-block">
-          <span className="proof-eyebrow">Mode preuve</span>
-          <h2>Lecture prompt par prompt pour {brand}</h2>
-          <p>Vous voyez les requetes qui font citer la marque, celles qui la font disparaitre, et la pression concurrente associee.</p>
+      <section className="proof-header">
+        <div className="proof-heading">
+          <span className="proof-eyebrow">Mode requetes</span>
+          <h2>Suivi prompt par prompt pour {brand}</h2>
+          <p>
+            Chaque requete expose son rang, sa variation et sa qualite. La liste principale reste dense et continue,
+            et le panneau de droite sert seulement d inspecteur pour le prompt selectionne.
+          </p>
         </div>
 
-        <div className="proof-stat-row">
-          <div className="proof-stat-card">
-            <BadgeCheck size={18} />
-            <div>
-              <span>Prompts solides</span>
-              <strong>{summary.strongCount}</strong>
-            </div>
+        <div className={`proof-live-panel ${refreshFlash ? 'flash' : ''}`}>
+          <div className="proof-live-head">
+            <span className="proof-live-status">
+              <RefreshCw size={14} className={isRefreshing ? 'spin' : ''} />
+              {isRefreshing ? 'Actualisation...' : 'Donnees live'}
+            </span>
+            <span className="proof-live-meta">
+              <TimerReset size={14} />
+              Maj {formatTimestamp(data.metadata?.timestamp)}
+            </span>
           </div>
-          <div className="proof-stat-card">
-            <Eye size={18} />
-            <div>
-              <span>Prompts visibles</span>
-              <strong>{summary.mentionedCount}</strong>
-            </div>
-          </div>
-          <div className="proof-stat-card risk">
-            <ShieldAlert size={18} />
-            <div>
-              <span>Prompts manques</span>
-              <strong>{summary.absentCount}</strong>
-            </div>
-          </div>
-          <div className="proof-stat-card">
-            <Sparkles size={18} />
-            <div>
-              <span>Qualite moyenne</span>
-              <strong>{summary.averageQuality || 'n/a'}</strong>
-            </div>
-          </div>
-        </div>
-      </header>
 
-      <div className="proof-controls">
+          {selectedPrompt ? (
+            <>
+              <div className="proof-live-rankline">
+                <div className="proof-live-copy">
+                  <span className="proof-live-label">Prompt actif</span>
+                  <strong>{selectedPrompt.prompt}</strong>
+                </div>
+                <div className="proof-live-rank">
+                  <span>Rang</span>
+                  <strong>#{selectedPrompt.current_rank || '--'}</strong>
+                  <DeltaBadge label="delta" change={selectedPrompt.rank_change} hideWhenEmpty={false} />
+                </div>
+              </div>
+
+              <div className="proof-live-grid">
+                <div className="proof-live-metric">
+                  <span>Score</span>
+                  <strong><AnimatedNumber value={selectedPrompt.score} decimals={1} /></strong>
+                  <DeltaBadge label="evolution" change={selectedPrompt.score_change} suffix=" pts" decimals={1} hideWhenEmpty />
+                </div>
+                <div className="proof-live-metric">
+                  <span>Mention</span>
+                  <strong><AnimatedNumber value={selectedPrompt.mention_rate} decimals={0} suffix="%" /></strong>
+                  <DeltaBadge label="evolution" change={selectedPrompt.mention_change} suffix=" pts" decimals={1} hideWhenEmpty />
+                </div>
+                <div className="proof-live-metric">
+                  <span>Position</span>
+                  <strong>{selectedPrompt.avg_position ? `#${selectedPrompt.avg_position}` : 'Absente'}</strong>
+                  <DeltaBadge label="evolution" change={selectedPrompt.position_change} suffix=" pos" decimals={1} hideWhenEmpty />
+                </div>
+              </div>
+            </>
+          ) : (
+            <p>Aucun prompt actif.</p>
+          )}
+        </div>
+      </section>
+
+      <MetricTape items={tapeItems} compact />
+
+      <section className="proof-toolbar">
         <div className="control-group">
           <span><Filter size={14} /> Statut</span>
           {[
@@ -301,6 +435,7 @@ export default function PromptComparator({ brand, projectId }) {
         <div className="control-group">
           <span><Radar size={14} /> Tri</span>
           {[
+            ['current_rank', 'Rang'],
             ['score', 'Score'],
             ['mention_rate', 'Mentions'],
             ['avg_position', 'Position']
@@ -315,91 +450,116 @@ export default function PromptComparator({ brand, projectId }) {
             </button>
           ))}
         </div>
-      </div>
+      </section>
 
-      <section className="proof-summary-band">
-        <article className="summary-band-card accent">
+      <section className="proof-summary">
+        <article className="summary-card accent">
           <span>Lecture prioritaire</span>
           <strong>{selectedPrompt?.statusLabel || 'Selectionnez un prompt'}</strong>
-          <p>{selectedPrompt?.rationale || 'Choisissez une requete pour lire son poids decisionnel et la pression associee.'}</p>
+          <p>{selectedPrompt?.rationale || 'Choisissez une requete pour lire son poids decisionnel et sa variation.'}</p>
         </article>
-        <article className="summary-band-card">
+        <article className="summary-card">
           <span>Meilleur prompt</span>
           <strong>{bestPrompt?.intent.label || 'n/a'}</strong>
-          <p>{bestPrompt?.prompt || 'Aucun prompt classe pour le moment.'}</p>
+          <p>{bestPrompt?.prompt || 'Aucun prompt fort pour le moment.'}</p>
         </article>
-        <article className="summary-band-card risk">
-          <span>Prompt le plus faible</span>
-          <strong>{worstPrompt?.statusLabel || 'n/a'}</strong>
-          <p>{worstPrompt?.prompt || 'Aucun signal faible a afficher.'}</p>
+        <article className="summary-card risk">
+          <span>Prompt fragile</span>
+          <strong>{weakestPrompt?.statusLabel || 'n/a'}</strong>
+          <p>{weakestPrompt?.prompt || 'Aucun signal faible a afficher.'}</p>
         </article>
       </section>
 
       <div className="proof-workspace">
-        <aside className="proof-list">
-          {filteredPrompts.map((prompt, index) => (
-            <button
-              key={prompt.id}
-              type="button"
-              className={`proof-list-item ${effectiveSelectedPromptId === prompt.id ? 'active' : ''} ${prompt.status}`}
-              onClick={() => setSelectedPromptId(prompt.id)}
-            >
-              <div className="proof-list-rank">{index + 1}</div>
-              <div className="proof-list-copy">
-                <div className="proof-list-topline">
-                  <span className={`status-pill ${prompt.status}`}>{prompt.statusLabel}</span>
-                  <span className="intent-pill">{prompt.intent.label}</span>
-                </div>
-                <strong>{prompt.prompt}</strong>
-                <span>{prompt.proofLine}</span>
-              </div>
-            </button>
-          ))}
-
-          {filteredPrompts.length === 0 && (
-            <div className="proof-empty">
-              Aucun prompt ne correspond au filtre actif.
+        <section className="proof-list-panel">
+          <div className="proof-list-head">
+            <div>
+              <span className="proof-list-kicker">Requetes classees</span>
+              <h3>{filteredPrompts.length} prompts affiches</h3>
             </div>
-          )}
-        </aside>
+            <span className="proof-list-meta">
+              {summary.trackedPromptCount > 0
+                ? `${summary.trackedPromptCount} prompts avec historique`
+                : 'Base initiale'}
+            </span>
+          </div>
 
-        <section className="proof-focus">
-          {selectedPrompt ? (
-            <>
-              <div className="focus-card headline">
-                <div className="focus-card-top">
-                  <span className={`status-pill ${selectedPrompt.status}`}>{selectedPrompt.statusLabel}</span>
-                  <span className="intent-pill">{selectedPrompt.intent.label}</span>
+          <div className="proof-list">
+            {filteredPrompts.map((prompt) => (
+              <button
+                key={prompt.id}
+                type="button"
+                className={`proof-row ${effectiveSelectedPromptId === prompt.id ? 'active' : ''} ${prompt.status} ${refreshFlash && effectiveSelectedPromptId === prompt.id ? 'flash' : ''}`}
+                onClick={() => setSelectedPromptId(prompt.id)}
+              >
+                <div className="proof-row-rank">
+                  <strong className="proof-row-rank-number">#{prompt.current_rank || '--'}</strong>
+                  <DeltaBadge label="rang" change={prompt.rank_change} hideWhenEmpty />
                 </div>
-                <h3>{selectedPrompt.prompt}</h3>
+
+                <div className="proof-row-main">
+                  <div className="proof-row-topline">
+                    <span className={`status-pill ${prompt.status}`}>{prompt.statusLabel}</span>
+                    <span className="intent-pill">{prompt.intent.label}</span>
+                  </div>
+                  <strong>{prompt.prompt}</strong>
+                  <span>{prompt.proofLine}</span>
+                </div>
+
+                <div className="proof-row-metrics">
+                  <div className="proof-row-metric">
+                    <span>Score</span>
+                    <strong><AnimatedNumber value={prompt.score} decimals={1} /></strong>
+                    <DeltaBadge label="score" change={prompt.score_change} suffix=" pts" decimals={1} hideWhenEmpty />
+                  </div>
+                  <div className="proof-row-metric">
+                    <span>Mention</span>
+                    <strong><AnimatedNumber value={prompt.mention_rate} decimals={0} suffix="%" /></strong>
+                    <DeltaBadge label="mention" change={prompt.mention_change} suffix=" pts" decimals={1} hideWhenEmpty />
+                  </div>
+                  <div className="proof-row-metric">
+                    <span>Position</span>
+                    <strong>{prompt.avg_position ? `#${prompt.avg_position}` : 'Absente'}</strong>
+                    <DeltaBadge label="position" change={prompt.position_change} suffix=" pos" decimals={1} hideWhenEmpty />
+                  </div>
+                </div>
+              </button>
+            ))}
+
+            {filteredPrompts.length === 0 && (
+              <div className="proof-empty">Aucun prompt ne correspond au filtre actif.</div>
+            )}
+          </div>
+        </section>
+
+        <aside className="proof-inspector">
+          <div className="rail-card">
+            <div className="focus-section-head">
+              <MessageSquareText size={16} />
+              <strong>Lecture operable</strong>
+            </div>
+            {selectedPrompt ? (
+              <>
+                <h3 className="inspector-title">{selectedPrompt.prompt}</h3>
                 <p>{selectedPrompt.rationale}</p>
-              </div>
-
-              <div className="focus-grid">
-                <article className="focus-card metric">
-                  <span>Presence inter-modeles</span>
-                  <strong>{selectedPrompt.mention_rate}%</strong>
-                </article>
-                <article className="focus-card metric">
-                  <span>Position moyenne</span>
-                  <strong>{selectedPrompt.avg_position ? `#${selectedPrompt.avg_position}` : 'Absente'}</strong>
-                </article>
-                <article className="focus-card metric">
-                  <span>Top of mind</span>
-                  <strong>{selectedPrompt.top_of_mind}%</strong>
-                </article>
-                <article className="focus-card metric">
-                  <span>Pression concurrente</span>
-                  <strong>{selectedPrompt.competitivePressure}</strong>
-                </article>
-              </div>
-
-              <div className="focus-card">
-                <div className="focus-section-head">
-                  <MessageSquareText size={16} />
-                  <strong>Ce que voit l IA</strong>
+                <div className="inspector-metrics">
+                  <div>
+                    <span>Score</span>
+                    <strong><AnimatedNumber value={selectedPrompt.score} decimals={1} /></strong>
+                  </div>
+                  <div>
+                    <span>Mention</span>
+                    <strong><AnimatedNumber value={selectedPrompt.mention_rate} decimals={0} suffix="%" /></strong>
+                  </div>
+                  <div>
+                    <span>Position</span>
+                    <strong>{selectedPrompt.avg_position ? `#${selectedPrompt.avg_position}` : 'Absente'}</strong>
+                  </div>
+                  <div>
+                    <span>Accord</span>
+                    <strong>{selectedPrompt.agreement_score ?? 'n/a'}%</strong>
+                  </div>
                 </div>
-                <p className="focus-paragraph">{selectedPrompt.proofLine}</p>
                 <div className="focus-inline-list">
                   <span className="mini-chip">
                     <Sparkles size={14} />
@@ -410,43 +570,11 @@ export default function PromptComparator({ brand, projectId }) {
                     {selectedPrompt.models_count} modele{selectedPrompt.models_count > 1 ? 's' : ''}
                   </span>
                   <span className="mini-chip">
-                    <ShieldAlert size={14} />
-                    Accord {selectedPrompt.agreement_score ?? 'n/a'}%
+                    <Gauge size={14} />
+                    Pression {selectedPrompt.competitivePressure}
                   </span>
-                  <span className="mini-chip">
-                    <Crosshair size={14} />
-                    Score {selectedPrompt.score}
-                  </span>
-                  {selectedPrompt.brand_position ? (
-                    <span className="mini-chip success">
-                      <Target size={14} />
-                      Position initiale #{selectedPrompt.brand_position}
-                    </span>
-                  ) : (
-                    <span className="mini-chip risk">
-                      <AlertTriangle size={14} />
-                      Aucune premiere citation
-                    </span>
-                  )}
                 </div>
-              </div>
-            </>
-          ) : (
-            <div className="focus-card">
-              <p>Aucun prompt selectionne.</p>
-            </div>
-          )}
-        </section>
 
-        <aside className="proof-rail">
-          <div className="rail-card">
-            <div className="focus-section-head">
-              <Sparkles size={16} />
-              <strong>Lecture operable</strong>
-            </div>
-            {selectedPrompt ? (
-              <>
-                <p>{selectedPrompt.rationale}</p>
                 {selectedPrompt.prompt_issues?.length ? (
                   <ul className="rail-list">
                     {selectedPrompt.prompt_issues.map((issue) => (
@@ -454,23 +582,6 @@ export default function PromptComparator({ brand, projectId }) {
                     ))}
                   </ul>
                 ) : null}
-                <ul className="rail-list">
-                  <li>
-                    {selectedPrompt.brand_mentioned
-                      ? 'Conserver ce prompt dans le noyau de suivi.'
-                      : 'Creer une preuve de marque ou un contenu cible sur cette intention.'}
-                  </li>
-                  <li>
-                    {selectedPrompt.competitivePressure > 1
-                      ? 'Les concurrents ressortent ensemble sur cette requete. Priorite benchmark.'
-                      : 'La pression concurrente reste moderee sur cette requete.'}
-                  </li>
-                  <li>
-                    {selectedPrompt.intent.key === 'comparaison'
-                      ? 'Traiter cette requete comme prompt strategique de consideration.'
-                      : 'Verifier si cette intention merite un cluster dedie.'}
-                  </li>
-                </ul>
               </>
             ) : (
               <p>Selectionnez un prompt pour lire sa valeur decisionnelle.</p>
@@ -495,33 +606,33 @@ export default function PromptComparator({ brand, projectId }) {
 
           <div className="rail-card">
             <div className="focus-section-head">
-              <Bot size={16} />
+              <ShieldAlert size={16} />
               <strong>Cadre du run</strong>
             </div>
-              <div className="rail-metric-list">
-                <div>
-                  <span>Total prompts</span>
-                  <strong>{data.total_prompts}</strong>
-                </div>
+            <div className="rail-metric-list">
+              <div>
+                <span>Total prompts</span>
+                <strong>{data.total_prompts}</strong>
+              </div>
               <div>
                 <span>Modeles</span>
                 <strong>{data.metadata?.models?.length || 1}</strong>
               </div>
-                <div>
-                  <span>Marque citee</span>
-                  <strong>{summary.mentionedCount}</strong>
-                </div>
-                <div>
-                  <span>Prompts fragiles</span>
-                  <strong>{summary.weakPromptCount}</strong>
-                </div>
+              <div>
+                <span>Prompts cites</span>
+                <strong>{summary.mentionedCount}</strong>
               </div>
+              <div>
+                <span>Prompts fragiles</span>
+                <strong>{summary.weakPromptCount}</strong>
+              </div>
+            </div>
           </div>
 
           <div className="rail-footer">
             Analyse sur {data.metadata?.models?.join(', ') || 'qwen3.5'} ·
             {data.metadata?.is_demo ? ' donnees demo' : ' donnees reelles'} ·
-            {data.total_prompts} prompts
+            base {data.metadata?.previous_timestamp ? `comparee au ${formatTimestamp(data.metadata.previous_timestamp)}` : 'initiale'}
           </div>
         </aside>
       </div>

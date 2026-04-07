@@ -14,6 +14,8 @@
     align-items: center;
     padding: 16px 20px;
     border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .ranking-header h2 {
@@ -26,6 +28,25 @@
 .ranking-count {
     font-size: 12px;
     color: var(--text-muted);
+}
+
+.ranking-header-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ranking-live {
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: rgba(94, 188, 255, 0.12);
+    color: #0b698b;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
 }
 
 .table-wrapper {
@@ -87,12 +108,49 @@
     color: var(--text-secondary);
 }
 
+.rank-pill {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(18, 39, 58, 0.05);
+    color: #5d7788;
+}
+
+.rank-pill.target {
+    background: rgba(94, 188, 255, 0.14);
+    color: #0b698b;
+}
+
 .brand-cell {
     min-width: 150px;
 }
 
+.brand-cell-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .brand-name {
     letter-spacing: 0.02em;
+}
+
+.brand-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(143, 170, 191, 0.58);
+    box-shadow: 0 0 0 6px rgba(143, 170, 191, 0.12);
+    flex-shrink: 0;
+}
+
+.brand-dot.target {
+    background: var(--accent-secondary);
+    box-shadow: 0 0 0 6px rgba(94, 188, 255, 0.16);
 }
 
 .brand-highlight {
@@ -125,6 +183,17 @@
     height: 100%;
     border-radius: 2px;
     transition: width 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.bar-fill::after {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 -35%;
+    width: 35%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0));
+    animation: ranking-scan 2.8s ease-in-out infinite;
 }
 
 .bar-value {
@@ -133,6 +202,24 @@
     font-size: 11px;
     font-weight: 600;
     color: var(--text-muted);
+}
+
+@keyframes ranking-scan {
+    0% {
+        transform: translateX(0);
+        opacity: 0;
+    }
+    20% {
+        opacity: 1;
+    }
+    100% {
+        transform: translateX(360%);
+        opacity: 0;
+    }
+}
+
+:root.reduced-motion .bar-fill::after {
+    animation: none;
 }
 
 @media (max-width: 768px) {

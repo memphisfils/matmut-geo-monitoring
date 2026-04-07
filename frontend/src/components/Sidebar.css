@@ -1,7 +1,5 @@
 .sidebar {
   width: 280px;
-  margin-left: 18px;
-  margin-bottom: 18px;
   border-radius: 28px;
   background:
     radial-gradient(circle at top left, rgba(106, 205, 255, 0.16), transparent 28%),
@@ -12,8 +10,8 @@
   flex-direction: column;
   flex-shrink: 0;
   position: sticky;
-  top: calc(var(--navbar-height) + 22px);
-  height: calc(100vh - var(--navbar-height) - 40px);
+  top: calc(var(--navbar-height) + 18px);
+  height: calc(100vh - var(--navbar-height) - 36px);
   overflow: hidden;
 }
 
@@ -59,11 +57,18 @@
 
 .sidebar-project {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   padding: 16px;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(162, 204, 229, 0.1);
+}
+
+.sidebar-project-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .sidebar-project-label {
@@ -71,6 +76,19 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: rgba(189, 219, 237, 0.62);
+}
+
+.sidebar-project-chip {
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(162, 204, 229, 0.12);
+  color: #dff6ff;
+  font-size: 0.68rem;
+  font-weight: 700;
 }
 
 .sidebar-project strong {
@@ -120,6 +138,19 @@
   color: #dff6ff;
 }
 
+.sidebar-context-line {
+  min-height: 34px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(216, 234, 246, 0.74);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;
@@ -151,7 +182,20 @@
   gap: 12px;
   text-align: left;
   cursor: pointer;
+  position: relative;
   transition: transform 180ms ease, background 180ms ease, color 180ms ease;
+}
+
+.nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 180ms ease;
 }
 
 .nav-item:hover {
@@ -164,6 +208,10 @@
   background: linear-gradient(90deg, rgba(95, 201, 255, 0.18), rgba(95, 201, 255, 0.04));
   color: #c7f1ff;
   box-shadow: inset 0 0 0 1px rgba(148, 225, 255, 0.14);
+}
+
+.nav-item.active::before {
+  background: #7dd8ff;
 }
 
 .nav-separator {

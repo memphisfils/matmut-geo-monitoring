@@ -1,17 +1,20 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ArrowRightLeft,
   CheckCircle2,
   Crosshair,
   Loader2,
   Plus,
   Sparkles,
   Target,
+  TrendingDown,
   TrendingUp,
-  Trophy,
   WandSparkles,
   X
 } from 'lucide-react';
 import { createBenchmark, fetchMetrics, runBenchmarkStream } from '../services/api';
+import AnimatedNumber from './AnimatedNumber';
+import MetricTape from './MetricTape';
 import PanelState from './PanelState';
 import './Benchmark.css';
 
@@ -30,86 +33,273 @@ function unwrapBenchmarkConfig(payload) {
   return payload?.benchmark || payload || null;
 }
 
-export default function Benchmark({ sector, onComplete }) {
-  const [brands, setBrands] = useState([]);
-  const [inputValue, setInputValue] = useState('');
+function normalizeList(values = []) {
+  const seen = new Set();
+  return values
+    .map((value) => String(value || '').trim())
+    .filter((value) => {
+      if (!value) return false;
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function buildProjectBenchmark(config, sector) {
+  const brands = normalizeList([config?.brand, ...(config?.competitors || [])]).slice(0, 6);
+  const prompts = normalizeList(config?.prompts || []);
+  const models = normalizeList(config?.models || []);
+  const products = Array.isArray(config?.products) ? config.products : [];
+
+  return {
+    key: [brands.join('|'), prompts.join('|'), models.join('|'), config?.sector || sector || ''].join('::'),
+    source: 'project',
+    sourceLabel: 'Projet actif',
+    sector: config?.sector || sector || 'Multi-secteur',
+    brands,
+    prompts,
+    products,
+    models
+  };
+}
+
+function getBrandResult(ranking = [], brand) {
+  if (!brand) return null;
+  return ranking.find((item) => String(item.brand || '').toLowerCase() === String(brand).toLowerCase()) || null;
+}
+
+function getDeltaTone(value) {
+  if (typeof value !== 'number' || Number.isNaN(value)) return 'neutral';
+  if (value > 0) return 'positive';
+  if (value < 0) return 'negative';
+  return 'neutral';
+}
+
+function formatDateTime(value) {
+  if (!value) return 'Aucun run';
+
+  try {
+    return new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function buildFallbackBenchmarkConfig(projectBenchmark, brands) {
+  return {
+    ...projectBenchmark,
+    source: 'manual',
+    sourceLabel: 'Benchmark manuel',
+    brands: normalizeList(brands).slice(0, 6)
+  };
+}
+
+export default function Benchmark({ config, data, sector, onComplete }) {
+  const projectBenchmark = useMemo(
+    () => buildProjectBenchmark(config, sector),
+    [config, sector]
+  );
+
+  const [customBenchmarkConfig, setCustomBenchmarkConfig] = useState(null);
+  const [customResults, setCustomResults] = useState(null);
+  const [draftBrands, setDraftBrands] = useState(projectBenchmark.brands);
+  const [draftInputValue, setDraftInputValue] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generated, setGenerated] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState(null);
   const [completedPrompts, setCompletedPrompts] = useState([]);
-  const [results, setResults] = useState(null);
   const [error, setError] = useState('');
+  const [modalError, setModalError] = useState('');
 
-  const benchmarkConfig = unwrapBenchmarkConfig(generated);
+  useEffect(() => {
+    setCustomBenchmarkConfig(null);
+    setCustomResults(null);
+    setDraftBrands(projectBenchmark.brands);
+    setDraftInputValue('');
+    setIsModalOpen(false);
+    setIsGenerating(false);
+    setIsRunning(false);
+    setProgress(null);
+    setCompletedPrompts([]);
+    setError('');
+    setModalError('');
+  }, [projectBenchmark.brands, projectBenchmark.key]);
+
+  const benchmarkConfig = customBenchmarkConfig || projectBenchmark;
+  const brands = benchmarkConfig.brands || [];
+  const displayResults = customBenchmarkConfig ? customResults : data;
+  const ranking = displayResults?.ranking || [];
+  const mainBrand = config?.brand || brands[0];
+  const mainBrandResult = getBrandResult(ranking, mainBrand);
+  const leader = ranking[0] || null;
+  const challenger = ranking[1] || null;
+  const lastRunAt = displayResults?.metadata?.timestamp || displayResults?.timestamp;
+  const promptCount = benchmarkConfig.prompts?.length || 0;
+  const modelCount = benchmarkConfig.models?.length || displayResults?.metadata?.llms_used?.length || 0;
+  const readyToRun = brands.length >= 2 && promptCount > 0;
+  const usingProjectBenchmark = !customBenchmarkConfig;
 
   const suggestedBrands = useMemo(() => {
-    if (sector && SECTOR_BRANDS[sector]) return SECTOR_BRANDS[sector];
+    if (benchmarkConfig.sector && SECTOR_BRANDS[benchmarkConfig.sector]) {
+      return SECTOR_BRANDS[benchmarkConfig.sector];
+    }
     return Object.values(SECTOR_BRANDS).flat().slice(0, 12);
-  }, [sector]);
+  }, [benchmarkConfig.sector]);
 
-  const addBrand = (brand) => {
-    const trimmed = brand.trim();
-    if (!trimmed || brands.includes(trimmed) || brands.length >= 6) return;
-    setBrands((current) => [...current, trimmed]);
-    setInputValue('');
+  const primaryGap = useMemo(() => {
+    if (!mainBrandResult || !leader) return null;
+    if (leader.brand === mainBrandResult.brand) {
+      return challenger ? mainBrandResult.global_score - challenger.global_score : 0;
+    }
+    return mainBrandResult.global_score - leader.global_score;
+  }, [challenger, leader, mainBrandResult]);
+
+  const metricItems = useMemo(() => {
+    const items = [
+      {
+        label: 'Marques',
+        value: brands.length,
+        meta: benchmarkConfig.sourceLabel
+      },
+      {
+        label: 'Prompts',
+        value: promptCount,
+        meta: readyToRun ? 'pack actif' : 'a cadrer'
+      },
+      {
+        label: 'Modeles',
+        value: modelCount,
+        meta: modelCount > 0 ? 'charges' : 'n/a'
+      }
+    ];
+
+    if (mainBrandResult) {
+      items.push({
+        label: `${mainBrand} score`,
+        value: mainBrandResult.global_score,
+        decimals: 1,
+        change: primaryGap,
+        changeSuffix: ' pts',
+        changeDecimals: 1
+      });
+    }
+
+    if (leader) {
+      items.push({
+        label: 'Leader mention',
+        value: leader.mention_rate,
+        suffix: '%',
+        meta: leader.brand
+      });
+    }
+
+    return items;
+  }, [benchmarkConfig.sourceLabel, brands.length, leader, mainBrand, mainBrandResult, modelCount, primaryGap, promptCount, readyToRun]);
+
+  const handleOpenModal = () => {
+    setDraftBrands(brands);
+    setDraftInputValue('');
+    setModalError('');
+    setIsModalOpen(true);
   };
 
-  const removeBrand = (brand) => {
-    setBrands((current) => current.filter((item) => item !== brand));
-    if (generated) setGenerated(null);
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setDraftBrands(brands);
+    setDraftInputValue('');
+    setModalError('');
   };
 
-  const handleKeyDown = (event) => {
+  const addDraftBrand = (brand) => {
+    const next = String(brand || '').trim();
+    if (!next || draftBrands.length >= 6) return;
+    if (draftBrands.some((item) => item.toLowerCase() === next.toLowerCase())) return;
+    setDraftBrands((current) => [...current, next]);
+    setDraftInputValue('');
+  };
+
+  const removeDraftBrand = (brand) => {
+    setDraftBrands((current) => current.filter((item) => item !== brand));
+  };
+
+  const handleDraftKeyDown = (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      addBrand(inputValue);
+      addDraftBrand(draftInputValue);
     }
   };
 
-  const handleGenerate = async () => {
-    if (brands.length < 2) {
-      setError('Selectionnez au moins 2 marques.');
+  const handleGenerateAlternative = async () => {
+    if (draftBrands.length < 2) {
+      setModalError('Selectionnez au moins 2 marques.');
       return;
     }
 
-    setError('');
     setIsGenerating(true);
-    setGenerated(null);
-    setResults(null);
+    setModalError('');
+    setError('');
+
+    const fallbackConfig = buildFallbackBenchmarkConfig(projectBenchmark, draftBrands);
 
     try {
-      const payload = await createBenchmark(brands);
+      const payload = await createBenchmark(draftBrands);
       if (payload.status === 'error') {
-        setError(payload.error || 'Generation benchmark impossible.');
+        setCustomBenchmarkConfig(fallbackConfig);
+        setCustomResults(null);
+        setError(`${payload.error || 'Generation indisponible.'} Benchmark prepare avec le pack de prompts du projet.`);
       } else {
-        setGenerated(payload);
+        const generatedConfig = unwrapBenchmarkConfig(payload) || {};
+        setCustomBenchmarkConfig({
+          ...fallbackConfig,
+          sector: generatedConfig.sector || fallbackConfig.sector,
+          brands: normalizeList(generatedConfig.brands || draftBrands).slice(0, 6),
+          products: Array.isArray(generatedConfig.products) ? generatedConfig.products : fallbackConfig.products,
+          prompts: normalizeList(generatedConfig.prompts || fallbackConfig.prompts),
+          sourceLabel: 'Benchmark genere'
+        });
+        setCustomResults(null);
       }
+      handleCloseModal();
     } catch {
-      setError('Erreur de connexion pendant la generation.');
+      setCustomBenchmarkConfig(fallbackConfig);
+      setCustomResults(null);
+      setError('Impossible de generer un benchmark enrichi. Le benchmark manuel reste disponible avec le pack du projet.');
+      handleCloseModal();
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const loadResults = async () => {
+  const loadBenchmarkResults = async () => {
     try {
-      const data = await fetchMetrics({});
-      if (data?.ranking) {
-        setResults(data);
+      const nextResults = await fetchMetrics({ benchmark: true });
+      if (nextResults?.ranking) {
+        setCustomResults(nextResults);
+        return;
       }
-    } catch {
-      setError('Impossible de charger les resultats benchmark.');
+      throw new Error('Resultats benchmark indisponibles');
+    } catch (err) {
+      setError(err.message || 'Impossible de charger les resultats benchmark.');
     }
   };
 
   const handleRunBenchmark = async () => {
-    if (!benchmarkConfig) return;
+    if (!readyToRun) {
+      setError('Le benchmark a besoin d au moins 2 marques et d un pack de prompts.');
+      return;
+    }
 
     setIsRunning(true);
     setProgress(null);
     setCompletedPrompts([]);
-    setResults(null);
     setError('');
 
     try {
@@ -119,7 +309,9 @@ export default function Benchmark({ sector, onComplete }) {
         prompts: benchmarkConfig.prompts || [],
         demo: false
       })) {
-        if (event.type === 'start') setProgress({ phase: 'start', ...event });
+        if (event.type === 'start') {
+          setProgress({ phase: 'start', ...event });
+        }
         if (event.type === 'progress') {
           setProgress({ phase: 'progress', ...event });
           setCompletedPrompts((current) => [...current, event]);
@@ -127,7 +319,7 @@ export default function Benchmark({ sector, onComplete }) {
         if (event.type === 'complete') {
           setProgress({ phase: 'complete', ...event });
           setIsRunning(false);
-          await loadResults();
+          await loadBenchmarkResults();
         }
         if (event.type === 'error') {
           setError(event.message || 'Erreur benchmark');
@@ -140,256 +332,353 @@ export default function Benchmark({ sector, onComplete }) {
     }
   };
 
+  const handleRestoreProjectBenchmark = () => {
+    setCustomBenchmarkConfig(null);
+    setCustomResults(null);
+    setProgress(null);
+    setCompletedPrompts([]);
+    setError('');
+  };
+
+  const emptyArena = (
+    <PanelState
+      icon={readyToRun ? CheckCircle2 : Crosshair}
+      title={readyToRun ? 'Benchmark pret a lancer' : 'Benchmark a cadrer'}
+      description={readyToRun
+        ? 'Le terrain de comparaison est pret. Lancez le run pour produire le classement et les ecarts de score.'
+        : 'Le projet actif ne fournit pas encore assez de marques ou de prompts pour un benchmark utile.'}
+      actions={readyToRun ? (
+        <button type="button" onClick={handleRunBenchmark} disabled={isRunning}>
+          Lancer le benchmark
+        </button>
+      ) : (
+        <button type="button" onClick={handleOpenModal}>
+          Configurer un benchmark
+        </button>
+      )}
+    />
+  );
+
   return (
     <div className="benchmark-wrapper">
-      <section className="benchmark-hero">
-        <div className="benchmark-hero-copy">
-          <span className="benchmark-kicker">Benchmarks</span>
-          <h1>Comparer plusieurs marques sur un meme terrain de reponses.</h1>
+      <section className="benchmark-header">
+        <div className="benchmark-heading">
+          <span className="benchmark-kicker">Benchmark actif</span>
+          <h1>
+            {brands.length >= 2
+              ? `${brands[0]} contre ${brands.slice(1, 3).join(' / ')}`
+              : 'Configurer un terrain de comparaison'}
+          </h1>
           <p>
-            Construisez un benchmark lisible, relisez le perimetre genere, puis lancez un run
-            comparatif qui fait ressortir les ecarts de citation, de score et de rang.
+            Le benchmark reprend d abord le projet actif. Si vous voulez une autre arene de comparaison,
+            ouvrez la fenetre de configuration au lieu de repartir d une page vide.
           </p>
         </div>
 
-        <div className="benchmark-hero-stats">
-          <article className="benchmark-stat-card">
-            <Target size={18} />
-            <div>
-              <span>Marques</span>
-              <strong>{brands.length}/6</strong>
-            </div>
-          </article>
-          <article className={`benchmark-stat-card ${benchmarkConfig ? 'ready' : ''}`}>
-            <Sparkles size={18} />
-            <div>
-              <span>Configuration</span>
-              <strong>{benchmarkConfig ? 'Prete' : 'A generer'}</strong>
-            </div>
-          </article>
-          <article className={`benchmark-stat-card ${isRunning ? 'live' : ''}`}>
-            <TrendingUp size={18} />
-            <div>
-              <span>Execution</span>
-              <strong>{isRunning ? 'En cours' : results ? 'Terminee' : 'En attente'}</strong>
-            </div>
-          </article>
+        <div className="benchmark-actions">
+          <button type="button" className="btn-secondary" onClick={handleOpenModal}>
+            <WandSparkles size={16} />
+            Autre benchmark
+          </button>
+          {!usingProjectBenchmark && (
+            <button type="button" className="btn-ghost" onClick={handleRestoreProjectBenchmark}>
+              <Target size={16} />
+              Revenir au projet
+            </button>
+          )}
+          <button type="button" className="btn-primary" onClick={handleRunBenchmark} disabled={isRunning || !readyToRun}>
+            {isRunning ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
+            {isRunning ? 'Analyse en cours...' : displayResults?.ranking?.length ? 'Relancer le benchmark' : 'Lancer le benchmark'}
+          </button>
         </div>
       </section>
 
-      <div className="benchmark-layout">
-        <div className="benchmark-panel">
-          <section className="panel-section">
-            <div className="panel-title-row">
-              <h2><Target size={14} /> Marques comparees</h2>
-              <span className="panel-chip">{sector || 'Multi-secteur'}</span>
-            </div>
-            <p className="panel-desc">
-              Selectionnez 2 a 6 marques pour construire un benchmark comparatif stable.
-            </p>
+      <MetricTape items={metricItems} compact />
 
-            <div className="brand-chips">
-              {brands.map((brand) => (
-                <div key={brand} className="brand-chip">
-                  <span>{brand}</span>
-                  <X size={12} onClick={() => removeBrand(brand)} />
+      <div className="benchmark-main-grid">
+        <section className="benchmark-arena">
+          <div className="benchmark-section-head">
+            <div>
+              <span className="benchmark-section-kicker">Arena</span>
+              <h2>Classement comparatif</h2>
+            </div>
+            <div className="benchmark-section-meta">
+              <span className="benchmark-badge">{benchmarkConfig.sourceLabel}</span>
+              <span className="benchmark-badge subtle">{formatDateTime(lastRunAt)}</span>
+            </div>
+          </div>
+
+          {ranking.length > 0 ? (
+            <>
+              <div className="benchmark-duel">
+                <article className="benchmark-duel-brand is-leader">
+                  <span className="benchmark-duel-label">Leader actuel</span>
+                  <strong>{leader?.brand}</strong>
+                  <span>
+                    <AnimatedNumber value={leader?.global_score} decimals={1} /> pts
+                  </span>
+                </article>
+
+                <div className="benchmark-duel-center">
+                  <ArrowRightLeft size={18} />
+                  <span>Confrontation active</span>
                 </div>
-              ))}
-            </div>
 
-            <div className="brand-input-row">
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(event) => setInputValue(event.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={brands.length >= 6 ? 'Maximum 6 marques' : 'Ajouter une marque'}
-                disabled={brands.length >= 6}
-              />
-              <button type="button" onClick={() => addBrand(inputValue)} disabled={brands.length >= 6}>
-                <Plus size={16} />
-              </button>
-            </div>
-
-            <div className="popular-brands">
-              <span>{sector ? `Suggestions ${sector}` : 'Suggestions rapides'}</span>
-              <div className="popular-brand-list">
-                {suggestedBrands.map((brand) => (
-                  <button
-                    key={brand}
-                    type="button"
-                    className="popular-chip"
-                    onClick={() => addBrand(brand)}
-                    disabled={brands.includes(brand) || brands.length >= 6}
-                  >
-                    {brand}
-                  </button>
-                ))}
+                <article className="benchmark-duel-brand">
+                  <span className="benchmark-duel-label">Challenger</span>
+                  <strong>{challenger?.brand || 'Aucun'}</strong>
+                  <span>
+                    <AnimatedNumber value={challenger?.global_score} decimals={1} /> pts
+                  </span>
+                </article>
               </div>
+
+              <div className="benchmark-standings">
+                <div className="benchmark-standings-head">
+                  <span>Rang</span>
+                  <span>Marque</span>
+                  <span>Score</span>
+                  <span>Mention</span>
+                  <span>Share of voice</span>
+                  <span>Ecart leader</span>
+                </div>
+
+                {ranking.map((item, index) => {
+                  const gapToLeader = leader ? item.global_score - leader.global_score : 0;
+                  const tone = getDeltaTone(gapToLeader);
+
+                  return (
+                    <div
+                      key={item.brand}
+                      className={`benchmark-standing-row ${item.brand === mainBrand ? 'is-main' : ''}`}
+                    >
+                      <span className="standing-rank">#{index + 1}</span>
+                      <div className="standing-brand">
+                        <span className="standing-brand-name">{item.brand}</span>
+                        {item.brand === mainBrand && <span className="standing-brand-tag">Projet</span>}
+                      </div>
+                      <span className="standing-score">
+                        <AnimatedNumber value={item.global_score} decimals={1} />
+                      </span>
+                      <span className="standing-metric">
+                        <AnimatedNumber value={item.mention_rate} decimals={0} suffix="%" />
+                      </span>
+                      <span className="standing-metric">
+                        <AnimatedNumber value={item.share_of_voice} decimals={0} suffix="%" />
+                      </span>
+                      <span className={`standing-delta ${tone}`}>
+                        {gapToLeader === 0 ? 'Leader' : (
+                          <>
+                            {gapToLeader > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                            <AnimatedNumber value={Math.abs(gapToLeader)} decimals={1} suffix=" pts" />
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="benchmark-footer-actions">
+                {onComplete && (
+                  <button type="button" className="btn-secondary" onClick={() => onComplete(displayResults)}>
+                    Voir les details
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            emptyArena
+          )}
+        </section>
+
+        <aside className="benchmark-rail">
+          <section className="benchmark-setup">
+            <div className="benchmark-section-head">
+              <div>
+                <span className="benchmark-section-kicker">Configuration</span>
+                <h2>Terrain compare</h2>
+              </div>
+              <span className={`benchmark-status ${readyToRun ? 'ready' : 'pending'}`}>
+                {displayResults?.ranking?.length ? 'Resultats charges' : readyToRun ? 'Pret a lancer' : 'A completer'}
+              </span>
+            </div>
+
+            <div className="benchmark-lineup">
+              {brands.length > 0 ? brands.map((brand) => (
+                <span key={brand} className={`benchmark-lineup-chip ${brand === mainBrand ? 'is-main' : ''}`}>
+                  {brand}
+                </span>
+              )) : <span className="benchmark-lineup-empty">Aucune marque configuree</span>}
+            </div>
+
+            <div className="benchmark-summary-grid">
+              <div className="benchmark-summary-item">
+                <span>Prompts</span>
+                <strong>{promptCount}</strong>
+                <small>{promptCount > 0 ? 'pack disponible' : 'aucun pack'}</small>
+              </div>
+              <div className="benchmark-summary-item">
+                <span>Modeles</span>
+                <strong>{modelCount}</strong>
+                <small>{modelCount > 0 ? 'lecture active' : 'non renseigne'}</small>
+              </div>
+              <div className="benchmark-summary-item">
+                <span>Leader</span>
+                <strong>{leader?.brand || '--'}</strong>
+                <small>{leader ? `${leader.mention_rate?.toFixed(0)}% de mention` : 'en attente de run'}</small>
+              </div>
+              <div className="benchmark-summary-item">
+                <span>Ecart projet</span>
+                <strong className={getDeltaTone(primaryGap)}>
+                  {typeof primaryGap === 'number'
+                    ? `${primaryGap > 0 ? '+' : ''}${primaryGap.toFixed(1)} pts`
+                    : '--'}
+                </strong>
+                <small>{mainBrand || 'Marque principale'}</small>
+              </div>
+            </div>
+
+            <div className="benchmark-prompts">
+              <div className="benchmark-prompts-head">
+                <h3>Prompts utilises</h3>
+                <span>{promptCount}</span>
+              </div>
+              {promptCount > 0 ? (
+                <ul>
+                  {benchmarkConfig.prompts.slice(0, 4).map((prompt, index) => (
+                    <li key={`${prompt}-${index}`}>{prompt}</li>
+                  ))}
+                  {promptCount > 4 && <li className="more">+{promptCount - 4} autres prompts</li>}
+                </ul>
+              ) : (
+                <p>Aucun prompt disponible dans ce benchmark.</p>
+              )}
             </div>
           </section>
 
-          {brands.length >= 2 && (
-            <section className="panel-section">
-              <button className="btn-generate" onClick={handleGenerate} disabled={isGenerating}>
-                {isGenerating ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
-                {isGenerating ? 'Generation...' : 'Generer le benchmark'}
-              </button>
+          {isRunning && progress && (
+            <section className="benchmark-live">
+              <div className="benchmark-section-head">
+                <div>
+                  <span className="benchmark-section-kicker">Live</span>
+                  <h2>Run benchmark</h2>
+                </div>
+                <span className="benchmark-status live">En cours</span>
+              </div>
+
+              <div className="benchmark-progress-line">
+                <div
+                  className="benchmark-progress-fill"
+                  style={{
+                    width: progress.total ? `${Math.min(100, (progress.current / progress.total) * 100)}%` : '8%'
+                  }}
+                />
+              </div>
+
+              <div className="benchmark-live-stats">
+                <div>
+                  <span>Phase</span>
+                  <strong>
+                    {progress.phase === 'progress'
+                      ? `Prompt ${progress.current}/${progress.total}`
+                      : 'Initialisation'}
+                  </strong>
+                </div>
+                <div>
+                  <span>Prompt actuel</span>
+                  <strong>{progress.prompt || 'Preparation du benchmark'}</strong>
+                </div>
+              </div>
+
+              {completedPrompts.length > 0 && (
+                <div className="benchmark-live-log">
+                  {completedPrompts.slice(-4).map((item, index) => (
+                    <div key={`${item.prompt}-${index}`} className="benchmark-live-item">
+                      <span className="benchmark-live-index">{completedPrompts.length - Math.min(4, completedPrompts.length) + index + 1}</span>
+                      <span className="benchmark-live-text">{item.prompt}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           )}
 
           {error && <div className="benchmark-error">{error}</div>}
-
-          {benchmarkConfig && (
-            <section className="panel-section generated-config">
-              <div className="panel-title-row">
-                <h2><CheckCircle2 size={14} /> Configuration generee</h2>
-                <span className="panel-chip success">Prete</span>
-              </div>
-
-              <div className="config-info">
-                <span>{benchmarkConfig.sector || sector || 'Benchmark'}</span>
-                <span>{benchmarkConfig.products?.length || 0} produits</span>
-                <span>{benchmarkConfig.prompts?.length || 0} prompts</span>
-              </div>
-
-              {!!benchmarkConfig.products?.length && (
-                <div className="products-list">
-                  {benchmarkConfig.products.map((product) => (
-                    <div key={product.id} className="product-item">
-                      <span className="product-name">{product.name}</span>
-                      <span className="product-desc">{product.description}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {!!benchmarkConfig.prompts?.length && (
-                <div className="prompts-preview">
-                  <span className="prompts-label">Prompts pilotes</span>
-                  <ul>
-                    {benchmarkConfig.prompts.slice(0, 3).map((prompt, index) => (
-                      <li key={`${prompt}-${index}`}>{prompt}</li>
-                    ))}
-                    {benchmarkConfig.prompts.length > 3 && (
-                      <li className="more">+{benchmarkConfig.prompts.length - 3} autres</li>
-                    )}
-                  </ul>
-                </div>
-              )}
-
-              <button className="btn-launch" onClick={handleRunBenchmark} disabled={isRunning}>
-                {isRunning ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
-                {isRunning ? 'Analyse...' : 'Lancer le benchmark'}
-              </button>
-            </section>
-          )}
-        </div>
-
-        <div className="benchmark-results">
-          {isRunning && progress && (
-            <section className="progress-panel">
-              <div className="panel-title-row">
-                <h2><TrendingUp size={14} /> Analyse en cours</h2>
-                <span className="panel-chip live">Live</span>
-              </div>
-
-              <div className="progress-stats">
-                <div className="stat">
-                  <span className="stat-label">Phase</span>
-                  <span className="stat-value">
-                    {progress.phase === 'progress' ? `Prompt ${progress.current}/${progress.total}` : 'Initialisation'}
-                  </span>
-                </div>
-
-                {progress.phase === 'progress' && (
-                  <>
-                    <div className="stat">
-                      <span className="stat-label">Prompt actuel</span>
-                      <span className="stat-value prompt-text">{progress.prompt}</span>
-                    </div>
-                    <div className="progress-bar-container">
-                      <div
-                        className="progress-bar-fill"
-                        style={{ width: `${(progress.current / progress.total) * 100}%` }}
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {completedPrompts.length > 0 && (
-                <div className="completed-list">
-                  <span className="completed-label">Prompts deja traites</span>
-                  {completedPrompts.map((item, index) => (
-                    <div key={`${item.prompt}-${index}`} className="completed-item">
-                      <span className="cp-num">{index + 1}</span>
-                      <span className="cp-prompt">{item.prompt}</span>
-                      {item.brands_mentioned && (
-                        <span className="cp-brands">{item.brands_mentioned.length} marques</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          )}
-
-          {results?.ranking && (
-            <section className="results-panel">
-              <div className="results-header">
-                <Trophy size={18} />
-                <h2>Classement benchmark</h2>
-              </div>
-
-              <div className="ranking-list">
-                {results.ranking.map((item, index) => (
-                  <div key={item.brand} className={`rank-item rank-${index + 1}`}>
-                    <div className="rank-badge">
-                      {index === 0 ? '1' : index === 1 ? '2' : index === 2 ? '3' : `#${index + 1}`}
-                    </div>
-                    <div className="rank-brand">{item.brand}</div>
-                    <div className="rank-score">{item.global_score?.toFixed(1)}</div>
-                    <div className="rank-metrics">
-                      <span>{item.mention_rate?.toFixed(0)}%</span>
-                      <span>#{item.avg_position?.toFixed(1)}</span>
-                      <span>{item.share_of_voice?.toFixed(0)}%</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="results-actions">
-                <button className="btn-secondary" type="button" onClick={() => { setGenerated(null); setResults(null); }}>
-                  Nouveau benchmark
-                </button>
-                {onComplete && (
-                  <button className="btn-primary" type="button" onClick={() => onComplete(results)}>
-                    Voir details
-                  </button>
-                )}
-              </div>
-            </section>
-          )}
-
-          {!isRunning && !results && (
-            <PanelState
-              icon={benchmarkConfig ? CheckCircle2 : Crosshair}
-              title={benchmarkConfig ? 'Configuration benchmark prete' : 'Benchmark non lance'}
-              description={
-                benchmarkConfig
-                  ? 'Le benchmark est configure. Lancez maintenant le run pour produire un classement comparatif.'
-                  : 'Selectionnez entre 2 et 6 marques pour preparer un benchmark comparatif et suivre les ecarts de visibilite.'
-              }
-              actions={benchmarkConfig ? (
-                <button onClick={handleRunBenchmark} disabled={isRunning}>
-                  Lancer le benchmark
-                </button>
-              ) : null}
-            />
-          )}
-        </div>
+        </aside>
       </div>
+
+      {isModalOpen && (
+        <div className="benchmark-modal-backdrop" onClick={handleCloseModal}>
+          <div className="benchmark-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="benchmark-modal-head">
+              <div>
+                <span className="benchmark-section-kicker">Autre benchmark</span>
+                <h2>Configurer une autre arene</h2>
+              </div>
+              <button type="button" className="benchmark-modal-close" onClick={handleCloseModal} aria-label="Fermer">
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="benchmark-modal-copy">
+              Saisissez 2 a 6 marques. Le projet actif reste la reference, mais vous pouvez preparer un autre benchmark
+              sans casser la lecture actuelle.
+            </p>
+
+            <div className="benchmark-modal-lineup">
+              {draftBrands.map((brand) => (
+                <span key={brand} className="benchmark-lineup-chip is-editing">
+                  {brand}
+                  <button type="button" onClick={() => removeDraftBrand(brand)} aria-label={`Supprimer ${brand}`}>
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            <div className="benchmark-modal-input">
+              <input
+                type="text"
+                value={draftInputValue}
+                onChange={(event) => setDraftInputValue(event.target.value)}
+                onKeyDown={handleDraftKeyDown}
+                placeholder={draftBrands.length >= 6 ? 'Maximum 6 marques' : 'Ajouter une marque'}
+                disabled={draftBrands.length >= 6}
+              />
+              <button type="button" onClick={() => addDraftBrand(draftInputValue)} disabled={draftBrands.length >= 6}>
+                <Plus size={16} />
+              </button>
+            </div>
+
+            <div className="benchmark-modal-suggestions">
+              {suggestedBrands.map((brand) => (
+                <button
+                  key={brand}
+                  type="button"
+                  className="benchmark-suggestion"
+                  onClick={() => addDraftBrand(brand)}
+                  disabled={draftBrands.some((item) => item.toLowerCase() === brand.toLowerCase()) || draftBrands.length >= 6}
+                >
+                  {brand}
+                </button>
+              ))}
+            </div>
+
+            {modalError && <div className="benchmark-error">{modalError}</div>}
+
+            <div className="benchmark-modal-actions">
+              <button type="button" className="btn-ghost" onClick={() => setDraftBrands(projectBenchmark.brands)}>
+                Charger le projet
+              </button>
+              <button type="button" className="btn-primary" onClick={handleGenerateAlternative} disabled={isGenerating}>
+                {isGenerating ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
+                {isGenerating ? 'Preparation...' : 'Appliquer ce benchmark'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

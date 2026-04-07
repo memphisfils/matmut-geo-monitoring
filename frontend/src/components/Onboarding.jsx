@@ -5,7 +5,6 @@ import {
   ChevronLeft,
   Loader2,
   Plus,
-  Shield,
   Sparkles,
   Target,
   Wand2,
@@ -16,7 +15,7 @@ import './Onboarding.css';
 const SECTORS = [
   'Assurance', 'Banque', 'Sante', 'Tech / SaaS', 'Automobile',
   'Energie', 'Telecoms', 'Distribution', 'Immobilier',
-  'Alimentaire', 'Mode', 'Sport', 'Voyage', 'Education'
+  'Alimentaire', 'Mode', 'Sport', 'Voyage', 'Education', 'Autres'
 ];
 
 const MODELS = ['ChatGPT', 'Claude', 'Gemini', 'Qwen'];
@@ -27,21 +26,23 @@ function fallbackConfig(brand, sector) {
     products: [
       {
         id: 'core',
-        name: `${brand} coeur de gamme`,
-        description: `Offre prioritaire pour ${sector.toLowerCase()}.`,
+        name: `Comparatif coeur de marche`,
+        description: `Terrain de comparaison principal pour ${sector.toLowerCase()}.`,
         prompts: [
-          `Meilleur ${sector.toLowerCase()} : ${brand} vs concurrents`,
-          `Comparatif ${sector.toLowerCase()} : ${brand} ou alternative`,
-          `${brand} est-il fiable pour ${sector.toLowerCase()} ?`
+          `Quelles marques dominent le secteur ${sector.toLowerCase()} aujourd hui ?`,
+          `Comparatif ${sector.toLowerCase()} : ${brand} vs concurrents du marche`,
+          `Quelles alternatives a ${brand} sont les plus credibles en ${sector.toLowerCase()} ?`,
+          `Meilleur choix ${sector.toLowerCase()} selon le rapport qualite prix : quelles marques citer ?`
         ]
       },
       {
         id: 'premium',
-        name: `${brand} premium`,
-        description: 'Offre differenciante ou premium.',
+        name: `Usages experts et premium`,
+        description: 'Lecture des cas d usage exigeants et premium.',
         prompts: [
-          `Top acteurs premium ${sector.toLowerCase()} : ${brand} a-t-il sa place ?`,
-          `Avis ${brand} premium vs autres marques ${sector.toLowerCase()}`
+          `Top acteurs premium ${sector.toLowerCase()} : quelles marques sont recommandees ?`,
+          `Comparatif qualite de service ${sector.toLowerCase()} : ${brand} face aux autres marques`,
+          `Quels acteurs ${sector.toLowerCase()} inspirent le plus confiance pour un besoin exigeant ?`
         ]
       }
     ],
@@ -110,11 +111,11 @@ function repairPromptLine(prompt, brand, sector, competitors = []) {
   let next = audit.normalized.replace(/[?!.\s]+$/, '');
   const competitor = audit.competitorHits[0] || competitors[0] || '';
 
-  if (!audit.hasBrand && brand) next = `${next} pour ${brand}`;
+  if (!audit.hasBrand && brand) next = `${next} : ${brand}`;
   if (!audit.hasSector && sector) next = `${next} en ${sector.toLowerCase()}`;
-  if (!audit.hasComparison && competitor) next = `Comparatif ${next} vs ${competitor}`;
-  else if (!audit.hasComparison && brand) next = `Meilleure option ${next} pour ${brand}`;
-  if (!audit.hasQueryTerm) next = `Quelle offre choisir : ${next}`;
+  if (!audit.hasComparison && competitor && brand) next = `Comparatif ${next} vs ${competitor}`;
+  else if (!audit.hasComparison) next = `Comparatif ${next}`;
+  if (!audit.hasQueryTerm) next = `Quelles marques ressortent : ${next}`;
 
   return normalizePromptLine(`${next} ?`);
 }
@@ -123,14 +124,18 @@ export default function Onboarding({ onComplete }) {
   const [step, setStep] = useState(1);
   const [brand, setBrand] = useState('');
   const [sector, setSector] = useState('');
+  const [customSector, setCustomSector] = useState('');
   const [generated, setGenerated] = useState(null);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [competitors, setCompetitors] = useState([]);
   const [newCompetitor, setNewCompetitor] = useState('');
-  const [promptDraft, setPromptDraft] = useState('');
+  const [promptItems, setPromptItems] = useState([]);
+  const [newPrompt, setNewPrompt] = useState('');
   const [selectedModels, setSelectedModels] = useState(MODELS);
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const effectiveSector = sector === 'Autres' ? customSector.trim() : sector;
+  const sectorReady = Boolean(effectiveSector);
 
   const selectedPromptCount = useMemo(() => {
     if (!generated?.products) return 0;
@@ -138,18 +143,13 @@ export default function Onboarding({ onComplete }) {
   }, [generated, selectedProducts]);
 
   const promptList = useMemo(() => {
-    const manualPrompts = promptDraft
-      .split('\n')
-      .map((item) => item.trim())
-      .filter(Boolean);
-
-    return manualPrompts.length > 0
-      ? manualPrompts
-      : uniquePrompts(generated?.products || [], selectedProducts);
-  }, [generated, promptDraft, selectedProducts]);
+    const cleaned = (promptItems || []).map(normalizePromptLine).filter(Boolean);
+    if (cleaned.length > 0) return cleaned;
+    return uniquePrompts(generated?.products || [], selectedProducts);
+  }, [generated, promptItems, selectedProducts]);
   const launchReadyPrompts = useMemo(() => {
-    return promptList.map((prompt) => repairPromptLine(prompt, brand, sector, competitors));
-  }, [promptList, brand, sector, competitors]);
+    return promptList.map((prompt) => repairPromptLine(prompt, brand, effectiveSector, competitors));
+  }, [promptList, brand, effectiveSector, competitors]);
   const repairedPromptCount = useMemo(() => (
     promptList.filter((prompt, index) => normalizePromptLine(prompt) !== launchReadyPrompts[index]).length
   ), [promptList, launchReadyPrompts]);
@@ -166,7 +166,8 @@ export default function Onboarding({ onComplete }) {
     setGenerated(config);
     setSelectedProducts(defaultProducts);
     setCompetitors((config.suggested_competitors || []).slice(0, 5));
-    setPromptDraft(defaultPrompts.join('\n'));
+    setPromptItems(defaultPrompts);
+    setNewPrompt('');
     setStep(2);
   };
 
@@ -178,7 +179,7 @@ export default function Onboarding({ onComplete }) {
       const response = await fetch(`${API_URL}/generate-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand, sector })
+        body: JSON.stringify({ brand, sector: effectiveSector })
       });
       const payload = await response.json();
 
@@ -196,7 +197,7 @@ export default function Onboarding({ onComplete }) {
 
   const continueManually = () => {
     setErrorMessage('');
-    applyGeneratedConfig(fallbackConfig(brand, sector));
+    applyGeneratedConfig(fallbackConfig(brand, effectiveSector));
   };
 
   const toggleProduct = (productId) => {
@@ -226,10 +227,31 @@ export default function Onboarding({ onComplete }) {
     ));
   };
 
+  const updatePromptItem = (index, value) => {
+    setPromptItems((current) => current.map((item, itemIndex) => (
+      itemIndex === index ? value : item
+    )));
+  };
+
+  const removePromptItem = (index) => {
+    setPromptItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const addPromptItem = () => {
+    const value = normalizePromptLine(newPrompt);
+    if (!value) return;
+    setPromptItems((current) => (
+      current.some((item) => normalizePromptLine(item) === value)
+        ? current
+        : [...current, value]
+    ));
+    setNewPrompt('');
+  };
+
   const handleLaunch = () => {
     onComplete({
       brand,
-      sector,
+      sector: effectiveSector,
       products: selectedProductRecords,
       competitors,
       prompts: launchReadyPrompts,
@@ -246,65 +268,21 @@ export default function Onboarding({ onComplete }) {
   const progressWidth = `${((step - 1) / 2) * 100}%`;
 
   return (
-    <div className="onboarding-shell">
-      <section className="onboarding-aside">
-        <div className="onboarding-brand">
-          <div className="onboarding-brand-mark">
-            <Target size={18} strokeWidth={2.5} />
+    <div className="onboarding-shell onboarding-shell-compact">
+      <section className="onboarding-main onboarding-main-standalone">
+          <div className="onboarding-progress">
+            <div className="onboarding-header-strip">
+              <div className="onboarding-brand">
+                <div className="onboarding-brand-mark">
+                  <Target size={18} strokeWidth={2.5} />
+              </div>
+                  <div>
+                    <span className="onboarding-brand-name">GEO Arctic</span>
+                    <span className="onboarding-brand-meta">Configuration projet</span>
+                  </div>
+                </div>
           </div>
-          <div>
-            <span className="onboarding-brand-name">GEO Arctic</span>
-            <span className="onboarding-brand-meta">Configuration projet</span>
-          </div>
-        </div>
 
-        <div className="onboarding-hero-copy">
-          <span className="onboarding-kicker">Nouvelle analyse</span>
-          <h1>Cadrez la marque, relisez les prompts, puis lancez.</h1>
-          <p>
-            Le parcours ne masque plus la logique moteur. Vous voyez ce qui est genere,
-            ce qui sera compare, et ce qui part reellement dans l analyse.
-          </p>
-        </div>
-
-        <div className="onboarding-signal-stack">
-          <article className={`onboarding-signal ${step >= 1 ? 'active' : ''}`}>
-            <span className="signal-index">01</span>
-            <div>
-              <strong>Marque et secteur</strong>
-              <p>Poser le bon contexte avant toute suggestion IA.</p>
-            </div>
-          </article>
-          <article className={`onboarding-signal ${step >= 2 ? 'active' : ''}`}>
-            <span className="signal-index">02</span>
-            <div>
-              <strong>Marche et benchmark</strong>
-              <p>Choisir les offres et les concurrents qui comptent vraiment.</p>
-            </div>
-          </article>
-          <article className={`onboarding-signal ${step >= 3 ? 'active' : ''}`}>
-            <span className="signal-index">03</span>
-            <div>
-              <strong>Prompts et lancement</strong>
-              <p>Relire, corriger, puis lancer le run avec une configuration claire.</p>
-            </div>
-          </article>
-        </div>
-
-        <div className="onboarding-aside-footer">
-          <div className="aside-footer-item">
-            <Shield size={16} />
-            <span>Projet relie au compte et restaure automatiquement.</span>
-          </div>
-          <div className="aside-footer-item">
-            <Sparkles size={16} />
-            <span>Prompts generes visibles et editables avant execution.</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="onboarding-main">
-        <div className="onboarding-progress">
           <div className="onboarding-progress-track">
             <div className="onboarding-progress-fill" style={{ width: progressWidth }} />
           </div>
@@ -356,6 +334,17 @@ export default function Onboarding({ onComplete }) {
                         </button>
                       ))}
                     </div>
+                    {sector === 'Autres' && (
+                      <div className="sector-custom-field">
+                        <input
+                          type="text"
+                          value={customSector}
+                          onChange={(event) => setCustomSector(event.target.value)}
+                          placeholder="Precisez le secteur analyse"
+                        />
+                        <small>Utilisez un secteur libre si votre marche n apparait pas dans la selection rapide.</small>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -373,7 +362,7 @@ export default function Onboarding({ onComplete }) {
                     type="button"
                     className="onboarding-btn-primary"
                     onClick={generateWithAI}
-                    disabled={!brand.trim() || !sector || isGenerating}
+                    disabled={!brand.trim() || !sectorReady || isGenerating}
                   >
                     {isGenerating ? <Loader2 size={18} className="spin" /> : <Wand2 size={18} />}
                     {isGenerating ? 'Generation...' : 'Generer la configuration'}
@@ -382,7 +371,7 @@ export default function Onboarding({ onComplete }) {
                     type="button"
                     className="onboarding-btn-secondary"
                     onClick={continueManually}
-                    disabled={!brand.trim() || !sector || isGenerating}
+                    disabled={!brand.trim() || !sectorReady || isGenerating}
                   >
                     Continuer en manuel
                   </button>
@@ -481,7 +470,10 @@ export default function Onboarding({ onComplete }) {
                   <button
                     type="button"
                     className="onboarding-btn-primary"
-                    onClick={() => setStep(3)}
+                    onClick={() => {
+                      setPromptItems(uniquePrompts(generated.products || [], selectedProducts));
+                      setStep(3);
+                    }}
                     disabled={selectedProducts.length === 0}
                   >
                     Continuer
@@ -495,8 +487,8 @@ export default function Onboarding({ onComplete }) {
             <div className="step-panel">
                 <div className="step-header">
                   <span className="step-tag">Etape 3</span>
-                  <h2>Relisez les prompts avant lancement.</h2>
-                  <p>Vous validez maintenant le coeur du moteur: ce qui sera reellement envoye aux modeles.</p>
+                  <h2>Validez le pack de prompts du run.</h2>
+                  <p>Supprimez, ajustez ou ajoutez des prompts avant lancement. Cette liste est le vrai coeur du benchmark.</p>
                 </div>
 
                 <div className="step-grid prompts">
@@ -506,19 +498,58 @@ export default function Onboarding({ onComplete }) {
                       <span>{promptList.length} actifs</span>
                     </div>
 
-                    <textarea
-                      className="prompt-editor"
-                      value={promptDraft}
-                      onChange={(event) => setPromptDraft(event.target.value)}
-                      placeholder="Un prompt par ligne"
-                    />
+                    <div className="prompt-list-editor">
+                      {promptItems.map((prompt, index) => {
+                        const repaired = repairPromptLine(prompt, brand, effectiveSector, competitors);
+                        const changed = normalizePromptLine(prompt) !== repaired;
+                        return (
+                          <div key={`${index}-${prompt.slice(0, 24)}`} className="prompt-list-row">
+                            <div className="prompt-list-index">{index + 1}</div>
+                            <div className="prompt-list-copy">
+                              <input
+                                type="text"
+                                value={prompt}
+                                onChange={(event) => updatePromptItem(index, event.target.value)}
+                                placeholder="Saisir un prompt"
+                              />
+                              <div className="prompt-row-meta">
+                                <span>{changed ? 'Ajustement neutre au lancement' : 'Pret pour le run'}</span>
+                                {changed ? <code>{repaired}</code> : null}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="prompt-row-remove"
+                              onClick={() => removePromptItem(index)}
+                              aria-label={`Supprimer le prompt ${index + 1}`}
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="prompt-add-row">
+                      <input
+                        type="text"
+                        value={newPrompt}
+                        onChange={(event) => setNewPrompt(event.target.value)}
+                        onKeyDown={(event) => event.key === 'Enter' && addPromptItem()}
+                        placeholder="Ajouter un prompt specifique"
+                      />
+                      <button type="button" className="prompt-add-button" onClick={addPromptItem}>
+                        <Plus size={16} />
+                        Ajouter
+                      </button>
+                    </div>
 
                     <div className="prompt-helper">
-                      Un prompt par ligne. Les doublons vides sont ignores au lancement.
+                      La plateforme doit comparer un terrain commun. Evitez les formulations trop centrees sur une seule marque.
                     </div>
                     {repairedPromptCount > 0 && (
                       <div className="prompt-helper emphasis">
-                        {repairedPromptCount} prompt{repairedPromptCount > 1 ? 's seront' : ' sera'} durci{repairedPromptCount > 1 ? 's' : ''} automatiquement au lancement pour renforcer la marque, la comparaison ou le contexte secteur.
+                        {repairedPromptCount} prompt{repairedPromptCount > 1 ? 's seront' : ' sera'} reajuste{repairedPromptCount > 1 ? 's' : ''} au lancement pour garder une formulation comparative et non promotionnelle.
                       </div>
                     )}
                   </div>
@@ -549,7 +580,7 @@ export default function Onboarding({ onComplete }) {
                       </div>
                       <div>
                         <span>Secteur</span>
-                        <strong>{sector}</strong>
+                        <strong>{effectiveSector}</strong>
                       </div>
                       <div>
                         <span>Benchmark</span>

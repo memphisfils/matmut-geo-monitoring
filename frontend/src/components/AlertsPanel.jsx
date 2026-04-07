@@ -9,8 +9,10 @@ import {
   Siren,
   Slack,
   Sparkles,
-  TriangleAlert
+  TriangleAlert,
+  ShieldAlert
 } from 'lucide-react';
+import MetricTape from './MetricTape';
 import PanelState from './PanelState';
 import './AlertsPanel.css';
 
@@ -91,72 +93,113 @@ export default function AlertsPanel({ brand }) {
   const channels = useMemo(() => (
     ['slack', 'email', 'telegram'].map((key) => {
       const data = status?.[key] || {};
+      const preference = status?.preferences?.channels?.[key] || {};
+      const configured = preference.configured ?? Boolean(data.configured);
+      const enabled = Boolean(preference.enabled);
+      const source = preference.source || 'default';
+      const config = preference.config || {};
       return {
         key,
         ...CHANNEL_META[key],
-        configured: Boolean(data.configured),
+        configured,
+        enabled,
+        source,
         detail: key === 'email'
-          ? (data.configured ? `${data.recipient} via ${data.host}` : 'Configuration SMTP manquante')
+          ? (configured
+            ? `${config.recipient || data.recipient || 'destinataire'} via ${config.host || data.host || 'SMTP'}`
+            : 'Configuration SMTP manquante')
           : key === 'telegram'
-            ? (data.configured ? `Chat ID ${data.chat_id}` : 'Bot ou chat non configure')
-            : (data.configured ? 'Webhook actif' : 'Webhook Slack manquant')
+            ? (configured ? `Chat ID ${config.chat_id || data.chat_id || '-'}` : 'Bot ou chat non configure')
+            : (configured ? 'Webhook actif' : 'Webhook Slack manquant')
       };
     })
   ), [status]);
 
   const configuredCount = channels.filter((channel) => channel.configured).length;
+  const enabledCount = channels.filter((channel) => channel.enabled).length;
   const scheduler = health?.scheduler || { role: 'disabled', running: false, configured: false };
-  const primaryAction = configuredCount === 0
-    ? 'Configurer un canal de sortie'
+  const primaryAction = enabledCount === 0
+    ? 'Activer au moins un canal projet'
     : scheduler.running
-      ? 'Surveiller la perte de rang'
+      ? 'Surveiller les alertes actives'
       : 'Relancer le moteur d alertes';
 
+  const alertRules = useMemo(() => {
+    const rules = status?.preferences?.rules;
+    if (!rules?.length) {
+      return [
+        {
+          key: 'manual',
+          title: 'Declenchement manuel',
+          body: 'Verification immediate de la chaine complete de notification.',
+          tone: 'neutral',
+          Icon: Sparkles
+        }
+      ];
+    }
+
+    const iconBySeverity = {
+      critical: ShieldAlert,
+      high: TriangleAlert,
+      medium: BellRing,
+      info: Clock3
+    };
+
+    return [...rules]
+      .sort((a, b) => Number(b.enabled) - Number(a.enabled))
+      .slice(0, 6)
+      .map((rule) => ({
+        key: rule.id,
+        title: rule.name,
+        body: `${rule.frequency} · ${rule.enabled ? 'active' : 'desactivee'} sur ce projet.`,
+        tone: rule.enabled ? (rule.severity === 'critical' ? 'risk' : 'watch') : 'neutral',
+        Icon: iconBySeverity[rule.severity] || BellRing
+      }));
+  }, [status]);
+
   const alertFeed = useMemo(() => {
-    const feed = [];
+    const feed = [
+      {
+        key: 'scheduler',
+        tone: scheduler.running ? 'good' : 'risk',
+        Icon: scheduler.running ? CheckCircle2 : TriangleAlert,
+        title: scheduler.running ? 'Moteur d alertes actif' : 'Moteur d alertes inactif',
+        body: scheduler.running
+          ? `Le scheduler tourne en mode ${scheduler.role}.`
+          : 'Les alertes programmees ne tourneront pas tant que le scheduler ne sera pas actif.'
+      },
+      {
+        key: 'channels',
+        tone: enabledCount > 0 ? 'good' : 'risk',
+        Icon: enabledCount > 0 ? MessageSquareMore : Siren,
+        title: enabledCount > 0 ? 'Canal projet actif' : 'Aucun canal projet actif',
+        body: enabledCount > 0
+          ? `${enabledCount} canal(aux) sont actives pour ce projet.`
+          : 'Activez au moins un canal dans les preferences du projet pour sortir les alertes.'
+      }
+    ];
 
-    feed.push({
-      key: 'scheduler',
-      tone: scheduler.running ? 'good' : 'risk',
-      Icon: scheduler.running ? CheckCircle2 : TriangleAlert,
-      title: scheduler.running ? 'Moteur d alertes actif' : 'Moteur d alertes inactif',
-      body: scheduler.running
-        ? `Le scheduler tourne en mode ${scheduler.role}.`
-        : 'Les alertes programmees ne tourneront pas tant que le scheduler ne sera pas actif.'
-    });
-
-    feed.push({
-      key: 'rank-loss',
-      tone: configuredCount > 0 ? 'watch' : 'risk',
-      Icon: BellRing,
-      title: `Regle de perte de rang pour ${brand}`,
-      body: configuredCount > 0
-        ? `Une notification peut partir si ${brand} perd sa premiere place.`
-        : `La regle existe, mais aucun canal actif ne peut notifier la perte de rang de ${brand}.`
-    });
-
-    feed.push({
-      key: 'weekly',
-      tone: configuredCount > 0 ? 'good' : 'watch',
-      Icon: Clock3,
-      title: 'Resume hebdomadaire',
-      body: configuredCount > 0
-        ? 'Envoi chaque lundi a 09h00 sur tous les canaux actifs.'
-        : 'Pret cote produit, mais aucun canal n est disponible pour livrer le resume.'
-    });
-
-    if (configuredCount === 0) {
+    if (!scheduler.running || enabledCount === 0) {
       feed.push({
-        key: 'setup',
-        tone: 'risk',
-        Icon: Siren,
-        title: 'Configuration incomplete',
-        body: 'Activez au moins un canal pour sortir les alertes du dashboard et du mode local.'
+        key: 'manual-summary',
+        tone: 'watch',
+        Icon: Clock3,
+        title: 'Resume hebdomadaire',
+        body: enabledCount > 0
+          ? 'Le resume est pret, mais attend le moteur planifie.'
+          : 'Le resume est defini, mais aucun canal ne peut encore le livrer.'
       });
     }
 
     return feed;
-  }, [brand, configuredCount, scheduler.role, scheduler.running]);
+  }, [enabledCount, scheduler.role, scheduler.running]);
+
+  const tapeItems = useMemo(() => ([
+    { label: 'Canaux actifs', value: enabledCount, meta: `${configuredCount} configures` },
+    { label: 'Regles visibles', value: alertRules.length, meta: 'catalogue actif' },
+    { label: 'Scheduler', value: scheduler.running ? 1 : 0, meta: scheduler.running ? scheduler.role : 'inactif' },
+    { label: 'Incidents', value: alertFeed.filter((item) => item.tone === 'risk').length, meta: 'a traiter' }
+  ]), [alertFeed, alertRules.length, configuredCount, enabledCount, scheduler.role, scheduler.running]);
 
   const handleTest = async (channel) => {
     setTesting(channel);
@@ -212,74 +255,47 @@ export default function AlertsPanel({ brand }) {
 
   return (
     <div className="alerts-shell">
-      <section className="alerts-hero">
-        <div className="alerts-hero-copy">
+      <section className="alerts-header">
+        <div className="alerts-heading">
           <span className="alerts-kicker">Alertes</span>
-          <h2>Feed operationnel pour {brand}</h2>
-          <p>Cette vue priorise ce qui sort du dashboard: moteur actif ou non, canaux disponibles, et regles qui peuvent vraiment notifier.</p>
-          <div className="alerts-chip-row">
-            <span className="alerts-chip">{configuredCount}/3 canaux actifs</span>
-            <span className="alerts-chip">{scheduler.running ? 'Scheduler en ligne' : 'Scheduler hors ligne'}</span>
+          <h2>Centre de notification pour {brand}</h2>
+          <p>
+            Cette vue montre ce qui peut vraiment partir hors dashboard: etat moteur, canaux disponibles,
+            incidents actifs et regles deja prêtes a notifier.
+          </p>
+        </div>
+
+        <div className="alerts-hero-actions">
+          <div className="alerts-summary-line">
             <span className="alerts-chip">{primaryAction}</span>
+            <span className="alerts-chip">{scheduler.running ? `Scheduler ${scheduler.role}` : 'Scheduler hors ligne'}</span>
+          </div>
+          <div className="alerts-key-metrics">
+            <div>
+              <span>Canaux</span>
+              <strong>{enabledCount}/3</strong>
+            </div>
+            <div>
+              <span>Regles</span>
+              <strong>{alertRules.length}</strong>
+            </div>
+            <div>
+              <span>Incidents</span>
+              <strong>{alertFeed.filter((item) => item.tone === 'risk').length}</strong>
+            </div>
           </div>
         </div>
-
-        <div className="alerts-hero-stats">
-          <article className="alerts-stat-card live">
-            <Sparkles size={18} />
-            <div>
-              <span>Canaux actifs</span>
-              <strong>{configuredCount}/3</strong>
-            </div>
-          </article>
-          <article className={`alerts-stat-card ${scheduler.running ? 'good' : 'risk'}`}>
-            <Clock3 size={18} />
-            <div>
-              <span>Scheduler</span>
-              <strong>{scheduler.running ? 'Actif' : 'Inactif'}</strong>
-            </div>
-          </article>
-          <article className="alerts-stat-card">
-            <MessageSquareMore size={18} />
-            <div>
-              <span>Regles visibles</span>
-              <strong>{alertFeed.length}</strong>
-            </div>
-          </article>
-        </div>
       </section>
 
-      <section className="alerts-summary-band">
-        <article className="alerts-summary-card accent">
-          <span>Action prioritaire</span>
-          <strong>{primaryAction}</strong>
-          <p>
-            {configuredCount === 0
-              ? 'Sans canal configure, les alertes restent visibles ici mais ne sortent pas du dashboard.'
-              : scheduler.running
-                ? `La chaine est exploitable pour ${brand}. Le prochain gain vient du reglage fin des regles.`
-                : 'Les regles sont pretes, mais aucune execution planifiee ne partira tant que le scheduler reste inactif.'}
-          </p>
-        </article>
-        <article className="alerts-summary-card">
-          <span>Canal le plus proche du pret</span>
-          <strong>{channels.find((channel) => channel.configured)?.label || 'Aucun canal actif'}</strong>
-          <p>{channels.find((channel) => channel.configured)?.detail || 'Activez Slack, Email ou Telegram pour tester la sortie reelle.'}</p>
-        </article>
-        <article className={`alerts-summary-card ${scheduler.running ? 'good' : 'risk'}`}>
-          <span>Etat moteur</span>
-          <strong>{scheduler.running ? `Mode ${scheduler.role}` : 'Moteur non lance'}</strong>
-          <p>{scheduler.running ? 'Les regles et le digest hebdomadaire peuvent tourner automatiquement.' : 'Le dashboard reste consultable, mais sans declenchement automatise.'}</p>
-        </article>
-      </section>
+      <MetricTape items={tapeItems} compact />
 
-      <section className="alerts-feed">
+      <section className="alerts-highlights">
         {alertFeed.map((item) => (
-          <article key={item.key} className={`feed-item ${item.tone}`}>
-            <div className={`feed-item-icon ${item.tone}`}>
+          <article key={item.key} className={`alert-highlight ${item.tone}`}>
+            <div className={`alert-highlight-icon ${item.tone}`}>
               <item.Icon size={18} />
             </div>
-            <div className="feed-item-copy">
+            <div>
               <strong>{item.title}</strong>
               <p>{item.body}</p>
             </div>
@@ -287,31 +303,41 @@ export default function AlertsPanel({ brand }) {
         ))}
       </section>
 
-      <section className="alerts-grid">
-        <div className="alerts-panel">
-          <div className="panel-topline">
-            <strong>Canaux</strong>
-            <span>{configuredCount > 0 ? 'Au moins un canal peut notifier' : 'Aucun canal ne peut notifier'}</span>
+      <div className="alerts-workspace">
+        <section className="alerts-main">
+          <div className="alerts-section-head">
+            <div>
+              <span className="alerts-section-kicker">Canaux</span>
+              <h3>Sorties disponibles</h3>
+            </div>
+            <span className="alerts-section-meta">
+              {enabledCount > 0 ? 'Au moins un canal projet peut notifier' : 'Aucun canal projet ne peut notifier'}
+            </span>
           </div>
 
-          <div className="channel-stack">
+          <div className="channel-list">
             {channels.map((channel) => {
               const result = testResults[channel.key];
               const Icon = channel.Icon;
 
               return (
-                <article key={channel.key} className={`channel-row ${channel.configured ? 'configured' : 'muted'}`}>
-                  <div className="channel-row-main">
+                <article key={channel.key} className={`channel-item ${channel.configured ? 'configured' : 'muted'}`}>
+                  <div className="channel-item-main">
                     <div className={`channel-icon ${channel.configured ? 'configured' : 'muted'}`}>
                       <Icon size={16} />
                     </div>
-                    <div>
-                      <strong>{channel.label}</strong>
-                      <p>{channel.detail}</p>
+                    <div className="channel-copy">
+                      <div className="channel-title-row">
+                        <strong>{channel.label}</strong>
+                        <span className={`channel-state ${channel.configured ? 'configured' : 'muted'}`}>
+                          {channel.enabled ? 'Actif' : channel.configured ? 'Pret mais inactif' : 'A configurer'}
+                        </span>
+                      </div>
+                      <p>{channel.detail}{channel.source !== 'default' ? ` · source ${channel.source}` : ''}</p>
                     </div>
                   </div>
 
-                  <div className="channel-row-actions">
+                  <div className="channel-actions">
                     <button
                       type="button"
                       className="channel-test-button"
@@ -320,7 +346,6 @@ export default function AlertsPanel({ brand }) {
                     >
                       {testing === channel.key ? 'Envoi...' : 'Tester'}
                     </button>
-
                     {result ? (
                       <span className={`result-pill ${result}`}>
                         {result === 'success' ? 'Envoye' : 'Echec'}
@@ -346,54 +371,63 @@ export default function AlertsPanel({ brand }) {
               );
             })}
           </div>
-        </div>
+        </section>
 
-        <div className="alerts-panel">
-          <div className="panel-topline">
-            <strong>Regles et actions</strong>
-            <span>Ce que la plateforme peut deja emettre aujourd hui</span>
+        <aside className="alerts-rail">
+          <div className="alerts-panel">
+            <div className="alerts-section-head">
+              <div>
+                <span className="alerts-section-kicker">Regles</span>
+                <h3>Catalogue actif</h3>
+              </div>
+            </div>
+
+            <div className="rule-list">
+              {alertRules.map((rule) => (
+                <article key={rule.key} className={`rule-item ${rule.tone}`}>
+                  <div className={`rule-icon ${rule.tone}`}>
+                    <rule.Icon size={16} />
+                  </div>
+                  <div>
+                    <strong>{rule.title}</strong>
+                    <p>{rule.body}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
 
-          <div className="rule-stack">
-            <article className="rule-card">
-              <div className="rule-card-head">
-                <BellRing size={16} />
-                <strong>Perte de premiere place</strong>
+          <div className="alerts-panel emphasis">
+            <div className="alerts-section-head">
+              <div>
+                <span className="alerts-section-kicker">Action manuelle</span>
+                <h3>Declencher maintenant</h3>
               </div>
-              <p>Notification prevue si {brand} perd la tete du classement sur une analyse comparee.</p>
-            </article>
-
-            <article className="rule-card">
-              <div className="rule-card-head">
-                <Clock3 size={16} />
-                <strong>Resume hebdomadaire</strong>
-              </div>
-              <p>Lecture synthese chaque lundi a 09h00 sur tous les canaux actifs.</p>
-            </article>
-
-            <article className="rule-card emphasis">
-              <div className="rule-card-head">
-                <Sparkles size={16} />
-                <strong>Declenchement manuel</strong>
-              </div>
-              <p>Utile pour verifier la chaine complete de notification sans attendre la prochaine fenetre planifiee.</p>
-              <button
-                type="button"
-                className="weekly-action-button"
-                disabled={weeklyLoading || configuredCount === 0}
-                onClick={handleWeekly}
-              >
-                {weeklyLoading ? 'Envoi du resume...' : 'Envoyer le resume maintenant'}
-              </button>
-              {weeklyResult ? (
-                <span className={`result-pill ${weeklyResult}`}>
-                  {weeklyResult === 'success' ? 'Resume envoye' : 'Erreur de declenchement'}
-                </span>
-              ) : null}
-            </article>
+            </div>
+            <p className="manual-action-copy">
+              Utilisez ce bouton pour verifier la chaine complete de notification sans attendre la prochaine execution planifiee.
+            </p>
+            <button
+              type="button"
+              className="weekly-action-button"
+              disabled={weeklyLoading || enabledCount === 0}
+              onClick={handleWeekly}
+            >
+              {weeklyLoading ? 'Envoi du resume...' : 'Envoyer le resume maintenant'}
+            </button>
+            {weeklyResult ? (
+              <span className={`result-pill ${weeklyResult}`}>
+                {weeklyResult === 'success' ? 'Resume envoye' : 'Erreur de declenchement'}
+              </span>
+            ) : null}
           </div>
-        </div>
-      </section>
+
+          <div className="alerts-footer-note">
+            Alertes visibles pour {brand} · {enabledCount}/3 canaux actifs ·
+            {scheduler.running ? ` moteur ${scheduler.role}` : ' moteur hors ligne'}
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

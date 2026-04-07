@@ -253,6 +253,41 @@ def test_prompt_compare_exposes_quality_and_model_breakdown(client):
     me_payload = client.get('/api/auth/me').get_json()
     user_id = me_payload['user']['id']
 
+    previous_results = _make_multimodel_results(
+        'Brand Prompt',
+        ['Competitor One', 'Competitor Two'],
+        ['Comparatif assurance Brand Prompt vs Competitor One', 'avis general assurance']
+    )
+    previous_results['timestamp'] = '2026-03-31T10:00:00'
+    previous_results['responses'][0]['llm_analyses']['model-alpha']['analysis'] = {
+        'brands_mentioned': ['Competitor One'],
+        'positions': {'Competitor One': 1},
+        'first_brand': 'Competitor One',
+        'brand_mentioned': False,
+        'brand_position': None
+    }
+    previous_results['responses'][0]['llm_analyses']['model-beta']['analysis'] = {
+        'brands_mentioned': ['Competitor One', 'Competitor Two'],
+        'positions': {'Competitor One': 1, 'Competitor Two': 2},
+        'first_brand': 'Competitor One',
+        'brand_mentioned': False,
+        'brand_position': None
+    }
+    previous_results['responses'][1]['llm_analyses']['model-alpha']['analysis'] = {
+        'brands_mentioned': ['Brand Prompt', 'Competitor One'],
+        'positions': {'Brand Prompt': 1, 'Competitor One': 2},
+        'first_brand': 'Brand Prompt',
+        'brand_mentioned': True,
+        'brand_position': 1
+    }
+    previous_results['responses'][1]['llm_analyses']['model-beta']['analysis'] = {
+        'brands_mentioned': ['Competitor One', 'Brand Prompt'],
+        'positions': {'Competitor One': 1, 'Brand Prompt': 2},
+        'first_brand': 'Competitor One',
+        'brand_mentioned': True,
+        'brand_position': 2
+    }
+
     results = _make_multimodel_results(
         'Brand Prompt',
         ['Competitor One', 'Competitor Two'],
@@ -263,6 +298,8 @@ def test_prompt_compare_exposes_quality_and_model_breakdown(client):
         ['Comparatif assurance Brand Prompt vs Competitor One', 'avis general assurance'],
         ['model-alpha', 'model-beta'], user_id=user_id
     )
+    app_module._save_results(previous_results, user_id=user_id)
+    db_module.save_analysis(previous_results, user_id=user_id, project_id=project_id)
     app_module._save_results(results, user_id=user_id)
     db_module.save_analysis(results, user_id=user_id, project_id=project_id)
 
@@ -278,6 +315,10 @@ def test_prompt_compare_exposes_quality_and_model_breakdown(client):
     assert 'agreement_score' in first_prompt
     assert 'intent' in first_prompt
     assert 'per_model' in first_prompt
+    assert 'rank_change' in first_prompt
+    assert 'score_change' in first_prompt
+    assert payload['summary']['tracked_prompt_count'] >= 1
+    assert payload['metadata']['previous_timestamp'] == '2026-03-31T10:00:00'
 
 
 def test_metrics_by_model_exposes_summary(client):
@@ -319,3 +360,127 @@ def test_repair_prompt_text_adds_brand_and_comparison():
     assert 'Brand Repair' in repaired
     assert 'Competitor One' in repaired
     assert '?' in repaired
+
+
+def test_alert_preferences_are_scoped_to_project_and_exposed_in_status(client):
+    _signup(client, 'Alice', 'alice@example.com')
+    me_payload = client.get('/api/auth/me').get_json()
+    user_id = me_payload['user']['id']
+
+    project_id = db_module.upsert_project(
+        'Brand Alerts', 'Assurance', ['Competitor One'], ['prompt 1'], ['qwen3.5'], user_id=user_id
+    )
+    client.post(f'/api/projects/{project_id}/activate')
+
+    update_response = client.put('/api/alerts/preferences', json={
+        'project_id': project_id,
+        'channels': {
+            'email': {
+                'enabled': True,
+                'config': {
+                    'recipient': 'alerts@example.com',
+                    'host': 'smtp.example.com',
+                    'port': '587',
+                    'user': 'smtp-user',
+                    'password': 'smtp-pass'
+                }
+            },
+            'slack': {
+                'enabled': False,
+                'config': {
+                    'webhook_url': 'https://hooks.slack.example/test'
+                }
+            }
+        },
+        'rules': {
+            'ALT-019': {'enabled': True},
+            'ALT-004': {'enabled': False}
+        }
+    })
+
+    assert update_response.status_code == 200
+    payload = update_response.get_json()
+    assert payload['project_id'] == project_id
+    assert payload['channels']['email']['enabled'] is True
+    assert payload['channels']['email']['configured'] is True
+    assert payload['channels']['slack']['enabled'] is False
+    assert payload['enabled_rules_count'] >= 1
+
+    preferences_response = client.get('/api/alerts/preferences')
+    preferences_payload = preferences_response.get_json()
+    assert preferences_response.status_code == 200
+    assert preferences_payload['channels']['email']['source'] == 'project'
+    assert preferences_payload['channels']['email']['config']['recipient'].startswith('ale')
+    assert any(rule['id'] == 'ALT-004' and rule['enabled'] is False for rule in preferences_payload['rules'])
+
+    status_response = client.get('/api/alerts/status')
+    status_payload = status_response.get_json()
+    assert status_response.status_code == 200
+    assert status_payload['preferences']['project_id'] == project_id
+    assert status_payload['summary']['enabled_project_channels'] == 1
+
+
+def test_auth_rejects_untrusted_origin(client):
+    response = client.post('/api/auth/signup', json={
+        'name': 'Mallory',
+        'email': 'mallory@example.com',
+        'password': 'password123'
+    }, headers={'Origin': 'https://evil.example.com'})
+
+    assert response.status_code == 403
+    assert response.get_json()['error'] == 'Origin non autorisee'
+
+
+def test_login_rate_limit_blocks_repeated_invalid_attempts(client):
+    _signup(client, 'Alice', 'alice-rate@example.com')
+    client.post('/api/auth/logout')
+
+    for _ in range(8):
+        response = client.post('/api/auth/login', json={
+            'email': 'alice-rate@example.com',
+            'password': 'wrong-password'
+        })
+        assert response.status_code == 401
+
+    blocked = client.post('/api/auth/login', json={
+        'email': 'alice-rate@example.com',
+        'password': 'wrong-password'
+    })
+
+    assert blocked.status_code == 429
+    assert blocked.get_json()['retry_after_seconds'] >= 1
+
+
+def test_alert_channel_config_is_encrypted_at_rest(client):
+    _signup(client, 'Alice', 'alice-encryption@example.com')
+    me_payload = client.get('/api/auth/me').get_json()
+    user_id = me_payload['user']['id']
+
+    project_id = db_module.upsert_project(
+        'Brand Secure', 'Assurance', ['Competitor One'], ['prompt 1'], ['qwen3.5'], user_id=user_id
+    )
+
+    response = client.put('/api/alerts/preferences', json={
+        'project_id': project_id,
+        'channels': {
+            'slack': {
+                'enabled': True,
+                'config': {
+                    'webhook_url': 'https://hooks.slack.example/services/T000/B000/SECRET'
+                }
+            }
+        }
+    })
+
+    assert response.status_code == 200
+
+    conn = db_module.get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT config FROM alert_channel_settings WHERE user_id = ? AND project_id = ? AND channel = ?',
+                (user_id, project_id, 'slack'))
+    row = cur.fetchone()
+    conn.close()
+
+    stored = row['config'] if hasattr(row, 'keys') else row[0]
+    assert stored.startswith('enc::')
+    assert 'hooks.slack.example' not in stored

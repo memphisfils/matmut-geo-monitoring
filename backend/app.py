@@ -8,11 +8,7 @@ Nouveautés :
 """
 # gevent monkey-patch AVANT tout import pour que les workers gevent
 # puissent répondre aux heartbeats Gunicorn pendant les appels LLM bloquants
-# NOTE: on patch uniquement threading/networking, PAS socket (pour Render)
-from gevent import monkey
-monkey.patch_thread()
-monkey.patch_time()
-# NE PAS patcher socket/dns/ssl pour éviter les problèmes Render
+from gevent import monkey; monkey.patch_all()
 from gevent import spawn as _gspawn
 
 from flask import Flask, jsonify, request, Response, stream_with_context, session

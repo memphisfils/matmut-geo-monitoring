@@ -6,6 +6,11 @@ Nouveautés :
   - GET  /api/health         → health check enrichi (version, uptime)
   - POST /api/run-analysis/stream → streaming SSE
 """
+# gevent monkey-patch AVANT tout import pour que les workers gevent
+# puissent répondre aux heartbeats Gunicorn pendant les appels LLM bloquants
+from gevent import monkey; monkey.patch_all()
+from gevent import spawn as _gspawn
+
 from flask import Flask, jsonify, request, Response, stream_with_context, session
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -1660,7 +1665,22 @@ def run_benchmark_stream():
                 else:
                     try:
                         print(f"[BENCHMARK] Prompt {i+1}/{limit} — Appel LLM...")
-                        all_model_resp = llm_client.query_all_models_for_prompt(prompt, system_prompt=geo_system)
+                        # LLM call en greenlet + keepalive SSE
+                        _llm_result = {}
+                        _llm_error = [None]
+                        def _do_llm():
+                            try:
+                                _llm_result['resp'] = llm_client.query_all_models_for_prompt(prompt, system_prompt=geo_system)
+                            except BaseException as e:
+                                _llm_error[0] = e
+                        _llm_gl = _gspawn(_do_llm)
+                        while not _llm_gl.ready():
+                            time.sleep(8)
+                            if not _llm_gl.ready():
+                                yield ': keepalive\n\n'
+                        if _llm_error[0] is not None:
+                            raise _llm_error[0]
+                        all_model_resp = _llm_result.get('resp', {})
                         analyses = {}
                         brands_in = []
                         for model, text in all_model_resp.items():
@@ -1895,7 +1915,22 @@ def run_analysis_stream():
                 else:
                     try:
                         print(f"[STREAM] Prompt {i+1}/{limit} — Appel LLM en cours...")
-                        all_model_resp = llm_client.query_all_models_for_prompt(prompt, system_prompt=geo_system)
+                        # LLM call en greenlet + keepalive SSE pour éviter proxy timeout
+                        _llm_result = {}
+                        _llm_error = [None]
+                        def _do_llm():
+                            try:
+                                _llm_result['resp'] = llm_client.query_all_models_for_prompt(prompt, system_prompt=geo_system)
+                            except BaseException as e:
+                                _llm_error[0] = e
+                        _llm_gl = _gspawn(_do_llm)
+                        while not _llm_gl.ready():
+                            time.sleep(8)
+                            if not _llm_gl.ready():
+                                yield ': keepalive\n\n'
+                        if _llm_error[0] is not None:
+                            raise _llm_error[0]
+                        all_model_resp = _llm_result.get('resp', {})
                         analyses = {}
                         brands_in = []
                         for model, text in all_model_resp.items():

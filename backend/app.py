@@ -1411,20 +1411,32 @@ def generate_config():
             f'{{"products":[{{"id":"p1","name":"...","description":"...","prompts":["...","..."]}}],"suggested_competitors":["C1","C2","C3"]}}\n'
             f'JSON uniquement.'
         )
-        resp = req.post(
-            f"{client.base_url}/chat",
-            headers={
-                'Content-Type': 'application/json',
-                'Authorization': f'Bearer {client.api_key}'
-            },
-            json={
-                'model': client.models[0],
-                'messages': [{'role': 'user', 'content': prompt_llm}],
-                'think': False,
-                'stream': False
-            },
-            timeout=50
-        )
+        try:
+            resp = req.post(
+                f"{client.base_url}/chat",
+                headers={
+                    'Content-Type': 'application/json',
+                    'Authorization': f'Bearer {client.api_key}'
+                },
+                json={
+                    'model': client.models[0],
+                    'messages': [{'role': 'user', 'content': prompt_llm}],
+                    'think': False,
+                    'stream': False
+                },
+                timeout=25
+            )
+        except req.exceptions.Timeout:
+            return jsonify({
+                'status': 'error',
+                'error': 'Le modèle IA met trop de temps à répondre. Veuillez réessayer.'
+            }), 504
+        except req.exceptions.ConnectionError:
+            return jsonify({
+                'status': 'error',
+                'error': 'Impossible de joindre le service IA. Veuillez réessayer.'
+            }), 502
+
         resp.raise_for_status()
         text = resp.json().get('message', {}).get('content', '')
         if not text:
@@ -1460,7 +1472,6 @@ def generate_config():
 
     except Exception as e:
         print(f"[generate-config] Erreur LLM: {e}")
-        # Plus de fallback - on retourne une erreur claire
         return jsonify({
             'status': 'error',
             'error': f'Génération IA impossible: {str(e)}. Veuillez réessayer ou saisir manuellement.'
@@ -1490,20 +1501,26 @@ def create_benchmark():
         prompt = generate_benchmark_prompt(brands)
 
         import requests as req
-        resp = req.post(
-            f"{client.base_url}/chat",
-            headers={
-                'Content-Type': 'application/json',
-                'Authorization': f'Bearer {client.api_key}'
-            },
-            json={
-                'model': client.models[0],
-                'messages': [{'role': 'user', 'content': prompt}],
-                'think': False,
-                'stream': False
-            },
-            timeout=120
-        )
+        try:
+            resp = req.post(
+                f"{client.base_url}/chat",
+                headers={
+                    'Content-Type': 'application/json',
+                    'Authorization': f'Bearer {client.api_key}'
+                },
+                json={
+                    'model': client.models[0],
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'think': False,
+                    'stream': False
+                },
+                timeout=25
+            )
+        except req.exceptions.Timeout:
+            return jsonify({'error': 'Le modèle IA met trop de temps à répondre. Veuillez réessayer.'}), 504
+        except req.exceptions.ConnectionError:
+            return jsonify({'error': 'Impossible de joindre le service IA. Veuillez réessayer.'}), 502
+
         resp.raise_for_status()
         text = resp.json().get('message', {}).get('content', '')
 

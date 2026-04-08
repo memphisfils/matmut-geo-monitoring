@@ -13,7 +13,8 @@ services:
     # Force pip instead of Poetry
     packageManager: pip
     # Gunicorn avec worker gevent : heartbeat coopératif pendant les appels LLM bloquants
-    startCommand: "cd backend && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --worker-class gevent --timeout 300 --keep-alive 300 --graceful-timeout 30"
+    # Utilise gunicorn.conf.py pour configuration explicite du port
+    startCommand: "cd backend && gunicorn app:app -c gunicorn.conf.py"
     healthCheckPath: /api/health
     healthCheckInterval: 30s
     envVars:

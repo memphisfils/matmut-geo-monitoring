@@ -14,7 +14,12 @@
       "Bash(npm run:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(python -c \"from gevent import monkey; monkey.patch_all\\(\\); from gevent import spawn; print\\(''gevent OK''\\)\")",
+      "Bash(source venv/Scripts/activate)",
+      "Bash(pip install:*)",
+      "Bash(timeout 10 python app.py)",
+      "Bash(PYTHONIOENCODING=utf-8 timeout 8 python app.py)"
     ]
   }
 }

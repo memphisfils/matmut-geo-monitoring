@@ -60,6 +60,9 @@ function buildPromptSummary(prompt) {
   const missedPrompt = !prompt.brand_mentioned;
   const promptQualityScore = prompt.prompt_quality_score ?? 0;
   const promptQualityLabel = prompt.prompt_quality_label || 'n/a';
+  const promptProfile = prompt.prompt_profile || 'discovery';
+  const neutralityRisk = prompt.neutrality_risk || 'low';
+  const suspicious = neutralityRisk === 'high' || promptProfile === 'brand-first';
 
   let status = 'watch';
   let statusLabel = 'A surveiller';
@@ -69,6 +72,10 @@ function buildPromptSummary(prompt) {
     status = 'risk';
     statusLabel = 'Marque absente';
     rationale = 'La marque ne ressort pas sur cette requete. Il faut renforcer la preuve produit et la citation de marque.';
+  } else if (suspicious) {
+    status = 'suspect';
+    statusLabel = 'Biais potentiel';
+    rationale = 'Le prompt fait remonter la marque, mais sa formulation semble trop orientee pour etre lue comme un terrain benchmark pleinement neutre.';
   } else if (goodPosition && prompt.mention_rate >= 60) {
     status = 'win';
     statusLabel = 'Point fort';
@@ -88,6 +95,9 @@ function buildPromptSummary(prompt) {
     competitivePressure,
     promptQualityScore,
     promptQualityLabel,
+    promptProfile,
+    neutralityRisk,
+    suspicious,
     proofLine: missedPrompt
       ? 'Aucune citation detectee sur les modeles actifs.'
       : `${prompt.mention_rate}% des modeles citent la marque, position moyenne ${prompt.avg_position || 'n/a'}.`
@@ -288,6 +298,9 @@ export default function PromptComparator({ brand, projectId }) {
       mentionedCount,
       absentCount,
       strongCount,
+      suspiciousPromptCount: data?.summary?.suspicious_prompt_count ?? prompts.filter((prompt) => prompt.suspicious).length,
+      brandWeightedCount: data?.summary?.brand_weighted_count ?? prompts.filter((prompt) => prompt.promptProfile === 'brand-first').length,
+      neutralPromptCount: data?.summary?.neutral_prompt_count ?? prompts.filter((prompt) => ['benchmark', 'comparison'].includes(prompt.promptProfile)).length,
       averageQuality: data?.summary?.average_quality_score ?? 0,
       weakPromptCount: data?.summary?.weak_prompt_count ?? 0,
       improvedPromptCount: data?.summary?.improved_prompt_count ?? 0,
@@ -296,7 +309,6 @@ export default function PromptComparator({ brand, projectId }) {
     };
   }, [data, enrichedPrompts]);
 
-  const bestPrompt = enrichedPrompts.find((item) => item.status === 'win') || enrichedPrompts[0] || null;
   const weakestPrompt = [...enrichedPrompts].reverse().find((item) => item.status === 'risk') || [...enrichedPrompts].reverse().find(Boolean) || null;
 
   const tapeItems = useMemo(() => {
@@ -304,7 +316,8 @@ export default function PromptComparator({ brand, projectId }) {
       { label: 'Prompts en hausse', value: summary.improvedPromptCount, meta: 'vs run precedent' },
       { label: 'Prompts en baisse', value: summary.declinedPromptCount, meta: 'a surveiller' },
       { label: 'Prompts suivis', value: summary.trackedPromptCount, meta: data?.metadata?.previous_timestamp ? 'avec historique' : 'base initiale' },
-      { label: 'Qualite moyenne', value: summary.averageQuality, decimals: 1, meta: 'pack prompts' }
+      { label: 'Qualite moyenne', value: summary.averageQuality, decimals: 1, meta: 'pack prompts' },
+      { label: 'Prompts suspects', value: summary.suspiciousPromptCount, meta: 'biais potentiel' }
     ];
 
     if (selectedPrompt) {
@@ -459,9 +472,9 @@ export default function PromptComparator({ brand, projectId }) {
           <p>{selectedPrompt?.rationale || 'Choisissez une requete pour lire son poids decisionnel et sa variation.'}</p>
         </article>
         <article className="summary-card">
-          <span>Meilleur prompt</span>
-          <strong>{bestPrompt?.intent.label || 'n/a'}</strong>
-          <p>{bestPrompt?.prompt || 'Aucun prompt fort pour le moment.'}</p>
+          <span>Pack benchmark</span>
+          <strong>{summary.neutralPromptCount} prompt{summary.neutralPromptCount > 1 ? 's' : ''} neutre{summary.neutralPromptCount > 1 ? 's' : ''}</strong>
+          <p>{summary.brandWeightedCount} prompt{summary.brandWeightedCount > 1 ? 's' : ''} restent trop centres sur la marque suivie.</p>
         </article>
         <article className="summary-card risk">
           <span>Prompt fragile</span>
@@ -501,6 +514,8 @@ export default function PromptComparator({ brand, projectId }) {
                   <div className="proof-row-topline">
                     <span className={`status-pill ${prompt.status}`}>{prompt.statusLabel}</span>
                     <span className="intent-pill">{prompt.intent.label}</span>
+                    <span className={`profile-pill ${prompt.promptProfile}`}>{prompt.promptProfile}</span>
+                    <span className={`risk-pill ${prompt.neutralityRisk}`}>risque {prompt.neutralityRisk}</span>
                   </div>
                   <strong>{prompt.prompt}</strong>
                   <span>{prompt.proofLine}</span>
@@ -564,6 +579,10 @@ export default function PromptComparator({ brand, projectId }) {
                   <span className="mini-chip">
                     <Sparkles size={14} />
                     Qualite {selectedPrompt.promptQualityScore}/100
+                  </span>
+                  <span className={`mini-chip ${selectedPrompt.suspicious ? 'suspect' : ''}`}>
+                    <ShieldAlert size={14} />
+                    {selectedPrompt.suspicious ? 'Prompt suspect' : 'Lecture stable'}
                   </span>
                   <span className="mini-chip">
                     <Bot size={14} />

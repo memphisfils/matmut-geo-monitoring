@@ -315,9 +315,12 @@ def test_prompt_compare_exposes_quality_and_model_breakdown(client):
     assert 'agreement_score' in first_prompt
     assert 'intent' in first_prompt
     assert 'per_model' in first_prompt
+    assert 'prompt_profile' in first_prompt
+    assert 'neutrality_risk' in first_prompt
     assert 'rank_change' in first_prompt
     assert 'score_change' in first_prompt
     assert payload['summary']['tracked_prompt_count'] >= 1
+    assert 'suspicious_prompt_count' in payload['summary']
     assert payload['metadata']['previous_timestamp'] == '2026-03-31T10:00:00'
 
 
@@ -349,6 +352,69 @@ def test_metrics_by_model_exposes_summary(client):
     assert 'mention_spread' in payload['summary']
 
 
+def test_metrics_expose_risk_signals_and_bias_monitor(client):
+    _signup(client, 'Alice', 'alice@example.com')
+    me_payload = client.get('/api/auth/me').get_json()
+    user_id = me_payload['user']['id']
+
+    brand = 'Brand Risk'
+    competitors = ['Competitor One']
+    prompts = [
+        'Comparatif Brand Risk vs Competitor One',
+        'Pourquoi Brand Risk est recommande',
+        'Meilleur choix Brand Risk'
+    ]
+    results = {
+        'timestamp': '2026-04-02T09:00:00',
+        'total_prompts': len(prompts),
+        'llms_used': ['model-alpha'],
+        'brand': brand,
+        'competitors': competitors,
+        'responses': [
+            {
+                'category': 'general',
+                'prompt': prompt,
+                'llm_analyses': {
+                    'model-alpha': {
+                        'response': 'alpha',
+                        'analysis': {
+                            'brands_mentioned': [brand, competitors[0]],
+                            'positions': {brand: 1, competitors[0]: 2},
+                            'first_brand': brand,
+                            'brand_mentioned': True,
+                            'brand_position': 1
+                        }
+                    }
+                }
+            }
+            for prompt in prompts
+        ],
+        'is_demo': False
+    }
+
+    project_id = db_module.upsert_project(
+        brand,
+        'Assurance',
+        competitors,
+        prompts,
+        ['model-alpha'],
+        user_id=user_id
+    )
+    app_module._save_results(results, user_id=user_id)
+    db_module.save_analysis(results, user_id=user_id, project_id=project_id)
+
+    response = client.get('/api/metrics')
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert 'risk_signals' in payload
+    assert payload['risk_signals']
+    assert 'bias_monitor' in payload
+    assert payload['bias_monitor']['status'] in {'watch', 'warning', 'ok'}
+    assert payload['bias_monitor']['score'] >= 0
+    assert payload['prompt_audit_summary']['weak_prompt_count'] >= 0
+
+
 def test_repair_prompt_text_adds_brand_and_comparison():
     repaired = app_module._repair_prompt_text(
         'avis general assurance',
@@ -360,6 +426,19 @@ def test_repair_prompt_text_adds_brand_and_comparison():
     assert 'Brand Repair' in repaired
     assert 'Competitor One' in repaired
     assert '?' in repaired
+
+
+def test_audit_single_prompt_marks_brand_first_as_high_risk():
+    audit = app_module._audit_single_prompt(
+        'Pourquoi Brand Repair est recommande',
+        'Brand Repair',
+        competitors=['Competitor One', 'Competitor Two'],
+        sector='Assurance'
+    )
+
+    assert audit['prompt_profile'] == 'brand-first'
+    assert audit['neutrality_risk'] == 'high'
+    assert audit['quality_label'] in {'Correct', 'Fragile'}
 
 
 def test_alert_preferences_are_scoped_to_project_and_exposed_in_status(client):

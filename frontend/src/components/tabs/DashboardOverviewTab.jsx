@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import {
   Activity,
+  AlertTriangle,
   ArrowUpRight,
   BellRing,
   BrainCircuit,
@@ -65,6 +66,12 @@ function deltaTone(value) {
   return 'neutral';
 }
 
+function riskTone(value) {
+  if (value === 'high' || value === 'warning') return 'negative';
+  if (value === 'medium' || value === 'watch') return 'warning';
+  return 'neutral';
+}
+
 export default function DashboardOverviewTab({ config, data, trendHistory }) {
   const currentMetrics = data?.metrics?.[config.brand] || {};
   const ranking = data?.ranking || [];
@@ -77,18 +84,28 @@ export default function DashboardOverviewTab({ config, data, trendHistory }) {
   const delta7dValue = parseDelta(delta7d);
   const delta30dValue = parseDelta(delta30d);
   const intentLeader = strongestIntent(config.prompts);
-  const activeModels = data?.metadata?.models || config.models || [];
+  const activeModels = data?.metadata?.models || data?.metadata?.models_used || config.models || [];
   const promptCount = config.prompts?.length || 0;
   const freshness = data?.metadata?.timestamp
     ? new Date(data.metadata.timestamp).toLocaleString('fr-FR')
     : 'n/a';
+  const riskSignals = data?.risk_signals || [];
+  const biasMonitor = data?.bias_monitor || null;
+  const promptAuditSummary = data?.prompt_audit_summary || config?.prompt_audit || null;
   const pressureGap = leader && currentMetrics.global_score
     ? Math.abs((leader.global_score || 0) - currentMetrics.global_score).toFixed(1)
     : 'n/a';
-  const nextAction = data?.insights?.recommendations?.[0]
+  const primaryWeakness = data?.insights?.weaknesses?.[0]
+    || (riskSignals[0] ? riskSignals[0].detail : 'Aucune faiblesse critique detectee sur ce snapshot.');
+  const nextAction = riskSignals[0]?.action
+    || data?.insights?.recommendations?.[0]
     || (currentRank === 1
       ? 'Consolider les prompts a forte presence avant le prochain run.'
       : 'Renforcer les prompts ou la marque reste citee mais pas dominante.');
+  const mainRisk = riskSignals[0] || null;
+  const benchmarkWatch = biasMonitor?.summary
+    || 'Aucune alerte de neutralite remontee pour le benchmark.';
+  const benchmarkStatus = biasMonitor?.status || 'ok';
 
   const metricTiles = [
     {
@@ -169,14 +186,17 @@ export default function DashboardOverviewTab({ config, data, trendHistory }) {
           <span className="overview-kicker">Vue d ensemble</span>
           <h1>{config.brand} en lecture decisionnelle</h1>
           <p>
-            La vue priorise ce qui bouge maintenant: score, rang, pression concurrente,
-            fraicheur des donnees et composition reelle du moteur d analyse.
+            La vue priorise d abord ce qui fragilise la lecture: risques du benchmark,
+            points faibles de la marque, pression concurrente et fiabilite du moteur.
           </p>
           <div className="overview-chip-row">
             <span className="overview-chip">{config.sector || 'General'}</span>
             <span className="overview-chip">{promptCount} prompts actifs</span>
             <span className="overview-chip">{activeModels.length || 1} modele{(activeModels.length || 1) > 1 ? 's' : ''}</span>
             <span className="overview-chip">{freshness === 'n/a' ? 'Fraicheur indisponible' : `Maj ${freshness}`}</span>
+            {promptAuditSummary ? (
+              <span className="overview-chip">{promptAuditSummary.weak_prompt_count || 0} prompts fragiles</span>
+            ) : null}
           </div>
 
           <div className="overview-metric-row">
@@ -218,25 +238,23 @@ export default function DashboardOverviewTab({ config, data, trendHistory }) {
 
         <div className="overview-summary">
           <article className="summary-panel main">
-            <span className="summary-label">Etat du projet</span>
-            <strong>{leader?.brand === config.brand ? 'Leader actuel' : 'Sous pression'}</strong>
+            <span className="summary-label">Risque principal</span>
+            <strong>{mainRisk?.title || 'Aucun risque critique'}</strong>
             <p>
-              {leader?.brand === config.brand
-                ? `${config.brand} garde la tete du classement sur ce snapshot.`
-                : `${leader?.brand || 'Un concurrent'} mene actuellement le classement.`}
+              {mainRisk?.detail || 'Le snapshot reste exploitable sans signal bloquant majeur.'}
             </p>
           </article>
 
           <article className="summary-panel">
-            <span className="summary-label">Derniere analyse</span>
-            <strong>{freshness}</strong>
-            <p>{activeModels.join(', ') || 'Modeles actifs backend'}</p>
+            <span className="summary-label">Biais benchmark</span>
+            <strong>{biasMonitor ? `${biasMonitor.score}/100` : 'n/a'}</strong>
+            <p>{benchmarkWatch}</p>
           </article>
 
           <article className="summary-panel">
-            <span className="summary-label">Pression immediate</span>
-            <strong>{runnerUp ? runnerUp.brand : 'Aucune pression directe'}</strong>
-            <p>{runnerUp ? `Ecart actuel ${pressureGap} points.` : nextAction}</p>
+            <span className="summary-label">Point faible prioritaire</span>
+            <strong>{primaryWeakness}</strong>
+            <p>{runnerUp ? `Pression immediate: ${runnerUp.brand} - ecart ${pressureGap} points.` : 'Pression concurrente encore peu lisible.'}</p>
           </article>
 
           <article className="summary-panel">
@@ -249,17 +267,47 @@ export default function DashboardOverviewTab({ config, data, trendHistory }) {
 
       <MetricTape items={liveTapeItems} compact />
 
+      <section className="overview-risk-strip">
+        <div className="overview-risk-strip-head">
+          <div className="overview-brief-head">
+            <AlertTriangle size={16} />
+            <strong>Risques prioritaires</strong>
+          </div>
+          <span className={`overview-state-pill ${riskTone(benchmarkStatus)}`}>
+            {benchmarkStatus === 'warning' ? 'Biais a verifier' : benchmarkStatus === 'watch' ? 'Lecture a surveiller' : 'Lecture stable'}
+          </span>
+        </div>
+
+        <div className="overview-risk-grid">
+          {riskSignals.length > 0 ? riskSignals.slice(0, 3).map((risk) => (
+            <article key={risk.id} className={`overview-risk-card ${riskTone(risk.level)}`}>
+              <div className="overview-risk-title-row">
+                <strong>{risk.title}</strong>
+                <span className={`overview-state-pill ${riskTone(risk.level)}`}>{risk.level}</span>
+              </div>
+              <p>{risk.detail}</p>
+              <span className="overview-risk-action">{risk.action}</span>
+            </article>
+          )) : (
+            <article className="overview-risk-card neutral">
+              <div className="overview-risk-title-row">
+                <strong>Aucun risque critique remonte</strong>
+                <span className="overview-state-pill neutral">stable</span>
+              </div>
+              <p>Le benchmark ne montre pas de fragilite bloquante sur ce snapshot.</p>
+              <span className="overview-risk-action">Continuer a enrichir l historique et confirmer la lecture sur plusieurs runs.</span>
+            </article>
+          )}
+        </div>
+      </section>
+
       <section className="overview-brief">
         <article className="overview-brief-item">
           <div className="overview-brief-head">
             <ShieldCheck size={16} />
-            <strong>Signal principal</strong>
+            <strong>Faiblesse immediate</strong>
           </div>
-          <p>
-            {currentRank === 1
-              ? `${config.brand} reste citee en premier sur une partie significative des reponses.`
-              : `${config.brand} est visible, mais n occupe pas encore la premiere place.`}
-          </p>
+          <p>{primaryWeakness}</p>
         </article>
 
         <article className="overview-brief-item">
@@ -277,7 +325,7 @@ export default function DashboardOverviewTab({ config, data, trendHistory }) {
         <article className="overview-brief-item">
           <div className="overview-brief-head">
             <BellRing size={16} />
-            <strong>Prochaine action</strong>
+            <strong>Action produit</strong>
           </div>
           <p>{data?.insights?.recommendations?.[1] || nextAction}</p>
         </article>
@@ -285,9 +333,13 @@ export default function DashboardOverviewTab({ config, data, trendHistory }) {
         <article className="overview-brief-item accent">
           <div className="overview-brief-head">
             <Sparkles size={16} />
-            <strong>Moteur visible</strong>
+            <strong>Fiabilite moteur</strong>
           </div>
-          <p>Le projet affiche maintenant son volume de prompts, ses clusters d intention et ses modeles au meme niveau que les KPI.</p>
+          <p>
+            {biasMonitor
+              ? `${biasMonitor.model_count} modele(s) actifs - ${biasMonitor.neutral_prompt_ratio}% de prompts neutres - ${biasMonitor.coverage_average}% de couverture concurrentielle.`
+              : 'Le projet affiche son volume de prompts, ses clusters d intention et ses modeles au meme niveau que les KPI.'}
+          </p>
         </article>
       </section>
 

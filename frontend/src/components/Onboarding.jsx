@@ -78,10 +78,12 @@ function auditPromptLine(prompt, brand, sector, competitors = []) {
   const lower = normalized.toLowerCase();
   const hasBrand = brand ? lower.includes(brand.toLowerCase()) : false;
   const hasSector = sector ? lower.includes(sector.toLowerCase()) : false;
-  const hasComparison = /(comparatif|compare|vs|alternative|alternatives| ou )/i.test(normalized);
+  const hasComparison = /(comparatif|compare|vs|alternative|alternatives|\bou\b)/i.test(normalized);
   const hasQueryTerm = /(quel|quelle|quels|meilleur|top|avis|comparatif|pourquoi|comment)/i.test(normalized);
   const competitorHits = competitors.filter((item) => item && lower.includes(item.toLowerCase()));
+  const competitorTarget = competitors.length ? Math.min(2, competitors.length) : 0;
   const wordCount = normalized ? normalized.split(/\s+/).length : 0;
+  const issues = [];
 
   let score = 32;
   if (hasBrand) score += 20;
@@ -90,17 +92,54 @@ function auditPromptLine(prompt, brand, sector, competitors = []) {
   if (hasSector) score += 8;
   if (hasQueryTerm) score += 8;
   if (wordCount >= 6 && wordCount <= 18) score += 10;
-  if (wordCount < 6) score -= 14;
-  if (wordCount > 18) score -= 8;
+  if (wordCount < 6) {
+    score -= 14;
+    issues.push('Trop court');
+  }
+  if (wordCount > 18) {
+    score -= 8;
+    issues.push('Trop long');
+  }
+  if (competitorTarget && competitorHits.length < competitorTarget) {
+    score -= 8;
+    issues.push('Peu de concurrents');
+  }
+  if (hasBrand && !hasComparison) {
+    score -= 12;
+    issues.push('Brand-first');
+  }
+  if (hasBrand && competitors.length > 0 && competitorHits.length === 0) {
+    score -= 12;
+    issues.push('Sans alternative');
+  }
+
+  const finalScore = Math.max(0, Math.min(100, score));
+  const qualityLabel = finalScore >= 75 ? 'Fort' : finalScore >= 55 ? 'Correct' : 'Fragile';
+  const promptProfile = hasBrand && !hasComparison
+    ? 'brand-first'
+    : hasComparison && competitorHits.length > 0
+      ? 'benchmark'
+      : hasComparison
+        ? 'comparison'
+        : 'discovery';
+  const neutralityRisk = promptProfile === 'brand-first' || finalScore < 55
+    ? 'high'
+    : competitorTarget && competitorHits.length < competitorTarget
+      ? 'medium'
+      : 'low';
 
   return {
     normalized,
-    score: Math.max(0, Math.min(100, score)),
+    score: finalScore,
+    qualityLabel,
     hasBrand,
     hasSector,
     hasComparison,
     hasQueryTerm,
-    competitorHits
+    competitorHits,
+    promptProfile,
+    neutralityRisk,
+    issues
   };
 }
 
@@ -150,6 +189,35 @@ export default function Onboarding({ onComplete }) {
   const launchReadyPrompts = useMemo(() => {
     return promptList.map((prompt) => repairPromptLine(prompt, brand, effectiveSector, competitors));
   }, [promptList, brand, effectiveSector, competitors]);
+  const promptDiagnostics = useMemo(() => (
+    promptList.map((prompt, index) => {
+      const audit = auditPromptLine(prompt, brand, effectiveSector, competitors);
+      const repaired = launchReadyPrompts[index] || normalizePromptLine(prompt);
+      const repairedAudit = auditPromptLine(repaired, brand, effectiveSector, competitors);
+      return {
+        prompt,
+        repaired,
+        changed: normalizePromptLine(prompt) !== repaired,
+        audit,
+        repairedAudit
+      };
+    })
+  ), [promptList, launchReadyPrompts, brand, effectiveSector, competitors]);
+  const promptSummary = useMemo(() => {
+    const base = {
+      weak: 0,
+      mediumRisk: 0,
+      neutralReady: 0,
+      brandFirst: 0
+    };
+    promptDiagnostics.forEach(({ audit }) => {
+      if (audit.score < 55) base.weak += 1;
+      if (audit.neutralityRisk === 'medium') base.mediumRisk += 1;
+      if (audit.promptProfile === 'brand-first') base.brandFirst += 1;
+      if (audit.promptProfile === 'benchmark' || audit.promptProfile === 'comparison') base.neutralReady += 1;
+    });
+    return base;
+  }, [promptDiagnostics]);
   const repairedPromptCount = useMemo(() => (
     promptList.filter((prompt, index) => normalizePromptLine(prompt) !== launchReadyPrompts[index]).length
   ), [promptList, launchReadyPrompts]);
@@ -257,7 +325,24 @@ export default function Onboarding({ onComplete }) {
       prompts: launchReadyPrompts,
       models: selectedModels,
       setup_mode: generated?.suggested_competitors?.length ? 'assisted' : 'manual',
-      prompt_audit: generated?.prompt_audit || null,
+      prompt_audit: {
+        ...(generated?.prompt_audit || {}),
+        average_quality_score: promptDiagnostics.length
+          ? Number((promptDiagnostics.reduce((sum, item) => sum + item.repairedAudit.score, 0) / promptDiagnostics.length).toFixed(1))
+          : 0,
+        weak_prompt_count: promptDiagnostics.filter((item) => item.repairedAudit.score < 55).length,
+        brand_weighted_count: promptDiagnostics.filter((item) => item.repairedAudit.promptProfile === 'brand-first').length,
+        neutral_prompt_count: promptDiagnostics.filter((item) => ['benchmark', 'comparison'].includes(item.repairedAudit.promptProfile)).length,
+        prompts: promptDiagnostics.map((item) => ({
+          prompt: item.repaired,
+          quality_score: item.repairedAudit.score,
+          quality_label: item.repairedAudit.qualityLabel,
+          prompt_profile: item.repairedAudit.promptProfile,
+          neutrality_risk: item.repairedAudit.neutralityRisk,
+          issues: item.repairedAudit.issues,
+          competitor_hits: item.repairedAudit.competitorHits
+        }))
+      },
       generation_notes: {
         ...(generated?.generation_notes || {}),
         repaired_before_launch: repairedPromptCount
@@ -498,14 +583,35 @@ export default function Onboarding({ onComplete }) {
                       <span>{promptList.length} actifs</span>
                     </div>
 
+                    <div className="prompt-audit-strip">
+                      <span className={`prompt-audit-pill ${promptSummary.weak > 0 ? 'danger' : 'neutral'}`}>
+                        {promptSummary.weak} fragile{promptSummary.weak > 1 ? 's' : ''}
+                      </span>
+                      <span className={`prompt-audit-pill ${promptSummary.brandFirst > 0 ? 'warning' : 'neutral'}`}>
+                        {promptSummary.brandFirst} brand-first
+                      </span>
+                      <span className="prompt-audit-pill success">
+                        {promptSummary.neutralReady} neutre{promptSummary.neutralReady > 1 ? 's' : ''} / comparatif{promptSummary.neutralReady > 1 ? 's' : ''}
+                      </span>
+                    </div>
+
                     <div className="prompt-list-editor">
                       {promptItems.map((prompt, index) => {
-                        const repaired = repairPromptLine(prompt, brand, effectiveSector, competitors);
-                        const changed = normalizePromptLine(prompt) !== repaired;
+                        const diagnostic = promptDiagnostics[index];
+                        const repaired = diagnostic?.repaired || repairPromptLine(prompt, brand, effectiveSector, competitors);
+                        const changed = diagnostic?.changed || normalizePromptLine(prompt) !== repaired;
+                        const audit = diagnostic?.audit || auditPromptLine(prompt, brand, effectiveSector, competitors);
                         return (
                           <div key={`${index}-${prompt.slice(0, 24)}`} className="prompt-list-row">
                             <div className="prompt-list-index">{index + 1}</div>
                             <div className="prompt-list-copy">
+                              <div className="prompt-row-topline">
+                                <span className={`prompt-type-pill ${audit.promptProfile}`}>{audit.promptProfile}</span>
+                                <span className={`prompt-type-pill ${audit.neutralityRisk === 'high' ? 'danger' : audit.neutralityRisk === 'medium' ? 'warning' : 'success'}`}>
+                                  risque {audit.neutralityRisk}
+                                </span>
+                                <span className="prompt-score-label">score {audit.score}</span>
+                              </div>
                               <input
                                 type="text"
                                 value={prompt}
@@ -514,6 +620,7 @@ export default function Onboarding({ onComplete }) {
                               />
                               <div className="prompt-row-meta">
                                 <span>{changed ? 'Ajustement neutre au lancement' : 'Pret pour le run'}</span>
+                                {audit.issues.length > 0 ? <span>{audit.issues.join(' - ')}</span> : <span>Lecture equilibrée pour le benchmark</span>}
                                 {changed ? <code>{repaired}</code> : null}
                               </div>
                             </div>
@@ -556,8 +663,18 @@ export default function Onboarding({ onComplete }) {
 
                   <div className="selection-panel">
                     <div className="panel-head">
-                      <strong>Modeles visibles</strong>
-                      <span>{selectedModels.length} selectionnes</span>
+                      <strong>Controle avant lancement</strong>
+                      <span>{selectedModels.length} modeles</span>
+                    </div>
+
+                    <div className="launch-risk-block">
+                      <strong>{promptSummary.weak > 0 || promptSummary.brandFirst > 0 ? 'Points a corriger avant run' : 'Pack pret a lancer'}</strong>
+                      <ul className="launch-risk-list">
+                        <li>{promptSummary.neutralReady} prompt(s) sont deja sur un terrain neutre ou comparatif.</li>
+                        <li>{promptSummary.brandFirst} prompt(s) restent trop centres sur la marque.</li>
+                        <li>{promptSummary.weak} prompt(s) sont juges fragiles dans leur etat actuel.</li>
+                        <li>{repairedPromptCount} prompt(s) seront automatiquement durcis au lancement.</li>
+                      </ul>
                     </div>
 
                     <div className="model-grid">
@@ -585,6 +702,10 @@ export default function Onboarding({ onComplete }) {
                       <div>
                         <span>Benchmark</span>
                         <strong>{competitors.length > 0 ? `${competitors.length} concurrents` : 'Run solo'}</strong>
+                      </div>
+                      <div>
+                        <span>Prompts neutres</span>
+                        <strong>{promptSummary.neutralReady}</strong>
                       </div>
                     </div>
                   </div>

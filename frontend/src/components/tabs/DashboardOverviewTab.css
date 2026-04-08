@@ -192,6 +192,105 @@
   line-height: 1.25;
 }
 
+.overview-risk-strip {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 26px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(244, 248, 251, 0.9));
+  border: 1px solid rgba(145, 171, 191, 0.16);
+  box-shadow: 0 16px 34px rgba(34, 57, 76, 0.05);
+}
+
+.overview-risk-strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.overview-risk-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overview-risk-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(145, 171, 191, 0.14);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.overview-risk-card.negative {
+  background: linear-gradient(180deg, rgba(255, 243, 240, 0.96), rgba(255, 255, 255, 0.82));
+}
+
+.overview-risk-card.warning {
+  background: linear-gradient(180deg, rgba(255, 249, 237, 0.96), rgba(255, 255, 255, 0.82));
+}
+
+.overview-risk-card.neutral {
+  background: linear-gradient(180deg, rgba(244, 249, 252, 0.96), rgba(255, 255, 255, 0.82));
+}
+
+.overview-risk-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.overview-risk-title-row strong {
+  color: #102435;
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.overview-risk-card p {
+  margin: 0;
+  color: #5b7487;
+  line-height: 1.6;
+}
+
+.overview-risk-action {
+  color: #0b698b;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.overview-state-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
+}
+
+.overview-state-pill.negative {
+  background: rgba(255, 234, 229, 0.96);
+  color: #b64b35;
+}
+
+.overview-state-pill.warning {
+  background: rgba(255, 244, 221, 0.96);
+  color: #996818;
+}
+
+.overview-state-pill.neutral {
+  background: rgba(236, 243, 247, 0.96);
+  color: #567082;
+}
+
 .overview-brief {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -244,6 +343,10 @@
 @media (max-width: 1180px) {
   .overview-hero,
   .overview-main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-risk-grid {
     grid-template-columns: 1fr;
   }
 

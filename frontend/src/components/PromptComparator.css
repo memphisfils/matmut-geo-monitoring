@@ -380,9 +380,53 @@
   color: #ba5a44;
 }
 
+.status-pill.suspect {
+  background: rgba(255, 245, 224, 0.96);
+  color: #9a6a11;
+}
+
 .intent-pill {
   background: rgba(111, 214, 255, 0.14);
   color: #0b698b;
+}
+
+.profile-pill,
+.risk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid rgba(145, 171, 191, 0.14);
+}
+
+.profile-pill {
+  background: rgba(18, 39, 58, 0.06);
+  color: #355163;
+  text-transform: lowercase;
+}
+
+.profile-pill.benchmark,
+.profile-pill.comparison,
+.risk-pill.low {
+  background: rgba(230, 249, 239, 0.94);
+  color: #126c50;
+}
+
+.profile-pill.brand-first,
+.risk-pill.high {
+  background: rgba(255, 240, 236, 0.94);
+  color: #ba5a44;
+}
+
+.profile-pill.discovery,
+.risk-pill.medium {
+  background: rgba(255, 245, 224, 0.96);
+  color: #9a6a11;
 }
 
 .proof-inspector {
@@ -428,6 +472,11 @@
 .mini-chip {
   background: rgba(236, 244, 250, 0.94);
   color: #355163;
+}
+
+.mini-chip.suspect {
+  background: rgba(255, 245, 224, 0.96);
+  color: #9a6a11;
 }
 
 .competitor-pill {

@@ -325,10 +325,11 @@ def _audit_single_prompt(prompt: str, brand: str, competitors=None, sector: str 
     word_count = len([part for part in re.split(r'\s+', prompt) if part])
     brand_present = bool(brand and brand.lower() in prompt_lower)
     competitor_hits = [item for item in competitors if item and item.lower() in prompt_lower]
-    comparison_term = bool(re.search(r'(comparatif|compare|vs|alternative|alternatives|ou)', prompt_lower))
+    comparison_term = bool(re.search(r'(comparatif|compare|vs|alternative|alternatives|\bou\b)', prompt_lower))
     query_term = bool(re.search(r'(quel|quelle|quels|meilleur|top|avis|comparatif|pourquoi|comment)', prompt_lower))
     sector_present = bool(sector and sector.lower() in prompt_lower)
     intent = _derive_prompt_intent(prompt)
+    competitor_target = min(2, len(competitors)) if competitors else 0
 
     quality_score = 32
     issues = []
@@ -347,6 +348,18 @@ def _audit_single_prompt(prompt: str, brand: str, competitors=None, sector: str 
         quality_score += min(18, len(competitor_hits) * 8)
     elif competitors:
         issues.append('Aucun concurrent du benchmark n apparait dans la formulation.')
+
+    if competitor_target and len(competitor_hits) < competitor_target:
+        quality_score -= 8
+        issues.append('Le prompt cite trop peu de concurrents pour un benchmark neutre.')
+
+    if brand_present and not comparison_term:
+        quality_score -= 12
+        issues.append('Le prompt cite la marque sans terrain comparatif suffisamment clair.')
+
+    if brand_present and competitors and not competitor_hits:
+        quality_score -= 12
+        issues.append('Le prompt risque de favoriser la marque sans exposer de vraie alternative.')
 
     if sector_present:
         quality_score += 8
@@ -373,6 +386,22 @@ def _audit_single_prompt(prompt: str, brand: str, competitors=None, sector: str 
     else:
         label = 'Fragile'
 
+    if brand_present and not comparison_term:
+        prompt_profile = 'brand-first'
+    elif comparison_term and competitor_hits:
+        prompt_profile = 'benchmark'
+    elif comparison_term:
+        prompt_profile = 'comparison'
+    else:
+        prompt_profile = 'discovery'
+
+    if prompt_profile == 'brand-first' or quality_score < 55:
+        neutrality_risk = 'high'
+    elif competitor_target and len(competitor_hits) < competitor_target:
+        neutrality_risk = 'medium'
+    else:
+        neutrality_risk = 'low'
+
     return {
         'prompt': prompt,
         'intent': intent,
@@ -385,7 +414,9 @@ def _audit_single_prompt(prompt: str, brand: str, competitors=None, sector: str 
         'issues': issues,
         'query_term': query_term,
         'comparison_term': comparison_term,
-        'sector_present': sector_present
+        'sector_present': sector_present,
+        'prompt_profile': prompt_profile,
+        'neutrality_risk': neutrality_risk
     }
 
 
@@ -403,15 +434,20 @@ def _audit_prompt_collection(prompts, brand: str, competitors=None, sector: str 
 
     distribution = {'Fort': 0, 'Correct': 0, 'Fragile': 0}
     intent_counts = {}
+    profile_distribution = {'benchmark': 0, 'comparison': 0, 'brand-first': 0, 'discovery': 0}
     for item in audited:
         distribution[item['quality_label']] = distribution.get(item['quality_label'], 0) + 1
         intent_label = item['intent']['label']
         intent_counts[intent_label] = intent_counts.get(intent_label, 0) + 1
+        profile_distribution[item['prompt_profile']] = profile_distribution.get(item['prompt_profile'], 0) + 1
 
     return {
         'average_quality_score': round(sum(item['quality_score'] for item in audited) / len(audited), 1),
         'quality_distribution': distribution,
         'weak_prompt_count': sum(1 for item in audited if item['quality_label'] == 'Fragile'),
+        'brand_weighted_count': sum(1 for item in audited if item['prompt_profile'] == 'brand-first'),
+        'neutral_prompt_count': sum(1 for item in audited if item['prompt_profile'] in ('benchmark', 'comparison')),
+        'profile_distribution': profile_distribution,
         'top_intents': [
             {'label': label, 'count': count}
             for label, count in sorted(intent_counts.items(), key=lambda pair: pair[1], reverse=True)
@@ -519,6 +555,161 @@ def _prompt_model_breakdown(response: dict, brand: str):
 
 
 # ── Scheduler ─────────────────────────────────────────────────────────────────
+
+def _build_risk_diagnostics(results: dict, metrics: dict, ranking: list):
+    brand = results.get('brand') or results.get('main_brand', 'Marque')
+    competitors = results.get('competitors', []) or []
+    prompts = [
+        _normalize_prompt_text(response.get('prompt'))
+        for response in (results.get('responses') or [])
+        if _normalize_prompt_text(response.get('prompt'))
+    ]
+    prompt_audit = _audit_prompt_collection(
+        prompts,
+        brand,
+        competitors=competitors,
+        sector=results.get('sector')
+    )
+    prompt_items = prompt_audit.get('prompts', [])
+    models_used = results.get('llms_used', ['qwen3.5']) or ['qwen3.5']
+    all_analyses = [
+        data.get('analysis', {})
+        for response in (results.get('responses') or [])
+        for data in (response.get('llm_analyses') or {}).values()
+    ]
+
+    brand_explicit_ratio = round(
+        (sum(1 for item in prompt_items if item.get('brand_present')) / len(prompt_items) * 100), 1
+    ) if prompt_items else 0
+    neutral_prompt_ratio = round(
+        (
+            sum(
+                1 for item in prompt_items
+                if not item.get('brand_present') and item.get('comparison_term')
+            ) / len(prompt_items) * 100
+        ), 1
+    ) if prompt_items else 0
+    brand_first_rate = round(
+        (sum(1 for item in all_analyses if item.get('first_brand') == brand) / len(all_analyses) * 100), 1
+    ) if all_analyses else 0
+
+    leader = ranking[0] if ranking else None
+    runner_up = next((item for item in ranking if item.get('brand') != brand), None)
+    leader_gap = None
+    if leader and runner_up:
+        leader_gap = round((leader.get('global_score', 0) or 0) - (runner_up.get('global_score', 0) or 0), 1)
+
+    risk_signals = []
+
+    def push_risk(risk_id, level, title, detail, action):
+        risk_signals.append({
+            'id': risk_id,
+            'level': level,
+            'title': title,
+            'detail': detail,
+            'action': action
+        })
+
+    weak_prompt_count = prompt_audit.get('weak_prompt_count', 0)
+    coverage_average = prompt_audit.get('coverage_average', 0)
+
+    if weak_prompt_count > 0:
+        push_risk(
+            'weak_prompt_pack',
+            'high' if weak_prompt_count >= max(2, len(prompt_items) // 3) else 'medium',
+            'Pack de prompts fragile',
+            f"{weak_prompt_count} prompt(s) restent fragiles sur {len(prompt_items) or 0}.",
+            'Supprimer ou reformuler les prompts trop courts, trop orientés marque ou trop peu comparatifs.'
+        )
+
+    if competitors and coverage_average < 35:
+        push_risk(
+            'low_competitor_coverage',
+            'high' if coverage_average < 20 else 'medium',
+            'Couverture concurrentielle trop faible',
+            f"Le pack couvre seulement {coverage_average}% des concurrents attendus.",
+            'Ajouter des requêtes neutres et des comparatifs directs avec les concurrents prioritaires.'
+        )
+
+    if competitors and brand_explicit_ratio >= 80 and coverage_average < 55:
+        push_risk(
+            'brand_weighted_prompt_pack',
+            'high',
+            'Benchmark potentiellement trop favorable à la marque',
+            f"{brand_explicit_ratio}% des prompts citent explicitement {brand} alors que la couverture concurrentielle reste basse.",
+            'Rééquilibrer le benchmark avec plus de requêtes neutres, comparatives et sans formulation brand-first.'
+        )
+
+    if len(models_used) < 2:
+        push_risk(
+            'single_model_read',
+            'medium',
+            'Lecture limitée à un seul modèle',
+            'La trajectoire actuelle repose sur un seul moteur LLM, donc la divergence inter-modèles reste non vérifiable.',
+            'Ajouter au moins un second modèle avant d interpréter le classement comme stable.'
+        )
+
+    if len(competitors) < 2:
+        push_risk(
+            'thin_benchmark',
+            'medium',
+            'Benchmark trop étroit',
+            f"Seulement {len(competitors)} concurrent(s) sont suivis dans ce projet.",
+            'Élargir le benchmark à 3 concurrents ou plus pour rendre les écarts plus crédibles.'
+        )
+
+    if leader and leader.get('brand') == brand and brand_first_rate >= 85 and len(models_used) < 2:
+        push_risk(
+            'leadership_unverified',
+            'high' if brand_first_rate >= 95 else 'medium',
+            'Leadership à confirmer',
+            f"{brand} ressort en tête sur {brand_first_rate}% des lectures alors que la vérification inter-modèles est insuffisante.",
+            'Confirmer la position avec plus de modèles et des prompts moins centrés sur la marque.'
+        )
+
+    severity_order = {'high': 0, 'medium': 1, 'low': 2}
+    risk_signals.sort(key=lambda item: (severity_order.get(item.get('level'), 3), item.get('title', '')))
+
+    bias_score = 0
+    if competitors and brand_explicit_ratio >= 80:
+        bias_score += 35
+    if competitors and coverage_average < 35:
+        bias_score += 25
+    if len(models_used) < 2:
+        bias_score += 15
+    if len(competitors) < 2:
+        bias_score += 10
+    if brand_first_rate >= 85:
+        bias_score += 15
+    if leader_gap is not None and leader and leader.get('brand') == brand and leader_gap >= 35:
+        bias_score += 10
+    bias_score = min(100, bias_score)
+
+    if bias_score >= 60:
+        bias_status = 'warning'
+        bias_summary = 'Le benchmark semble trop favorable à la marque suivie pour être considéré comme pleinement neutre.'
+    elif bias_score >= 35:
+        bias_status = 'watch'
+        bias_summary = 'La lecture reste exploitable, mais plusieurs signaux invitent à vérifier la neutralité du pack.'
+    else:
+        bias_status = 'ok'
+        bias_summary = 'Aucun biais structurel majeur ne ressort sur ce snapshot.'
+
+    return {
+        'risk_signals': risk_signals,
+        'bias_monitor': {
+            'status': bias_status,
+            'score': bias_score,
+            'summary': bias_summary,
+            'brand_explicit_ratio': brand_explicit_ratio,
+            'neutral_prompt_ratio': neutral_prompt_ratio,
+            'coverage_average': coverage_average,
+            'brand_first_rate': brand_first_rate,
+            'model_count': len(models_used)
+        },
+        'prompt_audit_summary': prompt_audit
+    }
+
 
 def _scheduled_analysis():
     projects = get_all_projects()
@@ -855,11 +1046,16 @@ def _build_metrics_payload(results):
         cm = az.calculate_metrics(analyses)
         category_data[cat] = {b: cm[b]['mention_rate'] for b in cm}
 
+    diagnostics = _build_risk_diagnostics(results, metrics, ranking)
+
     return {
         'metrics': metrics,
         'ranking': ranking,
         'insights': insights,
         'category_data': category_data,
+        'risk_signals': diagnostics['risk_signals'],
+        'bias_monitor': diagnostics['bias_monitor'],
+        'prompt_audit_summary': diagnostics['prompt_audit_summary'],
         'metadata': {
             'brand': brand,
             'competitors': competitors,
@@ -867,7 +1063,8 @@ def _build_metrics_payload(results):
             'total_analyses': len(all_analyses),
             'timestamp': results['timestamp'],
             'is_demo': results.get('is_demo', False),
-            'models_used': results.get('llms_used', ['qwen3.5'])
+            'models_used': results.get('llms_used', ['qwen3.5']),
+            'models': results.get('llms_used', ['qwen3.5'])
         }
     }
 
@@ -1206,6 +1403,8 @@ def generate_config():
             f'- formulations neutres, non promotionnelles\n'
             f'- ne pas ecrire des prompts centres sur "{brand}" du type "{brand} ou alternative"\n'
             f'- utiliser un terrain commun de comparaison: "quelles marques", "comparatif", "quels acteurs", "meilleur choix"\n'
+            f'- produire majoritairement des prompts benchmark neutres ou comparatifs\n'
+            f'- un seul prompt brand-first maximum sur l ensemble du pack\n'
             f'- mentionner "{brand}" et au moins 2 concurrents dans la plupart des prompts\n'
             f'- les prompts doivent pouvoir etre reuses sans avantager automatiquement la marque suivie\n\n'
             f'Format strict attendu:\n'
@@ -1953,6 +2152,8 @@ def compare_prompts():
                               'prompt_issues': prompt_audit['issues'],
                               'competitor_coverage': prompt_audit['competitor_coverage'],
                               'word_count': prompt_audit['word_count'],
+                              'prompt_profile': prompt_audit['prompt_profile'],
+                              'neutrality_risk': prompt_audit['neutrality_risk'],
                               'agreement_score': model_breakdown['agreement_score'],
                               'position_spread': model_breakdown['position_spread'],
                               'best_model': model_breakdown['best_model'],
@@ -1995,6 +2196,10 @@ def compare_prompts():
         if (item.get('rank_change') or 0) < 0 or (item.get('score_change') or 0) < 0
     )
     tracked_prompt_count = sum(1 for item in prompt_stats if item.get('has_history'))
+    suspicious_prompt_count = sum(
+        1 for item in prompt_stats
+        if item.get('neutrality_risk') == 'high' or item.get('prompt_profile') == 'brand-first'
+    )
     return jsonify({'brand': brand, 'prompts': prompt_stats,
                     'best_prompt':  prompt_stats[0]['prompt']  if prompt_stats else None,
                     'worst_prompt': prompt_stats[-1]['prompt'] if prompt_stats else None,
@@ -2005,9 +2210,13 @@ def compare_prompts():
                         'weak_prompt_count': prompt_audit_summary['weak_prompt_count'],
                         'top_intents': prompt_audit_summary['top_intents'],
                         'coverage_average': prompt_audit_summary['coverage_average'],
+                        'brand_weighted_count': prompt_audit_summary['brand_weighted_count'],
+                        'neutral_prompt_count': prompt_audit_summary['neutral_prompt_count'],
+                        'profile_distribution': prompt_audit_summary['profile_distribution'],
                         'improved_prompt_count': improved_prompt_count,
                         'declined_prompt_count': declined_prompt_count,
-                        'tracked_prompt_count': tracked_prompt_count
+                        'tracked_prompt_count': tracked_prompt_count,
+                        'suspicious_prompt_count': suspicious_prompt_count
                     },
                     'metadata': {'timestamp': results['timestamp'],
                                  'previous_timestamp': previous_run.get('timestamp'),

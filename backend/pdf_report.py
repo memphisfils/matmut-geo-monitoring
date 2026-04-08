@@ -18,15 +18,16 @@ from typing import Dict, List, Optional
 
 # ── Constantes design ─────────────────────────────────────────────────────────
 
-YELLOW  = "#FFD700"
-BLACK   = "#0A0A0A"
-DARK    = "#111111"
-SURFACE = "#1A1A1A"
-BORDER  = "#2A2A2A"
+ACCENT  = "#58BCFF"
+INK     = "#102435"
+DARK    = "#173247"
+SURFACE = "#173247"
+BORDER  = "#2B4A61"
 WHITE   = "#FFFFFF"
-MUTED   = "#888888"
-GREEN   = "#00CC44"
-RED     = "#FF4444"
+MUTED   = "#8CA3B6"
+GREEN   = "#1E9E66"
+RED     = "#D1644A"
+AMBER   = "#E39A2D"
 
 
 # ── HTML complet du rapport ───────────────────────────────────────────────────
@@ -38,7 +39,8 @@ def build_report_html(
     insights: Dict,
     prompt_stats: Optional[List[Dict]] = None,
     confidence: Optional[Dict] = None,
-    metadata: Optional[Dict] = None
+    metadata: Optional[Dict] = None,
+    report_definition: Optional[Dict] = None
 ) -> str:
     """
     Génère le HTML complet du rapport PDF GEO Monitor.
@@ -55,6 +57,13 @@ def build_report_html(
     is_demo   = metadata.get('is_demo', False) if metadata else False
     models    = metadata.get('models_used', ['qwen3.5']) if metadata else ['qwen3.5']
     date_str  = datetime.fromisoformat(ts[:19]).strftime('%d %B %Y')
+    report_definition = report_definition or {}
+    report_title = report_definition.get('name', "Rapport d'analyse principal")
+    report_description = report_definition.get(
+        'description',
+        "Analyse de presence dans les reponses des modeles de langage"
+    )
+    report_code = report_definition.get('id', 'RPT-MAIN')
 
     brand_data   = metrics.get(brand, {})
     brand_rank   = next((r['rank'] for r in ranking if r['brand'] == brand), '—')
@@ -70,8 +79,6 @@ def build_report_html(
 
     # ── CSS ──────────────────────────────────────────────────────────────────
     css = f"""
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap');
-
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 
 @page {{
@@ -80,8 +87,8 @@ def build_report_html(
 }}
 
 body {{
-  font-family: 'Space Grotesk', Arial, sans-serif;
-  background: {BLACK};
+  font-family: Arial, Helvetica, sans-serif;
+  background: {INK};
   color: {WHITE};
   font-size: 11px;
   line-height: 1.5;
@@ -91,21 +98,21 @@ body {{
 .cover {{
   width: 210mm;
   height: 297mm;
-  background: {BLACK};
+  background: {INK};
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   page-break-after: always;
   padding: 48px;
-  border-left: 6px solid {YELLOW};
+  border-left: 6px solid {ACCENT};
   position: relative;
 }}
 
 .cover-logo {{
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 11px;
   letter-spacing: 4px;
-  color: {YELLOW};
+  color: {ACCENT};
   text-transform: uppercase;
   font-weight: 700;
 }}
@@ -118,7 +125,7 @@ body {{
 }}
 
 .cover-tag {{
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 9px;
   letter-spacing: 3px;
   color: {MUTED};
@@ -155,15 +162,15 @@ body {{
 }}
 
 .cover-kpi-val {{
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 36px;
   font-weight: 700;
-  color: {YELLOW};
+  color: {ACCENT};
   line-height: 1;
 }}
 
 .cover-kpi-label {{
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 8px;
   letter-spacing: 2px;
   color: {MUTED};
@@ -183,18 +190,18 @@ body {{
 }}
 
 .cover-date {{
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 10px;
   color: {MUTED};
 }}
 
 .cover-demo-badge {{
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 9px;
   font-weight: 700;
   padding: 4px 12px;
-  border: 1px solid {YELLOW};
-  color: {YELLOW};
+  border: 1px solid {ACCENT};
+  color: {ACCENT};
   letter-spacing: 1px;
 }}
 
@@ -215,7 +222,7 @@ body {{
 }}
 
 .section-num {{
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 9px;
   color: {MUTED};
   letter-spacing: 1px;
@@ -223,7 +230,7 @@ body {{
 }}
 
 .section-title {{
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 2px;
@@ -246,12 +253,12 @@ body {{
   border-top: 2px solid {BORDER};
 }}
 
-.kpi-card.highlight {{ border-top-color: {YELLOW}; }}
+.kpi-card.highlight {{ border-top-color: {ACCENT}; }}
 .kpi-card.good      {{ border-top-color: {GREEN}; }}
 .kpi-card.warning   {{ border-top-color: {RED}; }}
 
 .kpi-val {{
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 24px;
   font-weight: 700;
   color: {WHITE};
@@ -259,11 +266,11 @@ body {{
   margin-bottom: 4px;
 }}
 
-.kpi-card.highlight .kpi-val {{ color: {YELLOW}; }}
+.kpi-card.highlight .kpi-val {{ color: {ACCENT}; }}
 .kpi-card.good      .kpi-val {{ color: {GREEN}; }}
 
 .kpi-label {{
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 8px;
   letter-spacing: 1.5px;
   color: {MUTED};
@@ -276,7 +283,7 @@ body {{
 .insight-block {{ background: {SURFACE}; border: 1px solid {BORDER}; padding: 16px; }}
 
 .insight-block-title {{
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 9px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -310,7 +317,7 @@ body {{
 .ranking-table {{
   width: 100%;
   border-collapse: collapse;
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 10px;
 }}
 
@@ -336,8 +343,8 @@ body {{
 .ranking-table td:not(:first-child) {{ text-align: right; }}
 
 .ranking-table tr.target-row {{
-  background: rgba(255,215,0,0.06);
-  border-left: 3px solid {YELLOW};
+  background: rgba(88,188,255,0.08);
+  border-left: 3px solid {ACCENT};
 }}
 
 .ranking-table tr.target-row td {{
@@ -356,17 +363,17 @@ body {{
 }}
 
 .rank-badge.first {{
-  background: {YELLOW};
+  background: {ACCENT};
   color: #000;
 }}
 
 .brand-name {{ font-weight: 600; }}
-.target-row .brand-name {{ color: {YELLOW}; }}
+.target-row .brand-name {{ color: {ACCENT}; }}
 
 .bar-cell {{ display: flex; align-items: center; gap: 6px; justify-content: flex-end; }}
 .bar-track {{ width: 60px; height: 3px; background: {BORDER}; }}
-.bar-fill  {{ height: 100%; background: {YELLOW}; }}
-.target-row .bar-fill {{ background: {YELLOW}; }}
+.bar-fill  {{ height: 100%; background: {ACCENT}; }}
+.target-row .bar-fill {{ background: {ACCENT}; }}
 .other-row  .bar-fill {{ background: #444; }}
 
 /* ── Prompts table ── */
@@ -378,7 +385,7 @@ body {{
 
 .prompt-table th {{
   padding: 7px 10px;
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 7.5px;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -397,9 +404,9 @@ body {{
   vertical-align: top;
 }}
 
-.prompt-table td:not(:first-child) {{ text-align: right; font-family: 'Space Mono', monospace; }}
+.prompt-table td:not(:first-child) {{ text-align: right; font-family: 'Courier New', monospace; }}
 
-.prompt-table tr.best-prompt {{ border-left: 3px solid {GREEN}; background: rgba(0,204,68,0.04); }}
+.prompt-table tr.best-prompt {{ border-left: 3px solid {GREEN}; background: rgba(30,158,102,0.08); }}
 .prompt-table tr.worst-prompt {{ border-left: 3px solid {BORDER}; }}
 
 .mention-yes {{ color: {GREEN}; font-weight: 700; }}
@@ -415,12 +422,12 @@ body {{
 }}
 
 .conf-brand {{ font-weight: 700; font-size: 11px; margin-bottom: 8px; color: {WHITE}; }}
-.conf-val   {{ font-family: 'Space Mono', monospace; font-size: 18px; font-weight: 700; }}
+.conf-val   {{ font-family: 'Courier New', monospace; font-size: 18px; font-weight: 700; }}
 .conf-val.high {{ color: {GREEN}; }}
-.conf-val.mid  {{ color: {YELLOW}; }}
+.conf-val.mid  {{ color: {AMBER}; }}
 .conf-val.low  {{ color: {RED}; }}
 .conf-val.na   {{ color: {MUTED}; font-size: 13px; }}
-.conf-label    {{ font-family: 'Space Mono', monospace; font-size: 8px; color: {MUTED}; letter-spacing: 1px; margin-top: 2px; }}
+.conf-label    {{ font-family: 'Courier New', monospace; font-size: 8px; color: {MUTED}; letter-spacing: 1px; margin-top: 2px; }}
 
 /* ── Recommandations ── */
 .reco-list {{ display: flex; flex-direction: column; gap: 10px; }}
@@ -432,14 +439,14 @@ body {{
   background: {SURFACE};
   border: 1px solid {BORDER};
   padding: 14px 16px;
-  border-left: 3px solid {YELLOW};
+  border-left: 3px solid {ACCENT};
 }}
 
 .reco-num {{
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 16px;
   font-weight: 700;
-  color: {YELLOW};
+  color: {ACCENT};
   line-height: 1;
   min-width: 24px;
 }}
@@ -457,7 +464,7 @@ body {{
   align-items: center;
   padding: 16px 48px;
   border-top: 1px solid {BORDER};
-  font-family: 'Space Mono', monospace;
+  font-family: 'Courier New', monospace;
   font-size: 8px;
   color: {MUTED};
   letter-spacing: 0.5px;
@@ -465,16 +472,16 @@ body {{
 """
 
     # ── Cover ────────────────────────────────────────────────────────────────
-    score_color = GREEN if global_score >= 60 else (YELLOW if global_score >= 35 else RED)
+    score_color = GREEN if global_score >= 60 else (AMBER if global_score >= 35 else RED)
     rank_suffix = {1: 'ER', 2: 'ÈME', 3: 'ÈME'}.get(brand_rank if isinstance(brand_rank, int) else 0, 'ÈME')
 
     cover = f"""
 <div class="cover">
   <div class="cover-logo">GEO Monitor</div>
   <div class="cover-main">
-    <div class="cover-tag">Rapport d'analyse IA — Visibilité LLM</div>
+    <div class="cover-tag">{report_code} · {report_title}</div>
     <div class="cover-brand">{brand}</div>
-    <div class="cover-subtitle">Analyse de présence dans les réponses des modèles de langage</div>
+    <div class="cover-subtitle">{report_description}</div>
     <div class="cover-score-block">
       <div class="cover-kpi">
         <div class="cover-kpi-val" style="color:{score_color};">{global_score:.1f}</div>
@@ -742,7 +749,8 @@ def generate_report(
     prompt_stats: Optional[List[Dict]] = None,
     confidence: Optional[Dict] = None,
     metadata: Optional[Dict] = None,
-    output_format: str = 'pdf'   # 'pdf' | 'html'
+    output_format: str = 'pdf',   # 'pdf' | 'html'
+    report_definition: Optional[Dict] = None
 ) -> tuple[bytes, str]:
     """
     Point d'entrée principal.
@@ -751,8 +759,16 @@ def generate_report(
         (content_bytes, content_type)
         content_type = 'application/pdf' | 'text/html'
     """
-    html = build_report_html(brand, ranking, metrics, insights,
-                             prompt_stats, confidence, metadata)
+    html = build_report_html(
+        brand,
+        ranking,
+        metrics,
+        insights,
+        prompt_stats,
+        confidence,
+        metadata,
+        report_definition
+    )
 
     if output_format == 'html':
         return html.encode('utf-8'), 'text/html; charset=utf-8'

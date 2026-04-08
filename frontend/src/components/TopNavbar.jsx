@@ -1,60 +1,234 @@
-import React from 'react';
-import { RefreshCw, Download, Wifi, WifiOff, Target } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Activity,
+  ChevronDown,
+  FolderOpen,
+  LogOut,
+  Plus,
+  RefreshCw,
+  Settings2,
+  Target,
+  UserRound,
+  Wifi,
+  WifiOff
+} from 'lucide-react';
 import './TopNavbar.css';
 
-export default function TopNavbar({ brand, onRefresh, onExport, isLoading, isBackendOnline, onReset, activeTab, onTabChange }) {
-  const tabs = [
-    { key: 'dashboard', label: 'Dashboard' },
-    { key: 'benchmark', label: 'Benchmark' },
-    { key: 'prompts', label: 'Prompts' },
-    { key: 'alerts', label: 'Alertes' },
-  ];
+const TAB_LABELS = {
+  dashboard: "Vue d'ensemble",
+  benchmark: 'Benchmarks',
+  prompts: 'Requetes',
+  alerts: 'Alertes',
+  projects: 'Mes marques',
+  exports: 'Rapports',
+  account: 'Compte',
+  history: 'Tendances',
+  keywords: 'Intentions',
+  sentiment: 'Sentiment',
+  'llm-status': 'LLM'
+};
+
+function getInitials(user) {
+  const source = user?.name || user?.email || 'GU';
+  return source
+    .split(/[\s@._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+}
+
+export default function TopNavbar({
+  brand,
+  user,
+  onRefresh,
+  isLoading,
+  isBackendOnline,
+  onReset,
+  exportSlot,
+  activeTab,
+  onCreateAnalysis,
+  onOpenProjects,
+  onOpenAccount,
+  onLogout
+}) {
+  const currentLabel = TAB_LABELS[activeTab] || "Vue d'ensemble";
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef(null);
+
+  useEffect(() => {
+    if (!accountOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (!accountRef.current?.contains(event.target)) {
+        setAccountOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setAccountOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [accountOpen]);
 
   return (
     <nav className="top-navbar">
-      <div className="nav-brand">
-        <Target size={24} className="brand-icon" />
-        <span className="brand-name">{brand || 'GEO Monitor'}</span>
-      </div>
+      <div className="nav-primary">
+        <div className="nav-brand compact">
+          <div className="brand-icon-shell">
+            <Target size={18} className="brand-icon" />
+          </div>
+          <div className="brand-copy">
+            <span className="brand-name">GEO Arctic</span>
+            <span className="brand-meta">Workspace</span>
+          </div>
+        </div>
 
-      <div className="nav-tabs">
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            className={`nav-tab ${activeTab === tab.key ? 'active' : ''}`}
-            onClick={() => onTabChange && onTabChange(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
+        <div className="nav-context">
+          <span className="nav-context-label">Projet actif</span>
+          <div className="nav-context-row">
+            <strong>{brand || 'Workspace'}</strong>
+            <span className="nav-tab-pill">{currentLabel}</span>
+          </div>
+        </div>
       </div>
 
       <div className="nav-actions">
+        {onCreateAnalysis && (
+          <button onClick={onCreateAnalysis} className="nav-btn nav-btn-accent">
+            <Plus size={16} />
+            <span>Nouvelle analyse</span>
+          </button>
+        )}
+
         {onRefresh && (
           <button onClick={onRefresh} disabled={isLoading} className="nav-btn">
             <RefreshCw size={16} className={isLoading ? 'spin' : ''} />
-            <span>Refresh</span>
+            <span>Relancer l analyse</span>
           </button>
         )}
-        {onExport && (
-          <button onClick={onExport} className="nav-btn">
-            <Download size={16} />
-            <span>Export</span>
-          </button>
-        )}
+
+        {exportSlot}
+
         {onReset && (
           <button onClick={onReset} className="nav-btn nav-btn-reset">
-            <span>Reset</span>
+            <span>Changer de projet</span>
           </button>
         )}
       </div>
 
-      <div className="nav-status">
+      <div className="nav-status-shell">
         <div className={`status-indicator ${isBackendOnline ? 'online' : 'offline'}`}>
+          <span className="status-dot" />
           {isBackendOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
-          <span>{isBackendOnline ? 'API' : 'DEMO'}</span>
+          <span>{isBackendOnline ? 'Donnees live' : 'Mode demo'}</span>
+        </div>
+        <div className={`nav-status-detail ${isLoading ? 'active' : ''}`}>
+          <Activity size={14} />
+          <span>{isLoading ? 'Run en cours' : 'Pret'}</span>
         </div>
       </div>
+
+      {user ? (
+        <div className="nav-account" ref={accountRef}>
+          <button
+            type="button"
+            className={`nav-account-trigger ${accountOpen ? 'open' : ''}`}
+            onClick={() => setAccountOpen((current) => !current)}
+          >
+            <span className="nav-account-avatar">{getInitials(user)}</span>
+            <span className="nav-account-copy">
+              <strong>{user.name || 'Compte'}</strong>
+              <small>{user.email}</small>
+            </span>
+            <ChevronDown size={14} className={`nav-account-chevron ${accountOpen ? 'open' : ''}`} />
+          </button>
+
+          {accountOpen && (
+            <div className="nav-account-dropdown">
+              <div className="nav-account-summary">
+                <span className="nav-account-summary-avatar">{getInitials(user)}</span>
+                <div className="nav-account-summary-copy">
+                  <strong>{user.name || 'Compte utilisateur'}</strong>
+                  <span>{user.email}</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="nav-account-option"
+                onClick={() => {
+                  setAccountOpen(false);
+                  onOpenAccount && onOpenAccount();
+                }}
+              >
+                <span className="nav-account-option-icon"><Settings2 size={16} /></span>
+                <div className="nav-account-option-copy">
+                  <strong>Compte et preferences</strong>
+                  <span>Ouvrir les reglages utilisateur</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="nav-account-option"
+                onClick={() => {
+                  setAccountOpen(false);
+                  onOpenProjects && onOpenProjects();
+                }}
+              >
+                <span className="nav-account-option-icon"><FolderOpen size={16} /></span>
+                <div className="nav-account-option-copy">
+                  <strong>Mes projets</strong>
+                  <span>Reprendre une marque ou ouvrir son historique</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="nav-account-option"
+                onClick={() => {
+                  setAccountOpen(false);
+                  onCreateAnalysis && onCreateAnalysis();
+                }}
+              >
+                <span className="nav-account-option-icon"><Plus size={16} /></span>
+                <div className="nav-account-option-copy">
+                  <strong>Nouvelle analyse</strong>
+                  <span>Ouvrir la fenetre de configuration d une nouvelle marque</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="nav-account-option danger"
+                onClick={() => {
+                  setAccountOpen(false);
+                  onLogout && onLogout();
+                }}
+              >
+                <span className="nav-account-option-icon"><LogOut size={16} /></span>
+                <div className="nav-account-option-copy">
+                  <strong>Se deconnecter</strong>
+                  <span>Fermer la session du navigateur</span>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="nav-account-placeholder">
+          <UserRound size={16} />
+        </div>
+      )}
     </nav>
   );
 }

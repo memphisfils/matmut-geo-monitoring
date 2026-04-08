@@ -1,0 +1,43 @@
+/* ── Sprint 3 — Onglets de navigation ── */
+/* À AJOUTER à la fin du App.css existant — ne pas écraser */
+
+.app-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 24px;
+  background: var(--bg-tertiary);
+  border-bottom: var(--border-thick) solid var(--border-color);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.app-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.app-tab {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 14px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  position: relative;
+  bottom: -2px; /* aligne avec border-bottom du parent */
+}
+
+.app-tab:hover {
+  color: var(--text-secondary);
+}
+
+.app-tab.active {
+  color: var(--accent-yellow);
+  border-bottom-color: var(--accent-yellow);
+}

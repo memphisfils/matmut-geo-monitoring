@@ -1,0 +1,197 @@
+.ap-wrapper {
+  background: var(--bg-secondary);
+  border: var(--border-thick) solid var(--border-color);
+  margin-bottom: 20px;
+  padding: 24px;
+}
+
+.ap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ap-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ap-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+
+.ap-icon-spin {
+  color: var(--accent-yellow);
+  animation: spin 1s linear infinite;
+}
+
+.ap-icon-done {
+  color: var(--accent-green);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ap-badge-demo {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  background: rgba(255, 215, 0, 0.1);
+  color: var(--accent-yellow);
+  border: 1px solid var(--accent-yellow);
+}
+
+.ap-models {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ap-model-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+}
+
+/* Progress bar */
+.ap-bar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ap-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.ap-bar-fill {
+  height: 100%;
+  background: var(--accent-yellow);
+  transition: width 0.4s ease;
+}
+
+.ap-bar-fill.complete {
+  background: var(--accent-green);
+}
+
+.ap-bar-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 80px;
+  text-align: right;
+}
+
+/* Prompt en cours */
+.ap-current {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: rgba(255, 215, 0, 0.04);
+  border-left: 3px solid var(--accent-yellow);
+  margin-bottom: 16px;
+}
+
+.ap-current-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+
+.ap-current-text {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+/* Log des prompts traités */
+.ap-log {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.ap-log-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  border-left: 2px solid transparent;
+  transition: background 0.15s;
+}
+
+.ap-log-row.mentioned {
+  color: var(--text-secondary);
+  border-left-color: var(--accent-green);
+  background: rgba(0, 204, 68, 0.03);
+}
+
+.ap-log-row:hover {
+  background: var(--bg-tertiary);
+}
+
+.ap-log-num {
+  width: 20px;
+  text-align: right;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.ap-log-prompt {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ap-log-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ap-log-pos {
+  font-weight: 600;
+  color: var(--accent-green);
+  font-size: 11px;
+}
+
+.ap-log-absent {
+  color: var(--text-muted);
+}
+
+.ap-log-check {
+  color: var(--accent-green);
+}
+
+.ap-log-x {
+  color: var(--text-muted);
+}

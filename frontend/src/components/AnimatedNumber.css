@@ -1,0 +1,20 @@
+.animated-number {
+  display: inline-flex;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+  transition: color 220ms ease, text-shadow 220ms ease, transform 220ms ease;
+}
+
+.animated-number.up {
+  color: #12795b;
+  text-shadow: 0 0 18px rgba(36, 165, 122, 0.18);
+}
+
+.animated-number.down {
+  color: #ba5a44;
+  text-shadow: 0 0 18px rgba(215, 110, 82, 0.16);
+}
+
+:root.reduced-motion .animated-number {
+  transition: none;
+}

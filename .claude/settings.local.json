@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find C:__003-travailmatmut-geo-dashboardproject -type f \\\\\\(-name *.py -o -name *.jsx -o -name *.js -o -name *.json -o -name *.yaml -o -name *.yml -o -name *.md -o -name .env* -o -name *.txt -o -name *.css \\\\\\) ! -path */venv/* ! -path */node_modules/* ! -path */.git/* ! -path */dist/*)",
+      "Bash(curl -s -X POST \"https://ollama.com/api/chat\" -H \"Content-Type: application/json\" -H \"Authorization: Bearer 9fd5e3a694f540eeb92932ad0ddb6b17.HTlfLw68jmRnl5g-UpNWJAtT\" -d '{\"\"\"\"model\"\"\"\":\"\"\"\"qwen3.5\"\"\"\",\"\"\"\"messages\"\"\"\":[{\"\"\"\"role\"\"\"\":\"\"\"\"user\"\"\"\",\"\"\"\"content\"\"\"\":\"\"\"\"Réponds simplement par OK\"\"\"\",\"\"\"\"stream\"\"\"\":false}}' --max-time 45)",
+      "Bash(curl -s -X POST \"https://ollama.com/api/chat\" -H \"Content-Type: application/json\" -H \"Authorization: Bearer 9fd5e3a694f540eeb92932ad0ddb6b17.HTlfLw68jmRnl5g-UpNWJAtT\" -d '{\"\"\"\"model\"\"\"\":\"\"\"\"qwen3.5\"\"\"\",\"\"\"\"messages\"\"\"\":[{\"\"\"\"role\"\"\"\":\"\"\"\"user\"\"\"\",\"\"\"\"content\"\"\"\":\"\"\"\"Réponds simplement par OK\"\"\"\"}],\"\"\"\"stream\"\"\"\":false}' --max-time 45)",
+      "Bash(python3 -c \":*)",
+      "Bash(python3:*)",
+      "Bash(curl -s \"http://localhost:5000/api/metrics\")",
+      "Bash(curl -s \"http://localhost:5000/api/history\")",
+      "Bash(curl -s \"http://localhost:5000/api/history?brand=tesla\")",
+      "Bash(curl -s \"http://localhost:5000/api/history?brand=nike\")",
+      "Bash(venv/Scripts/python -c \":*)",
+      "Bash(npm run:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
+    ]
+  }
+}

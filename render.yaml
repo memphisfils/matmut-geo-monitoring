@@ -23,6 +23,8 @@ services:
         value: 5000
       - key: FLASK_DEBUG
         value: false
+      - key: SCHEDULER_ROLE
+        value: disabled
       - key: OLLAMA_BASE_URL
         value: https://ollama.com/api
       - key: OLLAMA_MODEL
@@ -35,6 +37,35 @@ services:
         value: "40"
       - key: RENDER_INSTANCE_TYPE
         value: standard-0.5
+    disk:
+      name: data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+
+  - type: worker
+    name: geo-dashboard-scheduler
+    env: python
+    region: frankfurt
+    plan: starter
+    packageManager: pip
+    startCommand: "cd backend && python scheduler_runner.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: FLASK_DEBUG
+        value: false
+      - key: SCHEDULER_ROLE
+        value: worker
+      - key: OLLAMA_BASE_URL
+        value: https://ollama.com/api
+      - key: OLLAMA_MODEL
+        value: qwen3.5
+      - key: OLLAMA_MODELS
+        value: qwen3.5
+      - key: OLLAMA_API_KEY
+        sync: false
+      - key: OLLAMA_TIMEOUT
+        value: "40"
     disk:
       name: data
       mountPath: /opt/render/project/src/data

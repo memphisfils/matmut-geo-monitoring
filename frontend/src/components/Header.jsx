@@ -4,7 +4,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import './Header.css';
 
-export default function Header({ onRefresh, onExport, isLoading, metadata }) {
+export default function Header({ onRefresh, isLoading, metadata }) {
     const [isExporting, setIsExporting] = useState(false);
     const isDemo = metadata?.is_demo === true;
 

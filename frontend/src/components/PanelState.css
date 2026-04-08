@@ -1,0 +1,110 @@
+.panel-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px 26px;
+  border-radius: 24px;
+  border: 1px solid rgba(145, 171, 191, 0.16);
+  background:
+    radial-gradient(circle at top right, rgba(111, 214, 255, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(242, 248, 252, 0.92));
+  box-shadow: 0 20px 42px rgba(19, 56, 78, 0.07);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.panel-state:hover {
+  transform: translateY(-1px);
+  border-color: rgba(84, 191, 255, 0.24);
+  box-shadow: 0 24px 44px rgba(19, 56, 78, 0.09);
+}
+
+.panel-state.compact {
+  padding: 18px 20px;
+}
+
+.panel-state-icon {
+  width: 50px;
+  height: 50px;
+  flex-shrink: 0;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(75, 163, 199, 0.12);
+  color: #1f6e95;
+}
+
+.panel-state-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.panel-state-copy h3 {
+  margin: 0 0 6px;
+  font-size: 1.02rem;
+  color: #10212b;
+}
+
+.panel-state-copy p {
+  margin: 0;
+  color: #58717e;
+  line-height: 1.58;
+}
+
+.panel-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.panel-state-actions button,
+.panel-state-actions a {
+  min-height: 44px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  color: #072031;
+  background: linear-gradient(135deg, #8de7ff, #58bcff);
+  box-shadow: 0 18px 28px rgba(86, 188, 255, 0.18);
+}
+
+.panel-state-actions button:focus-visible,
+.panel-state-actions a:focus-visible {
+  outline: 3px solid rgba(82, 189, 255, 0.34);
+  outline-offset: 3px;
+}
+
+.panel-state.warning .panel-state-icon {
+  background: rgba(228, 172, 57, 0.12);
+  color: #916403;
+}
+
+.panel-state.success .panel-state-icon {
+  background: rgba(38, 151, 103, 0.12);
+  color: #1d7a58;
+}
+
+.panel-state.danger .panel-state-icon {
+  background: rgba(194, 78, 88, 0.12);
+  color: #a33742;
+}
+
+@media (max-width: 760px) {
+  .panel-state {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .panel-state-actions {
+    width: 100%;
+  }
+}

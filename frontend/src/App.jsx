@@ -1,105 +1,175 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import Onboarding from './components/Onboarding';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import Sidebar from './components/Sidebar';
 import TopNavbar from './components/TopNavbar';
-import KpiCards from './components/KpiCards';
-import RankingTable from './components/RankingTable';
-import { MentionChart, SovChart, RadarCompare, CategoryHeatmap } from './components/Charts';
-import TrendChart from './components/TrendChart';
-import SentimentChart from './components/SentimentChart';
-import DuelCard from './components/DuelCard';
-import InsightsPanel from './components/InsightsPanel';
 import AnalysisProgress from './components/AnalysisProgress';
-import LLMBreakdown from './components/LLMBreakdown';
-import PromptComparator from './components/PromptComparator';
-import AlertsPanel from './components/AlertsPanel';
 import ExportButton from './components/ExportButton';
-import Benchmark from './components/Benchmark';
 import {
   fetchMetrics, fetchExport, checkStatus, fetchHistory,
-  runAnalysisStream, generateTrendHistory, DEMO_DATA_FACTORY, fetchSession
+  runAnalysisStream, generateTrendHistory, DEMO_DATA_FACTORY, fetchSession,
+  fetchCurrentUser, loginUser, signupUser, loginWithGoogle, getGoogleClientId, activateProject, fetchProjects, logoutUser
 } from './services/api';
 import './App.css';
 
+const LandingPage = lazy(() => import('./components/LandingPage'));
+const AuthPage = lazy(() => import('./components/AuthPage'));
+const Onboarding = lazy(() => import('./components/Onboarding'));
+const WorkspaceHome = lazy(() => import('./components/WorkspaceHome'));
+const ProjectsPanel = lazy(() => import('./components/ProjectsPanel'));
+const Benchmark = lazy(() => import('./components/Benchmark'));
+const AlertsPanel = lazy(() => import('./components/AlertsPanel'));
+const AccountPanel = lazy(() => import('./components/AccountPanel'));
+const PromptComparator = lazy(() => import('./components/PromptComparator'));
+const DashboardOverviewTab = lazy(() => import('./components/tabs/DashboardOverviewTab'));
+const HistoryTab = lazy(() => import('./components/tabs/HistoryTab'));
+const KeywordsTab = lazy(() => import('./components/tabs/KeywordsTab'));
+const SentimentTab = lazy(() => import('./components/tabs/SentimentTab'));
+const LLMStatusTab = lazy(() => import('./components/tabs/LLMStatusTab'));
+const ExportsTab = lazy(() => import('./components/tabs/ExportsTab'));
+
+const DEFAULT_PREFERENCES = {
+  autoOpenLatestProject: false,
+  reduceMotion: false,
+  showHints: true
+};
+const DEBUG_APP = import.meta.env.DEV && import.meta.env.VITE_DEBUG_UI === 'true';
+
+function parseProjectList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return typeof value === 'string' ? value.split(',').map((item) => item.trim()) : [];
+  }
+}
+
+function projectToConfig(project) {
+  return {
+    projectId: project.id || null,
+    brand: project.brand,
+    sector: project.sector,
+    competitors: parseProjectList(project.competitors),
+    prompts: parseProjectList(project.prompts),
+    models: parseProjectList(project.models),
+    products: [],
+    setup_mode: 'assisted'
+  };
+}
+
+function LazySectionFallback({ label = 'Chargement de la vue...' }) {
+  return (
+    <div className="loading-state app-lazy-state">
+      <div className="loader" />
+      <p>{label}</p>
+    </div>
+  );
+}
+
+function debugApp(...args) {
+  if (DEBUG_APP) {
+    console.log(...args);
+  }
+}
+
 export default function App() {
-  const [config, setConfig]           = useState(null);
-  const [data, setData]               = useState(null);
+  const [page, setPage] = useState('landing');
+
+  const [config, setConfig] = useState(null);
+  const [data, setData] = useState(null);
   const [trendHistory, setTrendHistory] = useState([]);
   const [isBackendOnline, setIsBackendOnline] = useState(false);
-  const [error, setError]             = useState(null);
+  const [error, setError] = useState(null);
 
-  // Sprint 2 — Analyse en temps réel
-  const [isAnalyzing, setIsAnalyzing]         = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(null);
   const [completedPrompts, setCompletedPrompts] = useState([]);
-  const [analysisModels, setAnalysisModels]    = useState([]);
+  const [analysisModels, setAnalysisModels] = useState([]);
   const [isAnalysisComplete, setIsAnalysisComplete] = useState(false);
-  const [isDemo, setIsDemo]                   = useState(false);
+  const [isDemo, setIsDemo] = useState(false);
 
-  // Sprint 3 — Onglets
   const [activeTab, setActiveTab] = useState('dashboard');
-
-  const handleOnboardingComplete = useCallback(async (cfg) => {
-    setConfig(cfg);
-    setIsAnalyzing(true);
-    setIsAnalysisComplete(false);
-    setCompletedPrompts([]);
-    setAnalysisProgress(null);
-    setError(null);
-
+  const [authUser, setAuthUser] = useState(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [preferences, setPreferences] = useState(() => {
     try {
-      for await (const event of runAnalysisStream({
-        brand: cfg.brand, competitors: cfg.competitors, prompts: cfg.prompts,
-        products: cfg.products, sector: cfg.sector, demo: false
-      })) {
-        if (event.type === 'start') {
-          setAnalysisModels(event.models || []);
-          setIsDemo(event.is_demo || false);
-          console.log('[APP] Streaming start — models:', event.models, 'is_demo:', event.is_demo);
-        }
-        if (event.type === 'progress') {
-          setAnalysisProgress(event);
-          setCompletedPrompts(prev => [...prev, event]);
-          console.log(`[APP] Progress ${event.current}/${event.total} — brand_position:`, event.brand_position);
-        }
-        if (event.type === 'complete') {
-          console.log('[APP] Streaming COMPLETE — is_demo:', event.is_demo, 'timestamp:', event.timestamp);
-          setIsAnalysisComplete(true);
-          setIsAnalyzing(false);
-          await loadDashboardData(cfg);
-        }
-        if (event.type === 'error') {
-          throw new Error(event.message || 'Erreur analyse');
-        }
-      }
-    } catch (err) {
-      console.warn('[APP] Streaming fallback —', err.message);
-      setIsAnalyzing(false);
-      setIsAnalysisComplete(true);
-      await loadDashboardData(cfg);
+      return {
+        ...DEFAULT_PREFERENCES,
+        ...(JSON.parse(window.localStorage.getItem('geo_preferences') || '{}'))
+      };
+    } catch {
+      return DEFAULT_PREFERENCES;
     }
-  }, []);
+  });
+  const googleClientId = getGoogleClientId();
 
-  const loadDashboardData = useCallback(async (cfg) => {
-    console.log('[APP] loadDashboardData avec config:', cfg);
-    try {
-      // Délai pour laisser le temps à la sauvegarde results.json (fix race condition)
-      // Le backend doit avoir fini l'écriture AVANT d'appeler /api/metrics
-      // Timeout typique : 40s par prompt × 6 prompts = 240s max
-      await new Promise(resolve => setTimeout(resolve, 5000));
+  const applySessionState = useCallback(async (sessionData) => {
+    if (sessionData?.user) {
+      setAuthUser(sessionData.user);
+    }
 
-      console.log('[APP] fetchMetrics...');
-      const [result, historyData] = await Promise.all([
-        fetchMetrics({ brand: cfg.brand, competitors: cfg.competitors }),
-        fetchHistory({ brand: cfg.brand })
-      ]);
-      console.log('[APP] fetchMetrics result:', result?.metadata);
-      setData(result);
-      // Utiliser l'historique réel si disponible, sinon générer du fake
+    if (sessionData?.has_session && sessionData.project && sessionData.results?.ranking?.length > 0) {
+      const restoredConfig = projectToConfig(sessionData.project);
+
+      setPage('app');
+      setShowOnboarding(false);
+      setConfig(restoredConfig);
+      setData(sessionData.results);
+
+      const historyData = await fetchHistory({
+        brand: sessionData.project.brand,
+        projectId: sessionData.active_project_id || sessionData.project.id
+      });
       if (historyData && historyData.length > 0) {
-        console.log('[APP] Historique réel:', historyData.length, 'points');
         setTrendHistory(historyData);
       } else {
-        console.log('[APP] Pas dhistorique, génération de données fake');
+        setTrendHistory(generateTrendHistory(sessionData.results.ranking, sessionData.project.brand));
+      }
+      return true;
+    }
+
+    return false;
+  }, []);
+
+  const refreshProjects = useCallback(async () => {
+    if (!authUser) {
+      setProjects([]);
+      setProjectsLoading(false);
+      return [];
+    }
+
+    setProjectsLoading(true);
+    try {
+      const nextProjects = await fetchProjects({ force: true });
+      setProjects(nextProjects);
+      return nextProjects;
+    } catch (err) {
+      console.error('[APP] refreshProjects error:', err);
+      setProjects([]);
+      return [];
+    } finally {
+      setProjectsLoading(false);
+    }
+  }, [authUser]);
+
+  const loadDashboardData = useCallback(async (cfg) => {
+    debugApp('[APP] loadDashboardData', cfg);
+    try {
+      const [result, historyData] = await Promise.all([
+        fetchMetrics({ brand: cfg.brand, competitors: cfg.competitors, projectId: cfg.projectId }),
+        fetchHistory({ brand: cfg.brand, projectId: cfg.projectId })
+      ]);
+      debugApp('[APP] fetchMetrics result', result?.metadata);
+      setData(result);
+
+      if (historyData && historyData.length > 0) {
+        debugApp('[APP] Historique reel', historyData.length);
+        setTrendHistory(historyData);
+      } else {
+        debugApp('[APP] Pas d historique, generation de donnees fake');
         setTrendHistory(generateTrendHistory(result?.ranking, cfg.brand));
       }
     } catch (err) {
@@ -110,6 +180,68 @@ export default function App() {
     }
   }, []);
 
+  const handleOnboardingComplete = async (cfg) => {
+    setShowOnboarding(false);
+    setConfig(cfg);
+    setIsAnalyzing(true);
+    setIsAnalysisComplete(false);
+    setCompletedPrompts([]);
+    setAnalysisProgress(null);
+    setError(null);
+
+    try {
+      for await (const event of runAnalysisStream({
+        brand: cfg.brand,
+        competitors: cfg.competitors,
+        prompts: cfg.prompts,
+        products: cfg.products,
+        sector: cfg.sector,
+        demo: false
+      })) {
+        if (event.type === 'start') {
+          setAnalysisModels(event.models || []);
+          setIsDemo(event.is_demo || false);
+          debugApp('[APP] Streaming start', event.models, event.is_demo);
+        }
+        if (event.type === 'progress') {
+          setAnalysisProgress(event);
+          setCompletedPrompts((prev) => [...prev, event]);
+          debugApp('[APP] Progress', event.current, event.total, event.brand_position);
+        }
+        if (event.type === 'complete') {
+          debugApp('[APP] Streaming complete', event.is_demo, event.timestamp);
+          setIsAnalysisComplete(true);
+          setIsAnalyzing(false);
+          await loadDashboardData(cfg);
+          const nextProjects = await refreshProjects();
+          const persistedProject = nextProjects.find((item) => item.brand === cfg.brand);
+          if (persistedProject) {
+            setConfig((current) => ({
+              ...(current || cfg),
+              projectId: persistedProject.id
+            }));
+          }
+        }
+        if (event.type === 'error') {
+          throw new Error(event.message || 'Erreur analyse');
+        }
+      }
+    } catch (err) {
+      debugApp('[APP] Streaming fallback', err.message);
+      setIsAnalyzing(false);
+      setIsAnalysisComplete(true);
+      await loadDashboardData(cfg);
+      const nextProjects = await refreshProjects();
+      const persistedProject = nextProjects.find((item) => item.brand === cfg.brand);
+      if (persistedProject) {
+        setConfig((current) => ({
+          ...(current || cfg),
+          projectId: persistedProject.id
+        }));
+      }
+    }
+  };
+
   const handleRefresh = useCallback(async () => {
     if (!config) return;
     setIsAnalyzing(true);
@@ -119,30 +251,35 @@ export default function App() {
 
     try {
       for await (const event of runAnalysisStream({
-        brand: config.brand, competitors: config.competitors,
-        prompts: config.prompts, sector: config.sector, demo: false
+        brand: config.brand,
+        competitors: config.competitors,
+        prompts: config.prompts,
+        sector: config.sector,
+        demo: false
       })) {
-        if (event.type === 'start')    setAnalysisModels(event.models || []);
+        if (event.type === 'start') setAnalysisModels(event.models || []);
         if (event.type === 'progress') {
           setAnalysisProgress(event);
-          setCompletedPrompts(prev => [...prev, event]);
+          setCompletedPrompts((prev) => [...prev, event]);
         }
         if (event.type === 'complete') {
           setIsAnalysisComplete(true);
           setIsAnalyzing(false);
           await loadDashboardData(config);
+          await refreshProjects();
         }
       }
-    } catch (err) {
+    } catch {
       setIsAnalyzing(false);
       setIsAnalysisComplete(true);
       await loadDashboardData(config);
+      await refreshProjects();
     }
-  }, [config, loadDashboardData]);
+  }, [config, loadDashboardData, refreshProjects]);
 
   const handleExport = useCallback(async () => {
     try {
-      const report = await fetchExport();
+      const report = await fetchExport({ brand: config?.brand, projectId: config?.projectId });
       const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -156,133 +293,415 @@ export default function App() {
   }, [config]);
 
   useEffect(() => {
-    checkStatus().then(res => setIsBackendOnline(res?.status === 'ok'));
-    
-    // Auto-load session au démarrage
-    fetchSession().then(session => {
-      if (session.has_session && session.project) {
-        const project = session.project;
-        const config = {
-          brand: project.brand,
-          sector: project.sector,
-          competitors: project.competitors ? JSON.parse(project.competitors) : [],
-          prompts: project.prompts ? JSON.parse(project.prompts) : []
-        };
-        setConfig(config);
-        
-        // Charger les données si results.json existe
-        if (session.results) {
-          setData(session.results);
-        }
+    checkStatus().then((res) => setIsBackendOnline(res?.status === 'ok'));
+
+    Promise.all([fetchCurrentUser({ force: true }), fetchSession({ force: true })]).then(async ([currentUser, currentSession]) => {
+      if (currentUser?.authenticated) {
+        setAuthUser(currentUser.user);
+      }
+
+      const restored = await applySessionState(currentSession);
+      if (!restored && currentUser?.authenticated) {
+        setShowOnboarding(false);
+        setPage('app');
       }
     });
-  }, []);
+  }, [applySessionState]);
 
-  // Gestion du changement d'onglet
+  useEffect(() => {
+    refreshProjects();
+  }, [refreshProjects]);
+
+  useEffect(() => {
+    window.localStorage.setItem('geo_preferences', JSON.stringify(preferences));
+    document.documentElement.classList.toggle('reduced-motion', preferences.reduceMotion);
+  }, [preferences]);
+
+  const handleAuthContinue = async ({ mode, fullName, email, password }) => {
+    setAuthBusy(true);
+    setAuthError('');
+
+    try {
+      const authResult = mode === 'signup'
+        ? await signupUser({ name: fullName, email, password })
+        : await loginUser({ email, password });
+
+      setAuthUser(authResult.user || null);
+      const currentSession = await fetchSession({ force: true });
+      const restored = await applySessionState(currentSession);
+
+      if (!restored) {
+        setShowOnboarding(false);
+        setPage('app');
+      }
+    } catch (err) {
+      setAuthError(err.message || 'Connexion impossible');
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleGoogleAuth = async (credential) => {
+    if (!credential) {
+      setAuthError('Credential Google manquante');
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthError('');
+
+    try {
+      const authResult = await loginWithGoogle(credential);
+      setAuthUser(authResult.user || null);
+      const currentSession = await fetchSession({ force: true });
+      const restored = await applySessionState(currentSession);
+
+      if (!restored) {
+        setShowOnboarding(false);
+        setPage('app');
+      }
+    } catch (err) {
+      setAuthError(err.message || 'Connexion Google impossible');
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
   const handleTabChange = (tabKey) => {
     setActiveTab(tabKey);
   };
 
-  // SI PAS DE CONFIG = Onboarding SEULEMENT (pas de TopNavbar)
+  const resetWorkspace = useCallback(() => {
+    setConfig(null);
+    setData(null);
+    setTrendHistory([]);
+    setCompletedPrompts([]);
+    setAnalysisProgress(null);
+    setIsAnalysisComplete(false);
+    setIsAnalyzing(false);
+    setError(null);
+    setActiveTab('dashboard');
+    setShowOnboarding(false);
+    setPage(authUser ? 'app' : 'landing');
+  }, [authUser]);
+
+  const handleCreateAnalysis = useCallback(() => {
+    setShowOnboarding(true);
+    setError(null);
+    setCompletedPrompts([]);
+    setAnalysisProgress(null);
+    setIsAnalysisComplete(false);
+  }, []);
+
+  const handleProjectSelect = useCallback(async (project) => {
+    const nextConfig = projectToConfig(project);
+    setShowOnboarding(false);
+    setConfig(nextConfig);
+    setActiveTab('dashboard');
+    setError(null);
+
+    try {
+      await activateProject(project.id);
+      await loadDashboardData(nextConfig);
+    } catch (err) {
+      console.error('[APP] project activation error:', err);
+      setError(err.message || 'Impossible de charger ce projet');
+    }
+  }, [loadDashboardData]);
+
+  const handlePreferenceChange = useCallback((key) => {
+    setPreferences((current) => ({
+      ...current,
+      [key]: !current[key]
+    }));
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await logoutUser();
+    } catch (err) {
+      console.error('[APP] logout error:', err);
+    } finally {
+      setAuthUser(null);
+      setConfig(null);
+      setData(null);
+      setProjects([]);
+      setTrendHistory([]);
+      setCompletedPrompts([]);
+      setAnalysisProgress(null);
+      setIsAnalysisComplete(false);
+      setIsAnalyzing(false);
+      setShowOnboarding(false);
+      setActiveTab('dashboard');
+      setError(null);
+      setPage('landing');
+    }
+  }, []);
+
+  const closeOnboardingModal = useCallback(() => {
+    setShowOnboarding(false);
+    setError(null);
+  }, []);
+
+  useEffect(() => {
+    const shouldLockBody = Boolean(authUser && showOnboarding);
+    document.body.classList.toggle('modal-lock', shouldLockBody);
+    return () => document.body.classList.remove('modal-lock');
+  }, [authUser, showOnboarding]);
+
+  useEffect(() => {
+    if (!authUser || !showOnboarding) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        closeOnboardingModal();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [authUser, showOnboarding, closeOnboardingModal]);
+
+  const onboardingModal = authUser && showOnboarding ? (
+    <div
+      className="onboarding-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      onClick={closeOnboardingModal}
+    >
+      <div className="onboarding-modal-shell" onClick={(event) => event.stopPropagation()}>
+        <div className="onboarding-modal-head">
+          <div>
+            <span className="onboarding-modal-kicker">Nouvelle analyse</span>
+            <h2>Configurer une nouvelle marque</h2>
+            <p>Renseignez le contexte, le benchmark et les prompts du run.</p>
+          </div>
+          <button type="button" className="onboarding-modal-close" onClick={closeOnboardingModal}>
+            Fermer
+          </button>
+        </div>
+
+        <div className="onboarding-modal-body" onClick={(event) => event.stopPropagation()}>
+          <Suspense fallback={<LazySectionFallback label="Chargement de l onboarding..." />}>
+            <Onboarding onComplete={handleOnboardingComplete} />
+          </Suspense>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  useEffect(() => {
+    if (!authUser || config || showOnboarding || projectsLoading || !preferences.autoOpenLatestProject) {
+      return;
+    }
+
+    if (projects.length > 0) {
+      handleProjectSelect(projects[0]);
+    }
+  }, [authUser, config, showOnboarding, projectsLoading, preferences.autoOpenLatestProject, projects, handleProjectSelect]);
+
+  if (page === 'landing') {
+    return (
+      <Suspense fallback={<LazySectionFallback label="Chargement de l accueil..." />}>
+        <LandingPage
+          onStart={() => setPage('auth')}
+          onLogin={() => setPage('auth')}
+          onDemo={() => setPage('app')}
+        />
+      </Suspense>
+    );
+  }
+
+  if (page === 'auth') {
+    return (
+      <Suspense fallback={<LazySectionFallback label="Chargement de la connexion..." />}>
+        <AuthPage
+          onBack={() => setPage('landing')}
+          onContinue={handleAuthContinue}
+          onGoogle={handleGoogleAuth}
+          googleClientId={googleClientId}
+          isSubmitting={authBusy}
+          errorMessage={authError}
+        />
+      </Suspense>
+    );
+  }
+
   if (!config) {
+    if (authUser) {
+      return (
+        <div className={`app-layout ${showOnboarding ? 'modal-open' : ''}`}>
+          <div className="main-content" style={{ marginTop: 0 }}>
+            <div className="page-content">
+              <Suspense fallback={<LazySectionFallback label="Chargement de votre espace..." />}>
+                <WorkspaceHome
+                  user={authUser}
+                  projects={projects}
+                  loading={projectsLoading}
+                  showHints={preferences.showHints}
+                  onCreateAnalysis={handleCreateAnalysis}
+                  onProjectSelect={handleProjectSelect}
+                />
+              </Suspense>
+            </div>
+          </div>
+          {onboardingModal}
+        </div>
+      );
+    }
+
     return (
       <div className="app-layout">
-        <div className="main-content" style={{marginTop: 0}}>
-          <div className="page-content">
-            <Onboarding onComplete={handleOnboardingComplete} />
+        <div className="main-content onboarding-main-content" style={{ marginTop: 0 }}>
+          <div className="page-content onboarding-page">
+            {authUser && showOnboarding && (
+              <div className="workspace-onboarding-head">
+                <button className="workspace-back-link" onClick={() => setShowOnboarding(false)}>
+                  Retour aux projets
+                </button>
+                <p>Nouvelle analyse pour {authUser.name || authUser.email}</p>
+              </div>
+            )}
+            <div className="onboarding-stage">
+              <Suspense fallback={<LazySectionFallback label="Chargement de l onboarding..." />}>
+                <Onboarding onComplete={handleOnboardingComplete} />
+              </Suspense>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // AVEC CONFIG = TopNavbar + Dashboard
   return (
-    <div className="app-layout">
+    <div className={`app-layout ${showOnboarding ? 'modal-open' : ''}`}>
       <TopNavbar
         brand={config.brand}
+        user={authUser}
         onRefresh={handleRefresh}
         onExport={handleExport}
         isLoading={isAnalyzing}
         isBackendOnline={isBackendOnline}
-        onReset={() => { setConfig(null); setData(null); setCompletedPrompts([]); setActiveTab('dashboard'); }}
+        onReset={resetWorkspace}
         activeTab={activeTab}
-        onTabChange={handleTabChange}
-        exportSlot={<ExportButton brand={config.brand} />}
+        onCreateAnalysis={handleCreateAnalysis}
+        onOpenProjects={() => setActiveTab('projects')}
+        onOpenAccount={() => setActiveTab('account')}
+        onLogout={handleLogout}
+        exportSlot={<ExportButton brand={config.brand} projectId={config.projectId} />}
       />
 
-      <div className="main-content">
-        <div className="page-content">
+      <div className="app-body">
+        <Sidebar
+          brand={config.brand}
+          sector={config.sector}
+          isBackendOnline={isBackendOnline}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          onReset={resetWorkspace}
+        />
 
-          {/* Progression temps réel (Sprint 2) */}
-          {(isAnalyzing || (completedPrompts.length > 0 && !data)) && (
-            <AnalysisProgress
-              brand={config.brand}
-              progress={analysisProgress}
-              models={analysisModels}
-              isComplete={isAnalysisComplete}
-              isDemo={isDemo}
-              completedPrompts={completedPrompts}
-            />
-          )}
+        <div className="main-content">
+          <div className="page-content">
+            {(isAnalyzing || (completedPrompts.length > 0 && !data)) && (
+              <AnalysisProgress
+                brand={config.brand}
+                progress={analysisProgress}
+                models={analysisModels}
+                isComplete={isAnalysisComplete}
+                isDemo={isDemo}
+                completedPrompts={completedPrompts}
+                promptTarget={config?.prompts?.length}
+              />
+            )}
 
-          {isAnalyzing && !analysisProgress && (
-            <div className="loading-state">
-              <div className="loader" />
-              <p>Connexion à {analysisModels[0] || 'qwen3.5'}…</p>
-            </div>
-          )}
+            {error && !data && (
+              <div className="error-state"><p>❌ {error}</p></div>
+            )}
 
-          {error && !data && (
-            <div className="error-state"><p>❌ {error}</p></div>
-          )}
+            {activeTab === 'dashboard' && data && data.ranking && (
+              <Suspense fallback={<LazySectionFallback label="Chargement du dashboard..." />}>
+                <DashboardOverviewTab config={config} data={data} trendHistory={trendHistory} />
+              </Suspense>
+            )}
 
-          {/* Dashboard Tab */}
-          {activeTab === 'dashboard' && data && data.ranking && (
-            <>
-              <div className="dashboard-section">
-                <KpiCards data={data} brand={config.brand} />
-                <TrendChart data={trendHistory} brand={config.brand} />
-                <DuelCard ranking={data.ranking} brand={config.brand} />
-              </div>
+            {activeTab === 'prompts' && (
+              <Suspense fallback={<LazySectionFallback label="Chargement des requetes..." />}>
+                <PromptComparator brand={config.brand} projectId={config.projectId} />
+              </Suspense>
+            )}
 
-              <div id="ranking">
-                <RankingTable ranking={data.ranking} brand={config.brand} />
-              </div>
+            {activeTab === 'benchmark' && (
+              <Suspense fallback={<LazySectionFallback label="Chargement des benchmarks..." />}>
+                <Benchmark config={config} data={data} sector={config.sector} />
+              </Suspense>
+            )}
 
-              <LLMBreakdown brand={config.brand} />
+            {activeTab === 'history' && (
+              <Suspense fallback={<LazySectionFallback label="Chargement des tendances..." />}>
+                <HistoryTab config={config} trendHistory={trendHistory} data={data} />
+              </Suspense>
+            )}
 
-              <div className="charts-row">
-                <SentimentChart ranking={data.ranking} brand={config.brand} />
-                <MentionChart ranking={data.ranking} brand={config.brand} />
-                <SovChart ranking={data.ranking} brand={config.brand} />
-              </div>
+            {activeTab === 'keywords' && (
+              <Suspense fallback={<LazySectionFallback label="Chargement des intentions..." />}>
+                <KeywordsTab config={config} data={data} />
+              </Suspense>
+            )}
 
-              <div id="insights">
-                <RadarCompare ranking={data.ranking} brand={config.brand} />
-                <CategoryHeatmap categoryData={data.category_data} brand={config.brand} ranking={data.ranking} />
-                <InsightsPanel insights={data.insights} brand={config.brand} />
-              </div>
-            </>
-          )}
+            {activeTab === 'sentiment' && (
+              <Suspense fallback={<LazySectionFallback label="Chargement du sentiment..." />}>
+                <SentimentTab config={config} data={data} />
+              </Suspense>
+            )}
 
-          {/* Prompts Tab (Sprint 3) */}
-          {activeTab === 'prompts' && (
-            <PromptComparator brand={config.brand} />
-          )}
+            {activeTab === 'llm-status' && (
+              <Suspense fallback={<LazySectionFallback label="Chargement des modeles..." />}>
+                <LLMStatusTab config={config} />
+              </Suspense>
+            )}
 
-          {/* Benchmark Tab */}
-          {activeTab === 'benchmark' && (
-            <Benchmark sector={config.sector} />
-          )}
+            {activeTab === 'exports' && (
+              <Suspense fallback={<LazySectionFallback label="Chargement des rapports..." />}>
+                <ExportsTab config={config} data={data} />
+              </Suspense>
+            )}
 
-          {/* Alerts Tab (Sprint 3) */}
-          {activeTab === 'alerts' && (
-            <AlertsPanel brand={config.brand} />
-          )}
+            {activeTab === 'projects' && (
+              <Suspense fallback={<LazySectionFallback label="Chargement des projets..." />}>
+                <ProjectsPanel
+                  projects={projects}
+                  loading={projectsLoading}
+                  onProjectSelect={handleProjectSelect}
+                  onCreateAnalysis={handleCreateAnalysis}
+                />
+              </Suspense>
+            )}
 
+            {activeTab === 'alerts' && (
+              <Suspense fallback={<LazySectionFallback label="Chargement des alertes..." />}>
+                <AlertsPanel brand={config.brand} />
+              </Suspense>
+            )}
+
+            {activeTab === 'account' && (
+              <Suspense fallback={<LazySectionFallback label="Chargement du compte..." />}>
+                <AccountPanel
+                  user={authUser}
+                  projects={projects}
+                  isBackendOnline={isBackendOnline}
+                  preferences={preferences}
+                  onPreferenceChange={handlePreferenceChange}
+                  onOpenProjects={() => setActiveTab('projects')}
+                  onCreateAnalysis={handleCreateAnalysis}
+                  onLogout={handleLogout}
+                />
+              </Suspense>
+            )}
+          </div>
         </div>
       </div>
+      {onboardingModal}
     </div>
   );
 }

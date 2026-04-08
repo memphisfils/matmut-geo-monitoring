@@ -1,0 +1,122 @@
+.metric-tape {
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid rgba(145, 171, 191, 0.16);
+  border-bottom: 1px solid rgba(145, 171, 191, 0.16);
+  background: rgba(255, 255, 255, 0.48);
+  backdrop-filter: blur(12px);
+}
+
+.metric-tape.compact {
+  border-radius: 18px;
+  border: 1px solid rgba(145, 171, 191, 0.16);
+}
+
+.metric-tape::before,
+.metric-tape::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 80px;
+  background: linear-gradient(90deg, rgba(239, 246, 252, 0.94), rgba(239, 246, 252, 0));
+  z-index: 1;
+  pointer-events: none;
+}
+
+.metric-tape::after {
+  inset: 0 0 0 auto;
+  background: linear-gradient(270deg, rgba(239, 246, 252, 0.94), rgba(239, 246, 252, 0));
+}
+
+.metric-tape-track {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  animation: metric-tape-scroll 28s linear infinite;
+}
+
+.metric-tape:hover .metric-tape-track {
+  animation-play-state: paused;
+}
+
+.metric-tape-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  min-width: 220px;
+  border-right: 1px solid rgba(145, 171, 191, 0.14);
+  color: #173040;
+}
+
+.metric-tape-pulse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #7a93a4;
+}
+
+.metric-tape-pulse.up {
+  color: #12795b;
+}
+
+.metric-tape-pulse.down {
+  color: #ba5a44;
+}
+
+.metric-tape-label {
+  color: #5b7487;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.metric-tape-value {
+  color: #102435;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.metric-tape-change,
+.metric-tape-meta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.metric-tape-change.up {
+  color: #12795b;
+}
+
+.metric-tape-change.down {
+  color: #ba5a44;
+}
+
+.metric-tape-change.neutral,
+.metric-tape-meta {
+  color: #648092;
+}
+
+@keyframes metric-tape-scroll {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+:root.reduced-motion .metric-tape-track {
+  animation: none;
+}
+
+@media (max-width: 720px) {
+  .metric-tape-item {
+    min-width: 190px;
+    padding: 11px 14px;
+  }
+}

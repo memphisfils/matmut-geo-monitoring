@@ -248,6 +248,34 @@ def test_active_project_drives_metrics_and_history(client):
     assert beta_metrics_payload['metadata']['brand'] == 'Brand Beta'
 
 
+def test_save_analysis_does_not_overwrite_existing_project_fields(client):
+    _signup(client, 'Alice', 'alice-project@example.com')
+    user_id = client.get('/api/auth/me').get_json()['user']['id']
+
+    brand = 'Brand Persist'
+    project_id = db_module.upsert_project(
+        brand,
+        'Assurance',
+        ['Competitor One', 'Competitor Two'],
+        ['prompt 1', 'prompt 2'],
+        ['model-alpha', 'model-beta'],
+        user_id=user_id
+    )
+    results = _make_multimodel_results(
+        brand,
+        ['Competitor One', 'Competitor Two'],
+        ['Comparatif assurance Brand Persist vs Competitor One', 'avis general assurance']
+    )
+
+    db_module.save_analysis(results, user_id=user_id, project_id=project_id)
+
+    project = db_module.get_project_by_id(project_id, user_id=user_id)
+    assert project['sector'] == 'Assurance'
+    assert project['competitors'] == ['Competitor One', 'Competitor Two']
+    assert project['prompts'] == ['prompt 1', 'prompt 2']
+    assert project['models'] == ['model-alpha', 'model-beta']
+
+
 def test_prompt_compare_exposes_quality_and_model_breakdown(client):
     _signup(client, 'Alice', 'alice@example.com')
     me_payload = client.get('/api/auth/me').get_json()

@@ -24,7 +24,8 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 USE_POSTGRES = bool(DATABASE_URL)
 ALERT_CHANNEL_KEYS = ('slack', 'email', 'telegram')
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+DATA_DIR = os.getenv('GEO_DATA_DIR') or os.path.join(PROJECT_ROOT, 'data')
 DB_PATH = os.path.join(DATA_DIR, 'history.db')
 
 if USE_POSTGRES:
@@ -37,9 +38,12 @@ def get_db_connection():
         return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
     os.makedirs(DATA_DIR, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA foreign_keys = ON')
+    conn.execute('PRAGMA busy_timeout = 30000')
+    conn.execute('PRAGMA journal_mode = WAL')
+    conn.execute('PRAGMA synchronous = NORMAL')
     return conn
 
 
@@ -692,12 +696,6 @@ def save_analysis(results: dict, user_id: int = None, project_id: int = None):
     conn.commit()
     conn.close()
     print(f"[DATABASE] Analysis saved - {brand} / {llms_used}")
-
-    try:
-        upsert_project(brand, user_id=user_id)
-    except Exception:
-        pass
-
 
 def get_history(brand: str = None, days: int = 30, model: str = None,
                 user_id: int = None, project_id: int = None) -> list:

@@ -62,7 +62,8 @@ from alerts import send_alert, alert_rank_lost, alert_weekly_summary, send_slack
 from utils import build_geo_prompt, GEO_SYSTEM_PROMPT, generate_benchmark_prompt
 init_db()
 
-DATA_DIR     = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+DATA_DIR     = os.getenv('GEO_DATA_DIR') or os.path.join(PROJECT_ROOT, 'data')
 RESULTS_FILE = os.path.join(DATA_DIR, 'results.json')
 RESULTS_SNAPSHOTS_DIR = os.path.join(DATA_DIR, 'results_by_brand')
 START_TIME   = datetime.now()

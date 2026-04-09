@@ -10,15 +10,11 @@ import {
   Search,
   Shield,
   Smile,
-  Sparkles,
-  Target,
-  TrendingUp,
-  Wifi,
-  WifiOff
+  Target
 } from 'lucide-react';
 import './Sidebar.css';
 
-export default function Sidebar({ isBackendOnline, brand, sector, onReset, activeTab, onTabChange }) {
+export default function Sidebar({ brand, sector, onReset, activeTab, onTabChange }) {
   const navItems = [
     { key: 'dashboard', icon: BarChart3, label: "Vue d'ensemble" },
     { key: 'benchmark', icon: Shield, label: 'Benchmarks' },
@@ -57,21 +53,6 @@ export default function Sidebar({ isBackendOnline, brand, sector, onReset, activ
           <span>{sector || 'Secteur non defini'}</span>
         </div>
 
-        <div className="sidebar-status-row">
-          <div className={`status-badge ${isBackendOnline ? 'online' : 'offline'}`}>
-            {isBackendOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
-            <span>{isBackendOnline ? 'API connectee' : 'Mode demo'}</span>
-          </div>
-          <div className="sidebar-live-chip">
-            <Sparkles size={12} />
-            <span>Arctic</span>
-          </div>
-        </div>
-
-        <div className="sidebar-context-line">
-          <TrendingUp size={13} />
-          <span>Pilotage des signaux GEO en direct</span>
-        </div>
       </div>
 
       <nav className="sidebar-nav">

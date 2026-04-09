@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Activity,
   ChevronDown,
   FolderOpen,
   LogOut,
@@ -8,9 +7,7 @@ import {
   RefreshCw,
   Settings2,
   Target,
-  UserRound,
-  Wifi,
-  WifiOff
+  UserRound
 } from 'lucide-react';
 import './TopNavbar.css';
 
@@ -43,7 +40,6 @@ export default function TopNavbar({
   user,
   onRefresh,
   isLoading,
-  isBackendOnline,
   onReset,
   exportSlot,
   activeTab,
@@ -123,18 +119,6 @@ export default function TopNavbar({
             <span>Changer de projet</span>
           </button>
         )}
-      </div>
-
-      <div className="nav-status-shell">
-        <div className={`status-indicator ${isBackendOnline ? 'online' : 'offline'}`}>
-          <span className="status-dot" />
-          {isBackendOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
-          <span>{isBackendOnline ? 'Donnees live' : 'Mode demo'}</span>
-        </div>
-        <div className={`nav-status-detail ${isLoading ? 'active' : ''}`}>
-          <Activity size={14} />
-          <span>{isLoading ? 'Run en cours' : 'Pret'}</span>
-        </div>
       </div>
 
       {user ? (

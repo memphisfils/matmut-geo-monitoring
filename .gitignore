@@ -15,6 +15,7 @@ ENV/
 !.env.render
 
 # Data
+data/*.db
 data/*.json
 !data/.gitkeep
 data/results_by_brand/*.json
@@ -43,3 +44,29 @@ build/
 
 # Render
 .webapps/
+
+# Local working notes / archives
+.claude/
+memory/
+screenshots/
+resultat-alert/
+sprint*/
+fixe-*/
+index.fixed.html
+backend/3.10.0
+
+# Internal markdown notes
+ARCHITECTURE_STEP2_AUTH_DATA.md
+CLAUDE.md
+FIX_WORKER_TIMEOUT.md
+GEO_MONITOR_DESIGN_PROMPT.md
+GEO_MONITOR_ROADMAP.md
+PERFORMANCE_REPORT.md
+PRESENTATION.md
+PRODUCT_REDESIGN_ENGINE_PLAN.md
+QWEN.md
+ROADMAP_FINAL_21_JOURS.md
+SESSION_SUMMARY.md
+UX_STEP1_SPEC.md
+dejafait.md
+globalArchitecture.md
